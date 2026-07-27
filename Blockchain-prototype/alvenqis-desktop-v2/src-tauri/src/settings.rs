@@ -6,8 +6,8 @@ use std::fs;
 use std::sync::OnceLock;
 
 pub const DEFAULT_RPC_URL: &str = alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_RPC;
-pub const DEFAULT_MINING_RPC_URL: &str =
-    alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_MINING_RPC;
+pub const DEFAULT_MINING_RPC_URL: &str = alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_MINING_RPC;
+pub const DEFAULT_EXPLORER_URL: &str = "https://dohotstudio.com/explorer";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -26,13 +26,6 @@ pub struct AppSettings {
     pub start_minimized: bool,
     pub notify_block_mined: bool,
     pub notify_sound: bool,
-    pub notify_updates: bool,
-    /// When true (default), GitHub Releases are applied automatically without approval.
-    #[serde(default = "default_true")]
-    pub auto_update: bool,
-    /// Poll interval for GitHub auto-update (seconds). Minimum 60.
-    #[serde(default = "default_auto_update_interval")]
-    pub auto_update_interval_secs: u64,
     pub hide_balances: bool,
     pub mask_addresses: bool,
     pub show_advanced_metrics: bool,
@@ -70,6 +63,8 @@ pub struct AppSettings {
     #[serde(default = "default_miner_custom_commands")]
     pub miner_custom_commands: Vec<String>,
     pub default_page: String,
+    #[serde(default = "default_explorer_url")]
+    pub explorer_url: String,
     pub open_external_explorer: bool,
     pub keep_logs_days: u32,
 }
@@ -103,8 +98,8 @@ fn default_true() -> bool {
     true
 }
 
-fn default_auto_update_interval() -> u64 {
-    900
+fn default_explorer_url() -> String {
+    DEFAULT_EXPLORER_URL.to_owned()
 }
 
 impl Default for AppSettings {
@@ -125,9 +120,6 @@ impl Default for AppSettings {
             start_minimized: false,
             notify_block_mined: true,
             notify_sound: true,
-            notify_updates: true,
-            auto_update: true,
-            auto_update_interval_secs: 900,
             hide_balances: false,
             mask_addresses: false,
             show_advanced_metrics: true,
@@ -144,8 +136,7 @@ impl Default for AppSettings {
             default_pool_url: alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_POOL.to_owned(),
             pool_urls: vec![alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_POOL.to_owned()],
             default_worker_name: "desktop-01".into(),
-            stratum_host:
-                alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_STRATUM_HOST.to_owned(),
+            stratum_host: alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_STRATUM_HOST.to_owned(),
             stratum_port: default_stratum_port(),
             stratum_use_tls: true,
             stratum_skip_tls_verify: false,
@@ -153,6 +144,7 @@ impl Default for AppSettings {
             stratum_timeout_seconds: default_stratum_timeout_seconds(),
             miner_custom_commands: default_miner_custom_commands(),
             default_page: "overview".into(),
+            explorer_url: default_explorer_url(),
             open_external_explorer: true,
             keep_logs_days: 14,
         }
@@ -179,13 +171,15 @@ fn load_from_disk() -> AppSettings {
 }
 
 fn migrate_mining_settings(settings: &mut AppSettings) {
-    if settings.mining_rpc_url.eq_ignore_ascii_case(DEFAULT_RPC_URL) {
+    if settings
+        .mining_rpc_url
+        .eq_ignore_ascii_case(DEFAULT_RPC_URL)
+    {
         settings.mining_rpc_url = DEFAULT_MINING_RPC_URL.to_owned();
     }
     let legacy_pool = "https://rpcnode.dohotstudio.com/pool";
     if settings.default_pool_url.eq_ignore_ascii_case(legacy_pool) {
-        settings.default_pool_url =
-            alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_POOL.to_owned();
+        settings.default_pool_url = alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_POOL.to_owned();
     }
     for pool_url in &mut settings.pool_urls {
         if pool_url.eq_ignore_ascii_case(legacy_pool) {
@@ -198,6 +192,9 @@ fn migrate_mining_settings(settings: &mut AppSettings) {
     if settings.stratum_host.trim().is_empty() {
         settings.stratum_host =
             alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_STRATUM_HOST.to_owned();
+    }
+    if settings.explorer_url.trim().is_empty() {
+        settings.explorer_url = default_explorer_url();
     }
 }
 
@@ -241,10 +238,12 @@ pub fn update(patch: serde_json::Value) -> AppResult<AppSettings> {
     if let Some(rpc) = patch.get("mining_rpc_url").and_then(|v| v.as_str()) {
         settings.mining_rpc_url = normalize_mining_rpc_url(rpc)?;
     }
+    if let Some(explorer) = patch.get("explorer_url").and_then(|v| v.as_str()) {
+        settings.explorer_url = normalize_explorer_url(explorer)?;
+    }
     // Allow 3s local floor in settings UI; App.tsx raises remote polls to ≥10s.
     settings.refresh_interval_ms = settings.refresh_interval_ms.clamp(3_000, 60_000);
     settings.live_log_interval_ms = settings.live_log_interval_ms.clamp(2_000, 30_000);
-    settings.auto_update_interval_secs = settings.auto_update_interval_secs.clamp(60, 86_400);
     settings.keep_logs_days = settings.keep_logs_days.clamp(1, 365);
     settings.default_gpu_intensity = settings.default_gpu_intensity.clamp(1, 100);
     settings.default_gpu_batch_size = if settings.default_gpu_batch_size == 0 {
@@ -266,9 +265,7 @@ pub fn update(patch: serde_json::Value) -> AppResult<AppSettings> {
         .collect();
     if settings.default_miner_mode == "pool" {
         settings.default_miner_mode = "stratum".into();
-    } else if settings.default_miner_mode != "solo"
-        && settings.default_miner_mode != "stratum"
-    {
+    } else if settings.default_miner_mode != "solo" && settings.default_miner_mode != "stratum" {
         settings.default_miner_mode = "solo".into();
     }
     let backend = settings.default_miner_backend.to_ascii_lowercase();
@@ -375,6 +372,43 @@ pub fn get_mining_rpc_url() -> String {
     }
 }
 
+pub fn get_explorer_url() -> String {
+    let value = get().explorer_url;
+    if value.trim().is_empty() {
+        DEFAULT_EXPLORER_URL.to_owned()
+    } else {
+        value
+    }
+}
+
+pub fn normalize_explorer_url(raw: &str) -> AppResult<String> {
+    let trimmed = raw.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err(AppError::msg("Enter a public Alvenqis Explorer URL."));
+    }
+    let url = url::Url::parse(trimmed)?;
+    let local = matches!(
+        url.host_str().map(str::to_ascii_lowercase).as_deref(),
+        Some("127.0.0.1" | "localhost" | "::1")
+    );
+    if url.scheme() != "https" && !(local && url.scheme() == "http") {
+        return Err(AppError::msg(
+            "The public Explorer must use HTTPS; HTTP is allowed only for localhost.",
+        ));
+    }
+    if url.username() != "" || url.password().is_some() {
+        return Err(AppError::msg(
+            "The Explorer URL cannot contain embedded credentials.",
+        ));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(AppError::msg(
+            "Enter the Explorer base URL without a query or fragment.",
+        ));
+    }
+    Ok(trimmed.to_owned())
+}
+
 pub fn set_rpc_url(raw: &str) -> AppResult<String> {
     let normalized = normalize_rpc_url(raw)?;
     let mut settings = get();
@@ -436,5 +470,26 @@ fn normalize_mining_rpc_url(raw: &str) -> AppResult<String> {
         normalize_rpc_url(trimmed)
     } else {
         normalize_rpc_url(&format!("http://{trimmed}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_explorer_url, DEFAULT_EXPLORER_URL};
+
+    #[test]
+    fn public_explorer_requires_https() {
+        assert_eq!(
+            normalize_explorer_url(DEFAULT_EXPLORER_URL).unwrap(),
+            DEFAULT_EXPLORER_URL
+        );
+        assert!(normalize_explorer_url("http://explorer.example.com").is_err());
+        assert!(normalize_explorer_url("http://127.0.0.1:4173").is_ok());
+    }
+
+    #[test]
+    fn public_explorer_rejects_credentials_and_query() {
+        assert!(normalize_explorer_url("https://user:secret@example.com/explorer").is_err());
+        assert!(normalize_explorer_url("https://example.com/explorer?q=secret").is_err());
     }
 }

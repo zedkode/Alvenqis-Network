@@ -208,37 +208,6 @@ export interface SubmissionResult {
   mempool_size: number;
 }
 
-export type UpdatePhase =
-  | "idle"
-  | "disabled"
-  | "checking"
-  | "available"
-  | "unavailable"
-  | "downloading"
-  | "downloaded"
-  | "installing"
-  | "error";
-
-export interface UpdateProgress {
-  percent: number;
-  transferred: number;
-  total: number;
-  bytes_per_second: number;
-}
-
-export interface UpdateState {
-  phase: UpdatePhase;
-  current_version: string;
-  available_version: string | null;
-  release_name: string | null;
-  release_date: string | null;
-  message: string;
-  manual: boolean;
-  progress: UpdateProgress | null;
-  /** Components included in the release update. */
-  components?: string[];
-}
-
 export type OperatorCommand =
   | "start" | "stop" | "restart" | "status" | "mine"
   | "validate" | "backup" | "miner-start" | "miner-stop";
@@ -338,11 +307,6 @@ export interface AppSettings {
   start_minimized: boolean;
   notify_block_mined: boolean;
   notify_sound: boolean;
-  notify_updates: boolean;
-  /** Check GitHub Releases for application updates. */
-  auto_update: boolean;
-  /** Poll interval in seconds (min 60, default 900). */
-  auto_update_interval_secs: number;
   hide_balances: boolean;
   mask_addresses: boolean;
   show_advanced_metrics: boolean;
@@ -371,6 +335,8 @@ export interface AppSettings {
   /** Saved custom miner console command lines (allowlisted verbs only). */
   miner_custom_commands: string[];
   default_page: string;
+  /** Public web Explorer base URL, independent from the JSON RPC gateway. */
+  explorer_url: string;
   open_external_explorer: boolean;
   keep_logs_days: number;
 }
@@ -577,13 +543,6 @@ export interface AlvenqisBridge {
     diagnostics(): Promise<DiagnosticsInfo>;
     openPath(kind: "workspace" | "local_root" | "logs" | "user_data" | "settings_file"): Promise<void>;
     health(): Promise<RuntimeHealth>;
-  };
-  updates: {
-    state(): Promise<UpdateState>;
-    check(): Promise<UpdateState>;
-    download(): Promise<void>;
-    install(restart: boolean): Promise<void>;
-    onState(listener: (state: UpdateState) => void): () => void;
   };
   app: {
     platform: "windows" | "linux" | "other";

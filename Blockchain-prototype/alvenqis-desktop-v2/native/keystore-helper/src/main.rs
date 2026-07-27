@@ -934,7 +934,7 @@ mod rebrand_migration_tests {
         fs::write(current.join("wallets").join("keep.json"), b"alvenqis").expect("write");
 
         assert!(LEGACY_BRAND_FOLDERS.contains(&"Vireon"));
-        assert!(!LEGACY_BRAND_FOLDERS.iter().any(|b| *b == "Alvenqis"));
+        assert!(!LEGACY_BRAND_FOLDERS.contains(&"Alvenqis"));
         copy_missing_tree(&legacy, &current).expect("migrate under XDG");
         assert_eq!(
             fs::read_to_string(current.join("wallets").join("from-vireon.json")).expect("read"),

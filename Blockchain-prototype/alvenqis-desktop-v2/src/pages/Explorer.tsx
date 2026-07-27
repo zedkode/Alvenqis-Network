@@ -35,7 +35,7 @@ function explorerPath(query: string): string {
   if (/^\d+$/.test(value)) return `blocks/${value}`;
   if (/^alve1/i.test(value)) return `address/${encodeURIComponent(value)}`;
   if (/^(0x)?[a-f0-9]{64}$/i.test(value)) return `search?q=${encodeURIComponent(value)}`;
-  return value ? `search?q=${encodeURIComponent(value)}` : "dashboard";
+  return value ? `search?q=${encodeURIComponent(value)}` : "";
 }
 
 export function Explorer() {
@@ -47,7 +47,14 @@ export function Explorer() {
   const [dialogBlock, setDialogBlock] = useState<DesktopBlock | null>(null);
   const [dialogTx, setDialogTx] = useState<DesktopTransaction | null>(null);
 
-  const openExternal = (path = explorerPath(query)) => window.alvenqis.explorer.open(path);
+  const openExternal = async (path = explorerPath(query)) => {
+    setError(null);
+    try {
+      await window.alvenqis.explorer.open(path);
+    } catch (err) {
+      setError(`Cannot open the configured public Explorer: ${String(err).replace(/^Error:\s*/i, "")}`);
+    }
+  };
 
   const runLookup = useCallback(
     async (raw?: string) => {

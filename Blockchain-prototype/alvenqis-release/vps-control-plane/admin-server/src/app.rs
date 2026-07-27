@@ -1196,7 +1196,7 @@ fn compose_plan(role: DeploymentRole) -> (&'static str, &'static str, &'static s
         ),
         DeploymentRole::Explorer => (
             "",
-            "alvenqis-node alvenqis-rpc alvenqis-indexer alvenqis-control caddy",
+            "alvenqis-node alvenqis-rpc alvenqis-indexer alvenqis-control alvenqis-explorer gateway",
             "",
         ),
         DeploymentRole::Stratum => (
@@ -1206,7 +1206,7 @@ fn compose_plan(role: DeploymentRole) -> (&'static str, &'static str, &'static s
         ),
         DeploymentRole::FullStack => (
             "--profile pool",
-            "alvenqis-node alvenqis-rpc alvenqis-indexer alvenqis-control stratum-certbot alvenqis-pool caddy",
+            "alvenqis-node alvenqis-rpc alvenqis-indexer alvenqis-control stratum-certbot alvenqis-pool alvenqis-website alvenqis-explorer gateway",
             "",
         ),
     }
@@ -1229,7 +1229,8 @@ fn components_for_role(role: &DeploymentRole) -> Vec<&'static str> {
             "alvenqis-rpc",
             "alvenqis-indexer",
             "alvenqis-control",
-            "caddy",
+            "alvenqis-explorer",
+            "gateway",
         ],
         DeploymentRole::Stratum => vec![
             "alvenqis-node",
@@ -1245,7 +1246,9 @@ fn components_for_role(role: &DeploymentRole) -> Vec<&'static str> {
             "alvenqis-pool",
             "stratum-certbot",
             "alvenqis-control",
-            "caddy",
+            "alvenqis-website",
+            "alvenqis-explorer",
+            "gateway",
         ],
     }
 }

@@ -8,7 +8,7 @@ const sizes: Record<LogoSize, number> = {
   xl: 128
 };
 
-/** Canonical brand mark — exact `public/logo.png` (logonew source, never reprocessed). */
+/** Canonical brand mark: exact `public/logo.png`, synchronized from the root `logo.png`. */
 export function AlvenqisLogo({
   size = "md",
   className = "",

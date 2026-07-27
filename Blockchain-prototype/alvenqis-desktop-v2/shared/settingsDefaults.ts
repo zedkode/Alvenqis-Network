@@ -1,4 +1,4 @@
-import { MINING_RPC_URL, POOL_URL, RPC_URL } from "./constants";
+import { EXPLORER_URL, MINING_RPC_URL, POOL_URL, RPC_URL } from "./constants";
 import type { AppSettings } from "./types";
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -16,9 +16,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   start_minimized: false,
   notify_block_mined: true,
   notify_sound: true,
-  notify_updates: true,
-  auto_update: true,
-  auto_update_interval_secs: 900,
   hide_balances: false,
   mask_addresses: false,
   show_advanced_metrics: true,
@@ -42,6 +39,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   stratum_timeout_seconds: 20,
   miner_custom_commands: ["status", "devices", "config validate", "benchmark --seconds 3"],
   default_page: "overview",
+  explorer_url: EXPLORER_URL,
   open_external_explorer: true,
   keep_logs_days: 14
 };

@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppSettings,
   DiagnosticsInfo,
@@ -13,7 +12,6 @@ import type {
   RpcSettings,
   RuntimeHealth,
   SubmissionResult,
-  UpdateState,
   AlvenqisBridge,
   WalletCreateResult,
   WalletMetadata
@@ -85,21 +83,6 @@ export function createAlvenqisBridge(): AlvenqisBridge {
       diagnostics: () => invoke<DiagnosticsInfo>("settings_diagnostics"),
       openPath: (kind) => invoke<void>("settings_open_path", { kind }),
       health: () => invoke<RuntimeHealth>("runtime_health")
-    },
-    updates: {
-      state: () => invoke<UpdateState>("updates_state"),
-      check: () => invoke<UpdateState>("updates_check"),
-      download: () => invoke<void>("updates_download"),
-      install: (restart) => invoke<void>("updates_install", { restart }),
-      onState: (listener) => {
-        let unlisten: UnlistenFn | undefined;
-        void listen<UpdateState>("updates:state", (event) => listener(event.payload)).then((fn) => {
-          unlisten = fn;
-        });
-        return () => {
-          unlisten?.();
-        };
-      }
     },
     app: {
       platform: platform(),

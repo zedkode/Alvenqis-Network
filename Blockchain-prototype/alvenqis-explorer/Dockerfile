@@ -1,6 +1,10 @@
 FROM node:22-alpine AS build
 
 WORKDIR /app
+ARG VITE_ALVENQIS_RPC_URL=https://rpcnode.dohotstudio.com
+ARG VITE_ALVENQIS_WEBSITE_URL=https://dohotstudio.com
+ENV VITE_ALVENQIS_RPC_URL=$VITE_ALVENQIS_RPC_URL \
+    VITE_ALVENQIS_WEBSITE_URL=$VITE_ALVENQIS_WEBSITE_URL
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .

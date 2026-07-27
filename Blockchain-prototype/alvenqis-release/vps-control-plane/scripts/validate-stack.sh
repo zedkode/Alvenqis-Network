@@ -40,7 +40,7 @@ operational='\n'.join((root/p).read_text() for p in [
 ])
 for legacy in ('/data/chain','/data/mempool','/data/indexer','/data/node'):
  assert legacy not in operational, f'legacy storage path remains: {legacy}'
-for forbidden in ('privileged: true','init: true','DATABASE_URL','postgres-exporter','alvenqis-postgres','cadvisor:','alvenqis-cadvisor','watchtower','update-stack.sh','/api/update','/api/rollback',"a=='update'","a=='rollback'","compose('pull'",'DEPLOYMENT_SOURCE'):
+for forbidden in ('init: true','DATABASE_URL','postgres-exporter','alvenqis-postgres','watchtower','update-stack.sh','/api/update','/api/rollback',"a=='update'","a=='rollback'","compose('pull'",'DEPLOYMENT_SOURCE'):
  assert forbidden not in operational, f'forbidden mechanism remains: {forbidden}'
 assert 'value="latest"' not in operational
 assert '${ALVENQIS_VERSION:-latest}' not in operational
@@ -79,23 +79,24 @@ assert 'Public mining route must return HTTP 410' in health
 assert 'alvenqis-mining-rpc' not in health
 assert 'P2P_MIN_VALIDATED_PEERS' in health
 assert 'Private mining RPC did not return a valid live template.' in health
-proxy=(root/'docker/caddy/Caddyfile.template').read_text()
-assert 'handle_path /pool/*' in proxy
-assert 'reverse_proxy alvenqis-pool:30787' in proxy
-assert 'handle /mining/*' in proxy
+proxy=(root/'docker/gateway/nginx.conf.template').read_text()
+assert 'location /pool/' in proxy
+assert 'alvenqis-pool:30787' in proxy
+assert 'location /mining/' in proxy
 assert 'use stratum+tls://' in proxy
-assert ' 410' in proxy
+assert 'return 410' in proxy
+assert 'X-Alvenqis-Admin-Authenticated' in proxy
+assert not (root/'docker/caddy/Caddyfile.template').exists()
+assert not (root/'docker/caddy/caddy-entrypoint.sh').exists()
 assert 'stratum-certbot:' in main
 assert 'certbot/dns-cloudflare:v5.7.0' in main
 assert '${STRATUM_PORT:-3333}:${STRATUM_INTERNAL_PORT:-3333}/tcp' in main
 assert (root/'docker/stratum/certbot-loop.sh').is_file()
 cloudflare_bootstrap=(root/'scripts/cloudflare-bootstrap.sh').read_text()
 assert 'upsert_dns A "$STRATUM_HOST" "$public_ip" false' in cloudflare_bootstrap
-assert 'hostname:$website, service:$website_origin' in cloudflare_bootstrap
-assert 'onepanel-runtime' in main
-assert 'name: 1panel-network' in main
-assert 'http://alvenqis-website-runtime:18081' in cloudflare_bootstrap
-assert (root/'scripts/configure-1panel-website-runtime.sh').is_file()
+assert 'hostname:$website, service:"http://gateway:8080"' in cloudflare_bootstrap
+assert 'hostname:$explorer, service:"http://gateway:8080"' in cloudflare_bootstrap
+assert 'onepanel-runtime' not in main
 prepare_vps_env=(root.parents[2]/'Blockchain-scripts/operator/prepare-alvenqis-vps-env.py').read_text()
 assert 'prototype_root = repo_root / "Blockchain-prototype"' in prepare_vps_env
 assert '"ALVENQIS_HOST_REPO": str(prototype_root)' in prepare_vps_env
@@ -117,7 +118,10 @@ for name,service in compose_data['services'].items():
  assert service.get('cpus'), f'{name} lacks cpus'
  assert service.get('pids_limit'), f'{name} lacks pids_limit'
  assert service.get('logging', {}).get('driver') == 'json-file', f'{name} lacks bounded json logging'
-assert compose_data['services']['caddy']['depends_on']['grafana']['condition'] == 'service_started'
+ assert not service.get('privileged', False) or name == 'cadvisor', f'{name} must not be privileged'
+assert compose_data['services']['gateway']['depends_on']['grafana']['condition'] == 'service_started'
+assert compose_data['services']['cadvisor']['privileged'] is True
+assert '/var/run/docker.sock:/var/run/docker.sock' not in str(compose_data['services']['cadvisor'])
 assert compose_data['services']['alvenqis-indexer']['depends_on'] == {'alvenqis-node': {'condition': 'service_healthy'}}
 prometheus=(root/'monitoring/prometheus/prometheus.yml').read_text()
 for expensive_probe in ('http://alvenqis-rpc:10787/status','http://alvenqis-rpc:10787/indexer/status','http://alvenqis-rpc:10787/p2p/status'):
@@ -129,6 +133,7 @@ assert 'uid": "alvenqis-chain"' in (root/'monitoring/grafana/dashboards/alvenqis
 assert 'uid": "alvenqis-network"' in (root/'monitoring/grafana/dashboards/alvenqis-network.json').read_text()
 assert 'uid": "alvenqis-pool"' in (root/'monitoring/grafana/dashboards/alvenqis-pool.json').read_text()
 assert 'uid": "alvenqis-ops"' in (root/'monitoring/grafana/dashboards/alvenqis-ops.json').read_text()
+assert 'uid": "alvenqis-containers"' in (root/'monitoring/grafana/dashboards/alvenqis-containers.json').read_text()
 assert 'alvenqis_chain_height' in (root/'monitoring/grafana/dashboards/alvenqis-overview.json').read_text()
 assert 'alvenqis_indexer_lag_blocks_effective' in (root/'monitoring/grafana/dashboards/alvenqis-chain.json').read_text()
 PY2

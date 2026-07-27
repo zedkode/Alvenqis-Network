@@ -5,7 +5,7 @@ cd "$workspace"
 source scripts/lib.sh
 load_dotenv .env
 compose_args
-required=(alvenqis-node alvenqis-rpc alvenqis-indexer alvenqis-control docker-broker alvenqis-ops caddy prometheus alertmanager blackbox-exporter node-exporter alvenqis-metrics-exporter loki alloy grafana backup-scheduler); deadline=$((SECONDS+420))
+required=(alvenqis-node alvenqis-rpc alvenqis-indexer alvenqis-control docker-broker alvenqis-ops alvenqis-website alvenqis-explorer gateway prometheus alertmanager blackbox-exporter node-exporter cadvisor alvenqis-metrics-exporter loki alloy grafana backup-scheduler); deadline=$((SECONDS+420))
 [[ "${CLOUDFLARE_MODE:-disabled}" == tunnel ]] && required+=(cloudflared)
 [[ "${ENABLE_POOL:-false}" == true ]] && required+=(alvenqis-pool stratum-certbot)
 while ((SECONDS<deadline)); do
@@ -85,16 +85,16 @@ if command -v ss >/dev/null 2>&1; then
 fi
 
 # Mining methods are reachable only on the Docker-internal RPC route used by
-# the pool. The public Caddy boundary must retire them with HTTP 410.
-caddy_scheme=http
-[[ "${CLOUDFLARE_MODE:-disabled}" == tunnel ]] || caddy_scheme=https
-public_mining_code="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -ksS -o /dev/null -w '%{http_code}' -H "Host: ${RPC_HOST}" "${caddy_scheme}://caddy/mining/template")"
+# the pool. The public gateway boundary must retire them with HTTP 410.
+public_mining_code="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -sS -o /dev/null -w '%{http_code}' -H "Host: ${RPC_HOST}" "http://gateway:8080/mining/template")"
 [[ "$public_mining_code" == 410 ]] || {
   echo "Public mining route must return HTTP 410, got $public_mining_code" >&2
   exit 1
 }
 "${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-control curl -fsS http://127.0.0.1:10788/health >/dev/null
 "${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-metrics-exporter curl -fsS http://127.0.0.1:9101/health >/dev/null
+"${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS -H "Host: ${WEBSITE_HOST}" http://gateway:8080/healthz >/dev/null
+"${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS -H "Host: ${EXPLORER_HOST}" http://gateway:8080/healthz >/dev/null
 if [[ "${ENABLE_POOL:-false}" == true ]]; then
   private_template="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-pool curl -fsS --max-time 20 "http://alvenqis-rpc:10787/mining/template?miner_address=${POOL_ADDRESS}")"
   python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("template_id") and d.get("network_id") == "alvenqis-mainnet-candidate"' <<<"$private_template" || {

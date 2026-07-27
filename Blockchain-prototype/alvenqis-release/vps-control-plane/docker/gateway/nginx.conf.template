@@ -128,6 +128,11 @@ http {
     }
 
     location / {
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $forwarded_client_ip;
+      proxy_set_header X-Forwarded-For $forwarded_client_ip;
+      proxy_set_header X-Forwarded-Host $host;
+      proxy_set_header X-Forwarded-Proto $forwarded_proto;
       proxy_set_header X-Alvenqis-Admin-Authenticated "1";
       proxy_set_header X-Alvenqis-Admin-User $remote_user;
       proxy_pass http://control_backend;

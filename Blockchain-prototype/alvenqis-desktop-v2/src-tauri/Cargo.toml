@@ -1,6 +1,6 @@
 [package]
-name = "alvenqis-desktop-tauri"
-version = "1.0.0"
+name = "alvenqis-desktop-v2"
+version = "2.0.0"
 description = "Alvenqis Control Center - Tauri desktop shell"
 authors = ["Alvenqis Network <admin@alvenqis.network>"]
 edition = "2021"
@@ -10,7 +10,7 @@ publish = false
 [workspace]
 
 [lib]
-name = "alvenqis_desktop_tauri_lib"
+name = "alvenqis_desktop_v2_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -31,7 +31,6 @@ tokio = { version = "1", features = ["process", "time", "io-util", "rt-multi-thr
 parking_lot = "0.12"
 regex = "1"
 open = "5"
-sha2 = "0.10"
 # Shared protocol client: network defaults + typed RPC for status/account/balance.
 # Snapshot still uses ad-hoc GETs for indexer/pool/fleet (not in SDK v0).
 alvenqis-sdk-rust = { path = "../../alvenqis-sdk-rust", default-features = false, features = ["native"] }

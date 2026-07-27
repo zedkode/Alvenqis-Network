@@ -33,6 +33,9 @@ token="$(cat "$api_token_file")"
 : "${FLEET_HOST:?FLEET_HOST is required}"
 : "${GRAFANA_HOST:?GRAFANA_HOST is required}"
 : "${PROMETHEUS_HOST:?PROMETHEUS_HOST is required}"
+: "${WEBSITE_HOST:?WEBSITE_HOST is required}"
+: "${WWW_HOST:?WWW_HOST is required}"
+: "${EXPLORER_HOST:?EXPLORER_HOST is required}"
 : "${P2P_HOST:?P2P_HOST is required}"
 if [[ "${ENABLE_POOL:-false}" == "true" ]]; then
   : "${STRATUM_HOST:?STRATUM_HOST is required when ENABLE_POOL=true}"
@@ -99,27 +102,6 @@ if [[ "${ENABLE_POOL:-false}" == "true" ]]; then
   upsert_dns A "$STRATUM_HOST" "$public_ip" false
 fi
 
-if [[ "$mode" == "dns" ]]; then
-  if [[ "$phase" == "prepare" ]]; then
-    echo "Direct DNS mode has no pre-activation step."
-    exit 0
-  fi
-  for host in "$CONTROL_HOST" "$RPC_HOST" "$FLEET_HOST" "$GRAFANA_HOST" "$PROMETHEUS_HOST"; do
-    upsert_dns A "$host" "$public_ip" "${CLOUDFLARE_PROXY_HTTP:-true}"
-  done
-  if [[ "${ENABLE_POOL:-false}" == "true" ]]; then
-    upsert_dns A "$POOL_HOST" "$public_ip" "${CLOUDFLARE_PROXY_HTTP:-true}"
-  fi
-  if [[ -n "${WEBSITE_HOST:-}" ]]; then
-    upsert_dns A "$WEBSITE_HOST" "$public_ip" "${CLOUDFLARE_PROXY_HTTP:-true}"
-  fi
-  if [[ -n "${WWW_HOST:-}" ]]; then
-    upsert_dns A "$WWW_HOST" "$public_ip" "${CLOUDFLARE_PROXY_HTTP:-true}"
-  fi
-  echo "Cloudflare direct-DNS mode configured."
-  exit 0
-fi
-
 [[ "$mode" == "tunnel" ]] || { echo "Unsupported CLOUDFLARE_MODE: $mode" >&2; exit 64; }
 tunnel_name="${CLOUDFLARE_TUNNEL_NAME:-alvenqis-control-plane}"
 
@@ -151,6 +133,11 @@ fi
 printf '%s\n' "$tunnel_token" > "$secrets_dir/cloudflare_tunnel_token"
 chmod 0444 "$secrets_dir/cloudflare_tunnel_token"
 
+if [[ "$phase" == "prepare" ]]; then
+  echo "Cloudflare Tunnel token prepared; production ingress and DNS were not changed."
+  exit 0
+fi
+
 ingress="$(jq -n \
   --arg control "$CONTROL_HOST" \
   --arg rpc "$RPC_HOST" \
@@ -158,23 +145,24 @@ ingress="$(jq -n \
   --arg grafana "$GRAFANA_HOST" \
   --arg prometheus "$PROMETHEUS_HOST" \
   --arg pool "$POOL_HOST" \
-  --arg website "${WEBSITE_HOST:-}" \
-  --arg www "${WWW_HOST:-}" \
-  --arg website_origin "${WEBSITE_ORIGIN:-http://alvenqis-website-runtime:18081}" \
+  --arg website "$WEBSITE_HOST" \
+  --arg www "$WWW_HOST" \
+  --arg explorer "$EXPLORER_HOST" \
   --argjson pool_enabled "$([[ "${ENABLE_POOL:-false}" == "true" ]] && echo true || echo false)" \
   '{
     config: {
       ingress: (
         [
-          {hostname:$control, service:"http://caddy:80"},
-          {hostname:$rpc, service:"http://caddy:80"},
-          {hostname:$fleet, service:"http://caddy:80"},
-          {hostname:$grafana, service:"http://caddy:80"},
-          {hostname:$prometheus, service:"http://caddy:80"}
+          {hostname:$control, service:"http://gateway:8080"},
+          {hostname:$rpc, service:"http://gateway:8080"},
+          {hostname:$fleet, service:"http://gateway:8080"},
+          {hostname:$grafana, service:"http://gateway:8080"},
+          {hostname:$prometheus, service:"http://gateway:8080"},
+          {hostname:$website, service:"http://gateway:8080"},
+          {hostname:$www, service:"http://gateway:8080"},
+          {hostname:$explorer, service:"http://gateway:8080"}
         ]
-        + (if $pool_enabled then [{hostname:$pool, service:"http://caddy:80"}] else [] end)
-        + (if ($website | length) > 0 then [{hostname:$website, service:$website_origin}] else [] end)
-        + (if ($www | length) > 0 then [{hostname:$www, service:$website_origin}] else [] end)
+        + (if $pool_enabled then [{hostname:$pool, service:"http://gateway:8080"}] else [] end)
         + [{service:"http_status:404"}]
       ),
       originRequest: {connectTimeout:30}
@@ -183,22 +171,10 @@ ingress="$(jq -n \
 configured="$(cf PUT "/accounts/$CLOUDFLARE_ACCOUNT_ID/cfd_tunnel/$tunnel_id/configurations" --data "$ingress")"
 assert_success "$configured"
 
-if [[ "$phase" == "prepare" ]]; then
-  echo "Cloudflare Tunnel token and ingress prepared; DNS was not changed."
-  exit 0
-fi
-
-for host in "$CONTROL_HOST" "$RPC_HOST" "$FLEET_HOST" "$GRAFANA_HOST" "$PROMETHEUS_HOST"; do
+for host in "$CONTROL_HOST" "$RPC_HOST" "$FLEET_HOST" "$GRAFANA_HOST" "$PROMETHEUS_HOST" "$WEBSITE_HOST" "$WWW_HOST" "$EXPLORER_HOST"; do
   upsert_dns CNAME "$host" "$tunnel_id.cfargotunnel.com" true
 done
 if [[ "${ENABLE_POOL:-false}" == "true" ]]; then
   upsert_dns CNAME "$POOL_HOST" "$tunnel_id.cfargotunnel.com" true
 fi
-if [[ -n "${WEBSITE_HOST:-}" ]]; then
-  upsert_dns CNAME "$WEBSITE_HOST" "$tunnel_id.cfargotunnel.com" true
-fi
-if [[ -n "${WWW_HOST:-}" ]]; then
-  upsert_dns CNAME "$WWW_HOST" "$tunnel_id.cfargotunnel.com" true
-fi
-
 echo "Cloudflare Tunnel and DNS configuration completed."

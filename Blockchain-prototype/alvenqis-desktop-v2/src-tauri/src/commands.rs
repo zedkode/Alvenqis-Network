@@ -10,7 +10,6 @@ use crate::process::{
 };
 use crate::rpc::{self, NetworkSnapshot};
 use crate::settings::{self, AppSettings, DEFAULT_RPC_URL};
-use crate::updates::{UpdateService, UpdateState};
 use crate::workspace::{
     find_workspace_root, keystore_helper_path, local_root, settings_path, user_data_dir,
 };
@@ -195,17 +194,27 @@ pub async fn logs_export(app: AppHandle, service: String) -> AppResult<Option<St
 
 #[tauri::command]
 pub async fn explorer_open(path: String) -> AppResult<()> {
-    let rpc = settings::get_rpc_url();
-    let clean = path.trim().trim_start_matches('/');
-    let base = format!("{}/", rpc.trim_end_matches('/'));
-    let url = url::Url::parse(&base)?.join(if clean.is_empty() { "dashboard" } else { clean })?;
-    if url.origin().ascii_serialization() != url::Url::parse(&rpc)?.origin().ascii_serialization() {
-        return Err(crate::error::AppError::msg(
-            "Explorer path does not target the Alvenqis RPC endpoint",
-        ));
-    }
+    let url = explorer_url(&settings::get_explorer_url(), &path)?;
     open::that(url.as_str()).map_err(|err| crate::error::AppError::msg(err.to_string()))?;
     Ok(())
+}
+
+fn explorer_url(explorer: &str, path: &str) -> AppResult<url::Url> {
+    let clean = path.trim().trim_start_matches('/');
+    let base = format!("{}/", explorer.trim_end_matches('/'));
+    let url = if clean.is_empty() {
+        url::Url::parse(&explorer)?
+    } else {
+        url::Url::parse(&base)?.join(clean)?
+    };
+    if url.origin().ascii_serialization()
+        != url::Url::parse(&explorer)?.origin().ascii_serialization()
+    {
+        return Err(crate::error::AppError::msg(
+            "Explorer path escapes the configured public Explorer origin",
+        ));
+    }
+    Ok(url)
 }
 
 /// In-app safe lookup: height, hash, alve1 address, peer id, pool worker (public data only).
@@ -340,60 +349,6 @@ pub async fn settings_open_path(app: AppHandle, kind: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn updates_state(_app: AppHandle, _state: State<'_, UpdateService>) -> UpdateState {
-    UpdateState {
-        phase: "idle".into(),
-        current_version: env!("CARGO_PKG_VERSION").into(),
-        available_version: None,
-        release_name: None,
-        release_date: None,
-        message: "Automatic updates are disabled in this build.".into(),
-        manual: false,
-        progress: None,
-        components: Vec::new(),
-    }
-}
-
-#[tauri::command]
-pub async fn updates_check(
-    app: AppHandle,
-    state: State<'_, UpdateService>,
-) -> AppResult<UpdateState> {
-    let _ = (app, state);
-    Ok(UpdateState {
-        phase: "idle".into(),
-        current_version: env!("CARGO_PKG_VERSION").into(),
-        available_version: None,
-        release_name: None,
-        release_date: None,
-        message: "Automatic updates are disabled in this build.".into(),
-        manual: true,
-        progress: None,
-        components: Vec::new(),
-    })
-}
-
-#[tauri::command]
-pub async fn updates_download(app: AppHandle, state: State<'_, UpdateService>) -> AppResult<()> {
-    let _ = (app, state);
-    Err(crate::error::AppError::msg(
-        "Automatic updates are disabled in this build.",
-    ))
-}
-
-#[tauri::command]
-pub async fn updates_install(
-    app: AppHandle,
-    state: State<'_, UpdateService>,
-    restart: bool,
-) -> AppResult<()> {
-    let _ = (app, state, restart);
-    Err(crate::error::AppError::msg(
-        "Automatic updates are disabled in this build.",
-    ))
-}
-
-#[tauri::command]
 pub fn app_workspace() -> AppResult<String> {
     Ok(find_workspace_root()?.to_string_lossy().into_owned())
 }
@@ -440,4 +395,20 @@ pub fn app_close(app: AppHandle) -> AppResult<()> {
             .map_err(|err| crate::error::AppError::msg(err.to_string()))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::explorer_url;
+
+    #[test]
+    fn explorer_url_keeps_routes_on_configured_origin() {
+        let url = explorer_url("https://dohotstudio.com/explorer", "blocks/42").unwrap();
+        assert_eq!(url.as_str(), "https://dohotstudio.com/explorer/blocks/42");
+    }
+
+    #[test]
+    fn explorer_url_rejects_origin_escape() {
+        assert!(explorer_url("https://dohotstudio.com/explorer", "https://example.com").is_err());
+    }
 }

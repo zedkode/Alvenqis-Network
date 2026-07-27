@@ -3,11 +3,10 @@
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-# Prefer exact user-provided brand master (never reprocess pixels).
-$Master = Join-Path $Root "logonew.png.png"
-if (-not (Test-Path $Master)) { $Master = Join-Path $Root "logo.png" }
+# The root logo is the single canonical brand master.
+$Master = Join-Path $Root "logo.png"
 if (-not (Test-Path $Master)) {
-  throw "Missing logonew.png.png or logo.png at $Root"
+  throw "Missing canonical logo.png at $Root"
 }
 
 Write-Host "==> Generating Tauri icons from master logo (no pixel edits to master)"

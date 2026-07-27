@@ -39,4 +39,4 @@ envsubst '${CONTROL_HOST} ${RPC_HOST} ${FLEET_HOST} ${GRAFANA_HOST} ${PROMETHEUS
   > /tmp/nginx.conf
 
 nginx -t -c /tmp/nginx.conf
-exec nginx -c /tmp/nginx.conf
+exec nginx -c /tmp/nginx.conf -g 'daemon off;'

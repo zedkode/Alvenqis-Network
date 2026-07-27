@@ -12,7 +12,7 @@ export function Layout({ children }: LayoutProps) {
   const [network, setNetwork] = useState<NetworkResponse | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const websiteUrl = (import.meta.env.VITE_ALVENQIS_WEBSITE_URL ?? "https://dohotstudio.com").replace(/\/+$/, "");
-  const navItems = [
+  const navItems: Array<[string, string, string]> = [
     ["OV", "Dashboard", "/dashboard"],
     ["BL", "Blocks", "/blocks"],
     ["TX", "Transactions", "/transactions"],

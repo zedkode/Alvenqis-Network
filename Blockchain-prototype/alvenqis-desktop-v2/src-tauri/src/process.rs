@@ -23,7 +23,6 @@ pub struct MinerStartOptions {
     pub template_refresh_seconds: Option<u64>,
     #[serde(default)]
     pub status_interval_seconds: Option<u64>,
-    pub pool_url: Option<String>,
     pub worker_name: Option<String>,
     #[serde(default)]
     pub stratum_host: Option<String>,
@@ -177,7 +176,7 @@ pub async fn run_operator(
         }
     }
 
-    run_local_stack_operator(command, miner_address, miner_options).await
+    run_local_stack_operator(command, miner_address).await
 }
 
 async fn start_remote_miner(
@@ -211,7 +210,6 @@ async fn start_remote_miner(
         gpu_batch_size: Some(settings::get().default_gpu_batch_size),
         template_refresh_seconds: Some(settings::get().default_template_refresh_seconds),
         status_interval_seconds: Some(settings::get().default_status_interval_seconds),
-        pool_url: Some(settings::get().default_pool_url),
         worker_name: Some(settings::get().default_worker_name),
         stratum_host: Some(settings::get().stratum_host.clone()),
         stratum_port: Some(settings::get().stratum_port),
@@ -304,7 +302,9 @@ async fn start_remote_miner(
         if stratum_host.contains("://")
             || stratum_host.chars().any(char::is_whitespace)
             || worker_name.len() > 64
-            || worker_name.chars().any(|ch| ch.is_control() || ch.is_whitespace())
+            || worker_name
+                .chars()
+                .any(|ch| ch.is_control() || ch.is_whitespace())
         {
             return Err(AppError::msg(
                 "Stratum host must not include a URL scheme, and worker name must contain 1-64 non-whitespace characters.",
@@ -454,8 +454,7 @@ timeout_seconds = 20
     // Previous defaults (350k–500k) left the UI at 0 H/s while CPU sat at 100%.
     let intensity_u = u64::from(gpu_intensity.clamp(1, 100));
     let gpu_base = 131_072_u64;
-    let automatic_gpu_batch =
-        (gpu_base.saturating_mul(intensity_u) / 100).clamp(16_384, 131_072);
+    let automatic_gpu_batch = (gpu_base.saturating_mul(intensity_u) / 100).clamp(16_384, 131_072);
     let gpu_batch_size = if gpu_batch_size == 0 {
         automatic_gpu_batch
     } else {
@@ -726,11 +725,7 @@ fn resolve_binary(name: &str) -> AppResult<PathBuf> {
     )))
 }
 
-async fn run_local_stack_operator(
-    command: &str,
-    miner_address: Option<&str>,
-    miner_options: Option<MinerStartOptions>,
-) -> AppResult<String> {
+async fn run_local_stack_operator(command: &str, miner_address: Option<&str>) -> AppResult<String> {
     let workspace = find_workspace_root()?;
     let local = local_root(&workspace);
     let _ = fs::create_dir_all(local.join("logs"));
@@ -1015,7 +1010,10 @@ pub async fn run_miner_cli(line: &str) -> AppResult<String> {
         })
     } else {
         Err(AppError::msg(if text.is_empty() {
-            format!("Miner command failed ({raw}) exit {:?}", output.status.code())
+            format!(
+                "Miner command failed ({raw}) exit {:?}",
+                output.status.code()
+            )
         } else {
             text
         }))

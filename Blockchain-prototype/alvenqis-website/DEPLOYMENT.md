@@ -1,148 +1,177 @@
-# Alvenqis Network Deployment
+# Alvenqis Web Deployment
 
-This project is split into three deployable parts:
+The public web layer uses two independent, static SPA containers:
 
-1. Static React website and admin panel
-2. Node.js API server
-3. PostgreSQL database
+1. `alvenqis-website` for `dohotstudio.com` and `www.dohotstudio.com`
+2. `alvenqis-explorer` for `explorer.dohotstudio.com`
 
-The public site reads the Alvenqis Mainnet Candidate RPC. This is candidate-chain data and must not be described as a live public mainnet until launch gates pass.
+Both images are built directly from their repository directories, run unprivileged Nginx on internal port `8080`, expose `GET /healthz`, and support a read-only root filesystem when `/tmp` is mounted as `tmpfs`.
 
-## Production Website Runtime (1Panel)
+## Compose Services
 
-Create a Node.js 24 website/runtime in 1Panel from this directory. The runtime
-publishes port `18081` only on host loopback and joins `1panel-network`;
-Cloudflare Tunnel reaches it by the container name
-`alvenqis-website-runtime`.
+The VPS Compose stack should build the services with these contracts:
 
-Install/build command:
+```yaml
+services:
+  alvenqis-website:
+    build:
+      context: ../../alvenqis-website
+      args:
+        VITE_API_BASE_URL: https://api.dohotstudio.com
+        VITE_ALVENQIS_RPC_URL: https://rpcnode.dohotstudio.com
+        VITE_ALVENQIS_POOL_URL: https://pool.dohotstudio.com
+        VITE_ALVENQIS_EXPLORER_URL: https://explorer.dohotstudio.com
+        VITE_ALVENQIS_WEBSITE_URL: https://dohotstudio.com
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  alvenqis-explorer:
+    build:
+      context: ../../alvenqis-explorer
+      args:
+        VITE_ALVENQIS_RPC_URL: https://rpcnode.dohotstudio.com
+        VITE_ALVENQIS_WEBSITE_URL: https://dohotstudio.com
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    expose:
+      - "8080"
+    restart: unless-stopped
+```
+
+The exact relative contexts depend on the location of the VPS Compose file. They must resolve to:
+
+```text
+Blockchain-prototype/alvenqis-website
+Blockchain-prototype/alvenqis-explorer
+```
+
+Do not publish either container port directly to the public host. Only the Docker gateway should reach port `8080`.
+
+## Gateway Nginx
+
+The gateway and both SPA services must share the same Docker network. Route HTTP traffic by hostname:
+
+```nginx
+upstream alvenqis_website {
+    server alvenqis-website:8080;
+    keepalive 32;
+}
+
+upstream alvenqis_explorer {
+    server alvenqis-explorer:8080;
+    keepalive 32;
+}
+
+server {
+    listen 8080;
+    server_name dohotstudio.com www.dohotstudio.com;
+
+    location / {
+        proxy_pass http://alvenqis_website;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+
+server {
+    listen 8080;
+    server_name explorer.dohotstudio.com;
+
+    location / {
+        proxy_pass http://alvenqis_explorer;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+TLS may terminate at Cloudflare, but the gateway remains the only HTTP origin exposed by the VPS stack.
+
+## Cloudflare Hostnames
+
+Create proxied HTTPS records/routes for:
+
+| Public hostname | Gateway origin | Docker destination |
+|---|---|---|
+| `dohotstudio.com` | gateway HTTP listener | `alvenqis-website:8080` |
+| `www.dohotstudio.com` | gateway HTTP listener | `alvenqis-website:8080` |
+| `explorer.dohotstudio.com` | gateway HTTP listener | `alvenqis-explorer:8080` |
+
+`explorer.dohotstudio.com` must exist in DNS before the website's **Open web explorer** action can work publicly.
+
+The RPC and API hostnames remain separate services:
+
+```text
+rpcnode.dohotstudio.com
+api.dohotstudio.com
+pool.dohotstudio.com
+```
+
+Stratum is not an HTTP SPA route. `stratum.dohotstudio.com:3333` must follow the mining stack's DNS-only/TCP policy rather than this gateway configuration.
+
+## Backend API
+
+The website API remains an independent Node.js/PostgreSQL service. The static website is compiled with `VITE_API_BASE_URL=https://api.dohotstudio.com`; when that API is unavailable, public content uses the bundled static fallback.
+
+Required API environment includes:
+
+| Variable | Requirement |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_SECRET` | Strong access-token signing secret |
+| `JWT_REFRESH_SECRET` | Different strong refresh-token secret |
+| `CORS_ORIGIN` | `https://dohotstudio.com,https://www.dohotstudio.com` |
+| `ALVENQIS_RPC_URL` | Internal or protected Mainnet Candidate RPC origin |
+| `NODE_ENV` | `production` |
+
+Run Prisma migrations before starting a new API release and rotate initial admin credentials after seed.
+
+## Build and Verification
+
+Local frontend gates:
 
 ```bash
+cd Blockchain-prototype/alvenqis-website
 npm ci
 npm run build
-```
 
-Start command:
-
-```bash
-npm run start
-```
-
-The control-plane automation creates or updates the runtime through the
-official 1Panel API and restores the API to its previous disabled state:
-
-```bash
-cd /opt/alvenqis/repo/Blockchain-prototype/alvenqis-release/vps-control-plane
-./scripts/configure-1panel-website-runtime.sh
-```
-
-Runtime environment:
-
-```text
-NODE_ENV=production
-HOST=0.0.0.0
-PORT=18081
-VITE_ALVENQIS_RPC_URL=https://rpcnode.dohotstudio.com
-VITE_ALVENQIS_POOL_URL=https://pool.dohotstudio.com
-```
-
-`scripts/serve-production.mjs` serves `dist`, provides SPA fallback routing and
-exposes `GET /healthz`. Do not use `vite preview` as the production runtime.
-
-The `/admin` panel is part of the same build. Set
-`VITE_API_BASE_URL=https://api.dohotstudio.com` only after the API runtime and
-database are deployed; public content has a static fallback while it is absent.
-
-## Cloudflare
-
-The Docker control-plane tunnel owns both website hostnames:
-
-```text
-dohotstudio.com     -> http://alvenqis-website-runtime:18081
-www.dohotstudio.com -> http://alvenqis-website-runtime:18081
-```
-
-Re-apply the tunnel configuration after every hostname/origin change:
-
-```bash
-cd /opt/alvenqis/vps-control-plane
-scripts/cloudflare-bootstrap.sh --activate
-```
-
-The Stratum endpoint is deliberately different: `stratum.dohotstudio.com:3333`
-is a DNS-only `A` record because standard Cloudflare Tunnel is not a transparent
-proxy for arbitrary public TCP. TLS is terminated by the mining pool.
-
-## Backend Hosting
-
-Recommended runtime:
-
-```text
-Node.js 24
-```
-
-Build/start commands:
-
-```bash
-cd server
-npm install
-npm run prisma:generate
-npm run prisma:migrate
-npm run seed
-npm run cms:migrate
-npm run start
-```
-
-Production backend environment variables:
-
-| Variable | Required | Example | Notes |
-|---|---:|---|---|
-| `DATABASE_URL` | yes | `postgresql://user:pass@host:5432/alvenqis?schema=public` | PostgreSQL connection string |
-| `JWT_SECRET` | yes | long random secret | Access token signing secret |
-| `JWT_REFRESH_SECRET` | yes | different long random secret | Refresh token signing secret |
-| `PORT` | no | `4000` | API server port |
-| `CORS_ORIGIN` | yes | `https://dohotstudio.com,https://www.dohotstudio.com` | Comma-separated allowlist |
-| `RATE_LIMIT_WINDOW_MS` | no | `900000` | Default 15 minutes |
-| `RATE_LIMIT_MAX` | no | `300` | Global request limit per window |
-| `NODE_ENV` | yes | `production` | Enables secure refresh cookie |
-| `ALVENQIS_RPC_URL` | yes | `http://127.0.0.1:10787` | Mainnet Candidate Rust RPC used by the read-only network adapter |
-| `DEFAULT_ADMIN_EMAIL` | first deploy | `admin@alvenqis.network` | Used by seed |
-| `DEFAULT_ADMIN_PASSWORD` | first deploy | strong password | Rotate after first login |
-
-## PostgreSQL
-
-Use a managed PostgreSQL service or a separately hosted database. The server expects normal Prisma migrations against PostgreSQL.
-
-Operational notes:
-
-- Run migrations before starting a new backend release.
-- Keep database backups enabled.
-- Rotate `DEFAULT_ADMIN_PASSWORD` after seed by creating a new superadmin or changing the user through the admin panel.
-- Restrict direct DB access to the backend host/provider.
-
-## API Documentation
-
-After backend deploy:
-
-```text
-GET /openapi.json
-GET /api/docs
-```
-
-## Verification Checklist
-
-```bash
+cd ../alvenqis-explorer
+npm ci
+npm run lint
 npm run build
-npm run server:test
 ```
 
-Manual checks:
+Container gates:
 
-- `http://127.0.0.1:18081/healthz` returns the website health payload on the VPS.
-- `https://dohotstudio.com/` and `https://www.dohotstudio.com/` return the same current build.
-- `/downloads`, `/explorer` and `/mining` load through SPA fallback after a direct request.
-- `/explorer` reads the public Rust RPC.
-- `/mining` reads the pool status API while work/share submission remains Stratum TLS only.
-- `/api/network/stats` returns `mode: "mainnet_candidate"` and matches the Rust RPC height.
-- `/admin` login works with seeded superadmin.
-- CMS pages still render if the API is temporarily down because the frontend has static fallback content.
+```bash
+docker compose build alvenqis-website alvenqis-explorer
+docker compose up -d alvenqis-website alvenqis-explorer gateway
+docker compose exec -T alvenqis-website wget -qO- http://127.0.0.1:8080/healthz
+docker compose exec -T alvenqis-explorer wget -qO- http://127.0.0.1:8080/healthz
+```
+
+Public verification:
+
+```bash
+curl -fsS https://dohotstudio.com/healthz
+curl -fsS https://www.dohotstudio.com/healthz
+curl -fsS https://explorer.dohotstudio.com/healthz
+curl -fsS https://rpcnode.dohotstudio.com/health
+```
+
+Also verify:
+
+- direct SPA requests such as `/desktop`, `/blocks/1`, `/tx/<hash>`, and `/address/<address>` return the correct application;
+- `/wallet`, `/mining`, and `/downloads` redirect to sections of `/desktop`;
+- the explorer displays an explicit unavailable state when RPC/indexer requests fail;
+- public block, transaction, and address links remain shareable after a browser refresh;
+- website and explorer containers remain healthy with `read_only: true`.

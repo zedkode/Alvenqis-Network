@@ -66,7 +66,7 @@ pub fn find_workspace_root() -> AppResult<PathBuf> {
 
 fn monorepo_from_manifest() -> Option<PathBuf> {
     let from_crate = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // alvenqis-desktop-tauri/src-tauri -> alvenqis-desktop-tauri -> monorepo
+    // alvenqis-desktop-v2/src-tauri -> alvenqis-desktop-v2 -> monorepo
     if let Some(parent) = from_crate.parent() {
         if is_workspace(parent) {
             return Some(parent.to_path_buf());

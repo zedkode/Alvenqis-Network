@@ -7,7 +7,7 @@ import { AlvenqisLogo } from "../components/brand/AlvenqisLogo";
 import type {
   AppSettings, DiagnosticsInfo, LanguageId, PathInfo, ThemeId, DensityId, AccentId
 } from "@shared/types";
-import { NETWORK_ID } from "@shared/constants";
+import { EXPLORER_URL, NETWORK_ID } from "@shared/constants";
 import { AddressChip } from "../components/ui/AddressChip";
 import { EmptyState } from "../components/ui/EmptyState";
 import { KeyValue, Panel } from "../components/ui/Panel";
@@ -37,7 +37,7 @@ const sections: Array<{ id: SectionId; label: string; icon: typeof Monitor; hint
   { id: "network", label: "Network", icon: Network, hint: "RPC endpoint and identity" },
   { id: "mining", label: "Mining defaults", icon: Cpu, hint: "CUDA, solo, pool and Stratum" },
   { id: "wallet", label: "Wallet & security", icon: KeyRound, hint: "Identity, vault, recovery phrase" },
-  { id: "notifications", label: "Notifications", icon: Bell, hint: "Blocks, sound, updates, message center" },
+  { id: "notifications", label: "Notifications", icon: Bell, hint: "Blocks, sound and message center" },
   { id: "data", label: "Data & paths", icon: HardDrive, hint: "Workspace and chain root" },
   { id: "services", label: "Services", icon: Boxes, hint: "Miner process diagnostics" },
   { id: "privacy", label: "Privacy", icon: Shield, hint: "Balances and address masking" },
@@ -121,6 +121,7 @@ export function Settings() {
   const [paths, setPaths] = useState<PathInfo | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsInfo | null>(null);
   const [rpcDraft, setRpcDraft] = useState(settings.rpc_url);
+  const [explorerDraft, setExplorerDraft] = useState(settings.explorer_url);
   const [miningRpcDraft, setMiningRpcDraft] = useState(settings.mining_rpc_url);
   const [poolDraft, setPoolDraft] = useState(settings.default_pool_url);
   const [workerDraft, setWorkerDraft] = useState(settings.default_worker_name);
@@ -160,6 +161,7 @@ export function Settings() {
 
   useEffect(() => {
     setRpcDraft(settings.rpc_url);
+    setExplorerDraft(settings.explorer_url);
     setMiningRpcDraft(settings.mining_rpc_url);
     setPoolDraft(settings.default_pool_url);
     setWorkerDraft(settings.default_worker_name);
@@ -216,6 +218,13 @@ export function Settings() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveExplorer = async () => {
+    await patch(
+      { explorer_url: explorerDraft },
+      `Public Explorer set to ${explorerDraft.trim().replace(/\/$/, "")}.`
+    );
   };
 
   const saveMiningDefaults = async () => {
@@ -615,11 +624,55 @@ export function Settings() {
               </p>
             </Panel>
             <Panel title="Explorer" detail="External browser surface">
+              <div className="field">
+                <label htmlFor="explorer-endpoint">Public Explorer base URL</label>
+                <input
+                  id="explorer-endpoint"
+                  value={explorerDraft}
+                  spellCheck={false}
+                  placeholder={EXPLORER_URL}
+                  onChange={(event) => setExplorerDraft(event.target.value)}
+                />
+              </div>
+              <div className="button-row">
+                <button
+                  className="button primary"
+                  disabled={
+                    saving ||
+                    !explorerDraft.trim() ||
+                    explorerDraft.trim().replace(/\/$/, "") === settings.explorer_url
+                  }
+                  onClick={() => void saveExplorer()}
+                >
+                  Apply Explorer URL
+                </button>
+                <button
+                  className="button"
+                  disabled={saving || settings.explorer_url === EXPLORER_URL}
+                  onClick={() => {
+                    setExplorerDraft(EXPLORER_URL);
+                    void patch({ explorer_url: EXPLORER_URL }, `Explorer reset to ${EXPLORER_URL}.`);
+                  }}
+                >
+                  Reset public Explorer
+                </button>
+                <button
+                  className="button"
+                  disabled={saving}
+                  onClick={() =>
+                    void window.alvenqis.explorer
+                      .open("")
+                      .catch((error) => setNotice({ error: true, text: String(error) }))
+                  }
+                >
+                  Open configured Explorer
+                </button>
+              </div>
               <Toggle
                 checked={settings.open_external_explorer}
                 onChange={(open_external_explorer) => void patch({ open_external_explorer })}
                 label="Open explorer links externally"
-                description="Launch the selected RPC explorer URL in the system browser."
+                description="Launch public chain links in the system browser, independently from the RPC gateway."
               />
             </Panel>
           </div>
@@ -916,12 +969,6 @@ export function Settings() {
                 onChange={(notify_sound) => void patch({ notify_sound })}
                 label="Play system sound with mined-block alerts"
               />
-            </Panel>
-            <Panel title="Application updates" detail="Disabled">
-              <p className="muted" style={{ margin: 0 }}>
-                Automatic updates are permanently disabled in this build. Install new versions
-                manually from release packages when needed.
-              </p>
             </Panel>
           </div>
         )}

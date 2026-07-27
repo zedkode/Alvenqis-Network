@@ -34,6 +34,55 @@ groups:
           summary: "Alvenqis RPC status is unreachable"
           description: "The metrics exporter cannot reach alvenqis-rpc /status."
 
+      - alert: AlvenqisContainerMetricsDown
+        expr: up{job="cadvisor"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: cadvisor
+        annotations:
+          summary: "Container metrics are unavailable"
+          description: "Prometheus cannot scrape cAdvisor."
+
+      - alert: AlvenqisCloudflareTunnelMetricsDown
+        expr: up{job="cloudflared"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: cloudflare-tunnel
+        annotations:
+          summary: "Cloudflare Tunnel connector is unavailable"
+          description: "Prometheus cannot scrape the active cloudflared connector."
+
+      - alert: AlvenqisContainerMemoryPressure
+        expr: |
+          (
+            container_memory_working_set_bytes{name=~"alvenqis-.+"}
+            /
+            container_spec_memory_limit_bytes{name=~"alvenqis-.+"}
+          ) > 0.90
+          and container_spec_memory_limit_bytes{name=~"alvenqis-.+"} > 0
+        for: 10m
+        labels:
+          severity: warning
+          brand: alvenqis
+          service: containers
+        annotations:
+          summary: "Alvenqis container memory pressure"
+          description: "{{ $labels.name }} has used more than 90% of its memory limit for ten minutes."
+
+      - alert: AlvenqisContainerOom
+        expr: increase(container_oom_events_total{name=~"alvenqis-.+"}[10m]) > 0
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: containers
+        annotations:
+          summary: "Alvenqis container OOM event"
+          description: "{{ $labels.name }} reported an out-of-memory event."
+
       - alert: AlvenqisIndexerLagging
         expr: alvenqis_indexer_lag_blocks_effective > 5
         for: 10m

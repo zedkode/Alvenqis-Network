@@ -36,6 +36,20 @@ Typecheck:
 npm run lint
 ```
 
+Validation without producing installers:
+
+```powershell
+npm test
+npm run build
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
+```
+
+The public web Explorer is configured independently from the JSON RPC gateway under
+**Settings -> Network -> Explorer**. The default is `https://dohotstudio.com/explorer`;
+custom remote Explorer endpoints must use HTTPS.
+
 ## Full user guide
 
 See **[DESKTOP_V2_USER_GUIDE.md](../../Blockchain-docs/human/operator/DESKTOP_V2_USER_GUIDE.md)** for:
@@ -48,6 +62,8 @@ See **[DESKTOP_V2_USER_GUIDE.md](../../Blockchain-docs/human/operator/DESKTOP_V2
 
 - Stack: **Tauri 2 + React 19 + Vite 7 + Rust** sidecars (current supported line).
 - Native keystore / sidecars still prepared via `scripts/prepare-native.*`.
+- Root `logo.png` is the canonical brand source used by the UI and icon generation.
+- Windows builds use NSIS; Linux builds support deb, AppImage and rpm through Tauri.
 - Do not claim Mainnet Live; labels stay **Mainnet Candidate**.
 - Heavy `node_modules` / `src-tauri/target` are not committed — install and prepare locally.
 - Stratum **client** is in `alvenqis-miner`; pool must expose `alvenqis-stratum-v1` for live mining over Stratum.

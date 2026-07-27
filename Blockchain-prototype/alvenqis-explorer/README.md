@@ -4,6 +4,30 @@ Status: Draft / Mainnet Candidate / Prototype / Not Live Mainnet
 
 This app provides a read-only Mainnet Candidate explorer UI served exclusively by `alvenqis-rpc-gateway`.
 
+## Production container
+
+Build directly from this directory:
+
+```bash
+docker build -t alvenqis-explorer .
+docker run --rm -p 8080:8080 --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m alvenqis-explorer
+```
+
+The Nginx runtime is unprivileged, serves the SPA on port `8080`, writes runtime files only below `/tmp`, and exposes `GET /healthz`.
+
+Compose service:
+
+```yaml
+alvenqis-explorer:
+  build:
+    context: ./Blockchain-prototype/alvenqis-explorer
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=16m
+  ports:
+    - "8080:8080"
+```
+
 Current scope:
 - dashboard, latest blocks, block details, transaction details, address details and network status;
 - local mempool visibility and latest mined transaction visibility;

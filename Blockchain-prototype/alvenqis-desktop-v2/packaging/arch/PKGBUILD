@@ -16,7 +16,7 @@
 #   NOT supported. Install still provides wallet + chain view without NVIDIA.
 
 pkgname=alvenqis-control-center
-pkgver=1.0.0
+pkgver=2.0.0
 pkgrel=1
 pkgdesc="Alvenqis Control Center — wallet & chain UI (NVIDIA CUDA mining only; no AMD/OpenCL)"
 arch=('x86_64')
@@ -59,10 +59,10 @@ options=('!lto') # Tauri/AppImage tooling can conflict with full LTO strip on Ar
 source=()
 sha256sums=()
 
-# packaging/arch → desktop-tauri → Blockchain-prototype → monorepo root
+# packaging/arch -> alvenqis-desktop-v2 -> Blockchain-prototype -> monorepo root
 _repo_root="$(cd "${startdir}/../../../.." && pwd)"
 _prototype="${_repo_root}/Blockchain-prototype"
-_desktop="${_prototype}/alvenqis-desktop-tauri"
+_desktop="${_prototype}/alvenqis-desktop-v2"
 
 prepare() {
   cd "$_repo_root"
@@ -103,7 +103,7 @@ exec /opt/alvenqis-control-center/alvenqis-control-center.AppImage "$@"
 WRAP
     chmod 755 "$pkgdir/usr/bin/alvenqis-control-center"
   else
-    local bin="${_desktop}/src-tauri/target/release/alvenqis-desktop-tauri"
+    local bin="${_desktop}/src-tauri/target/release/alvenqis-desktop-v2"
     if [[ -f "$bin" ]]; then
       install -Dm755 "$bin" "$pkgdir/usr/bin/alvenqis-control-center"
     else

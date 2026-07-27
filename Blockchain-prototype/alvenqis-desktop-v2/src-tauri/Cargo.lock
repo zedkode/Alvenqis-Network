@@ -33,8 +33,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "alvenqis-desktop-tauri"
-version = "1.0.0"
+name = "alvenqis-desktop-v2"
+version = "2.0.0"
 dependencies = [
  "alvenqis-sdk-rust",
  "dirs",
@@ -44,7 +44,6 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
- "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

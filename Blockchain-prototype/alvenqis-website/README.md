@@ -4,6 +4,30 @@ React + Vite + Tailwind CSS + Framer Motion + React Three Fiber prototype for th
 
 This is a fresh website project, built separately from previous website experiments.
 
+## Production container
+
+Build directly from this directory:
+
+```bash
+docker build -t alvenqis-website .
+docker run --rm -p 8080:8080 --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m alvenqis-website
+```
+
+The Nginx runtime is unprivileged, serves the SPA on port `8080`, writes runtime files only below `/tmp`, and exposes `GET /healthz`.
+
+Compose service:
+
+```yaml
+alvenqis-website:
+  build:
+    context: ./Blockchain-prototype/alvenqis-website
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=16m
+  ports:
+    - "8080:8080"
+```
+
 ## Commands
 
 ```bash

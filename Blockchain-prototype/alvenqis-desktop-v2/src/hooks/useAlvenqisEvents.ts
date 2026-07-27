@@ -45,8 +45,6 @@ export function useAlvenqisEvents(opts?: {
           });
         })
       );
-
-      // Auto-update notifications intentionally disabled.
     })();
 
     return () => {

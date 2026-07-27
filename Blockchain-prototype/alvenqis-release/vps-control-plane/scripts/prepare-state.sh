@@ -24,7 +24,6 @@ create_owned 10001 10001 \
   state/control state/pool state/loki
 create_owned 65534 65534 state/prometheus state/alertmanager
 create_owned 472 472 state/grafana
-create_owned 1000 1000 state/caddy/data state/caddy/config
 create_owned 473 473 state/alloy
 create_owned 0 0 state/backups state/metrics state/ops state/repair-backups
 

@@ -10,12 +10,10 @@ mod pool;
 mod process;
 mod rpc;
 mod settings;
-mod updates;
 mod workspace;
 
 use notify::NotifyState;
 use tauri::Manager;
-use updates::UpdateService;
 use workspace::{migrate_legacy_user_data, set_resource_root};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -24,8 +22,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
-        // Update service remains as a no-op API stub; auto-update loop is permanently disabled.
-        .manage(UpdateService::default())
         .manage(NotifyState::default())
         .setup(|app| {
             if let Ok(resource_dir) = app.path().resource_dir() {
@@ -33,8 +29,6 @@ pub fn run() {
             }
             migrate_legacy_user_data()?;
             health::ensure_runtime_dirs();
-            // Auto-update completely removed (product decision: no GitHub update overlay).
-            let _ = app;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -67,10 +61,6 @@ pub fn run() {
             commands::settings_diagnostics,
             commands::settings_open_path,
             commands::runtime_health,
-            commands::updates_state,
-            commands::updates_check,
-            commands::updates_download,
-            commands::updates_install,
             commands::app_workspace,
             commands::app_version,
             commands::app_minimize,

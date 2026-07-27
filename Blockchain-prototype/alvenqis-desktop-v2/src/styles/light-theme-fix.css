@@ -47,8 +47,6 @@
 [data-theme="light"] .v-dialog,
 [data-theme="light"] .toast,
 [data-theme="light"] .notification-center,
-[data-theme="light"] .update-toast,
-[data-theme="light"] .update-modal,
 [data-theme="light"] .secret-modal,
 [data-theme="light"] .startup-gate {
   background: var(--grad-panel) !important;
@@ -257,8 +255,7 @@
 [data-theme="light"] .v-dialog-backdrop,
 [data-theme="light"] .startup-overlay,
 [data-theme="light"] .secret-modal-backdrop,
-[data-theme="light"] .detail-dialog-backdrop,
-[data-theme="light"] .update-lock {
+[data-theme="light"] .detail-dialog-backdrop {
   background: rgba(18, 48, 66, 0.38) !important;
 }
 [data-theme="light"] .startup-rail {
@@ -266,9 +263,7 @@
   border-color: var(--border) !important;
 }
 [data-theme="light"] .startup-gate,
-[data-theme="light"] .secret-modal,
-[data-theme="light"] .update-modal,
-[data-theme="light"] .update-toast {
+[data-theme="light"] .secret-modal {
   background: var(--grad-dialog) !important;
 }
 

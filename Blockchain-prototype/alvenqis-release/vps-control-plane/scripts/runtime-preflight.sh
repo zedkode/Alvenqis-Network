@@ -63,7 +63,7 @@ if (role != "controller" or minimum_peers > 0) and not seeds:
 print(f"P2P seed preflight: role={role} seeds={len(seeds)} minimum_validated={minimum_peers}")
 PY
 
-for port_name in P2P_PORT STRATUM_PORT STRATUM_INTERNAL_PORT HTTP_PORT HTTPS_PORT; do
+for port_name in P2P_PORT STRATUM_PORT STRATUM_INTERNAL_PORT HTTP_PORT; do
   value="${!port_name:-}"
   [[ "$value" =~ ^[0-9]+$ ]] && ((value >= 1 && value <= 65535)) || {
     echo "$port_name must be between 1 and 65535." >&2

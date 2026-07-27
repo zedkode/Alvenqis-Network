@@ -1388,9 +1388,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 /* ── Dialogs / startup ── */
 .detail-dialog,
 .startup-gate,
-.secret-modal,
-.update-modal,
-.update-toast {
+.secret-modal {
   border-color: rgba(var(--accent-primary-rgb), 0.35);
   box-shadow: var(--shadow), var(--glow);
 }

@@ -136,10 +136,6 @@ fn client_for(remote: bool) -> AppResult<reqwest::Client> {
     Ok(built)
 }
 
-fn is_retryable_status(code: reqwest::StatusCode) -> bool {
-    matches!(code.as_u16(), 408 | 425 | 429 | 500 | 502 | 503 | 504)
-}
-
 async fn request_once(base: &str, endpoint: &str, remote: bool) -> AppResult<Value> {
     let url = format!("{}{}", base.trim_end_matches('/'), endpoint);
     let response = client_for(remote)?
