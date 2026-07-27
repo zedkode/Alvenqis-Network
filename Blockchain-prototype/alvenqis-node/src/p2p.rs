@@ -2053,6 +2053,7 @@ mod tests {
     use crate::devnet::{init_devnet, mine_dev_blocks, mine_pending_block};
     use alvenqis_core::{Address, Amount, Network, PrivateKey, INITIAL_BASE_FEE_ATOMIC};
     use std::net::TcpListener;
+    use std::sync::atomic::AtomicU16;
     use std::sync::{Mutex, MutexGuard};
     use std::thread;
     use std::time::Instant;
@@ -2064,15 +2065,22 @@ mod tests {
     }
 
     fn free_port_pair() -> (u16, u16) {
-        // Hold both listeners until both ports have been selected. Releasing
-        // the first listener before requesting the second can let the OS hand
-        // the same ephemeral port to both test nodes.
-        let first = TcpListener::bind("127.0.0.1:0").expect("first ephemeral listener");
-        let second = TcpListener::bind("127.0.0.1:0").expect("second ephemeral listener");
-        let first_port = first.local_addr().expect("first listener address").port();
-        let second_port = second.local_addr().expect("second listener address").port();
-        assert_ne!(first_port, second_port);
-        (first_port, second_port)
+        static PORT_ATTEMPT: AtomicU16 = AtomicU16::new(0);
+        let process_offset = (std::process::id() as u16).wrapping_mul(2);
+
+        for _ in 0..1_000 {
+            let attempt = PORT_ATTEMPT.fetch_add(1, Ordering::Relaxed);
+            let offset = process_offset.wrapping_add(attempt.wrapping_mul(2)) % 8_000;
+            let first_port = 20_000 + offset;
+            let second_port = first_port + 1;
+            let first = TcpListener::bind(("127.0.0.1", first_port));
+            let second = TcpListener::bind(("127.0.0.1", second_port));
+            if first.is_ok() && second.is_ok() {
+                return (first_port, second_port);
+            }
+        }
+
+        panic!("could not reserve a non-ephemeral TCP port pair for P2P tests");
     }
 
     fn write_devnet_config(path: &Path, port: u16, seeds: &[String]) {

@@ -283,3 +283,10 @@ docker-compose.override.yaml
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl.backup
+
+
+
+# -----------------------------------------------------------------------------
+# Audit and security reports 2
+# -----------------------------------------------------------------------------
+AUDIT_ALVENQIS_NETWORK.md

@@ -58,6 +58,9 @@ The bootstrap UI binds to loopback. Use the SSH tunnel printed by the script,
 complete the form, then trigger deploy. The installer builds from the checked
 out immutable release bundle and never pulls a newer Alvenqis source tree.
 
+The `validator` bootstrap role is a PoW full-validation node that verifies
+blocks and transactions. Alvenqis does not expose a staking-validator role.
+
 ## Repair or migrate an existing host
 
 ```bash

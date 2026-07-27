@@ -472,6 +472,7 @@ async fn audit_log(
 async fn bootstrap_roles() -> Json<Value> {
     Json(json!({
         "roles": ["node", "validator", "indexer", "explorer", "stratum", "full-stack"],
+        "validator_semantics": "PoW full-validation node; Alvenqis has no staking validator role",
         "execution": "manifest-only",
         "secrets": "supplied out-of-band at execution time",
     }))

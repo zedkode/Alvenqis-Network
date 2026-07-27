@@ -317,11 +317,14 @@ impl ReputationStore {
 
     fn observed_uptime_seconds_at(&self, peer_id: &str, now: u64) -> u64 {
         self.peers.get(peer_id).map_or(0, |record| {
-            record.observed_uptime_seconds.saturating_add(
-                (record.connected_since_unix > 0)
-                    .then(|| now.saturating_sub(record.connected_since_unix))
-                    .unwrap_or(0),
-            )
+            let active_interval = if record.connected_since_unix > 0 {
+                now.saturating_sub(record.connected_since_unix)
+            } else {
+                0
+            };
+            record
+                .observed_uptime_seconds
+                .saturating_add(active_interval)
         })
     }
 }
@@ -389,6 +392,7 @@ fn with_admin_queue_lock<T>(
     let lock_path = runtime_dir.join(PEER_ADMIN_QUEUE_LOCK_FILE_NAME);
     let lock = fs::OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(lock_path)?;
