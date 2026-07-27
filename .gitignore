@@ -290,3 +290,4 @@ docker-compose.override.yaml
 # Audit and security reports 2
 # -----------------------------------------------------------------------------
 AUDIT_ALVENQIS_NETWORK.md
+PLAN_IMBUNATATIRI_ALVENQIS_NETWORK.md

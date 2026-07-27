@@ -17,6 +17,7 @@ use libp2p::identify;
 use libp2p::identity::Keypair;
 use libp2p::ping;
 use libp2p::request_response::{self, ProtocolSupport};
+use libp2p::swarm::dial_opts::DialOpts;
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::{noise, yamux, Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder};
 use serde::{Deserialize, Serialize};
@@ -431,7 +432,7 @@ async fn run_p2p_service_async(
                     codec,
                     [(sync_protocol, ProtocolSupport::Full)],
                     request_response::Config::default()
-                        .with_request_timeout(Duration::from_secs(20)),
+                        .with_request_timeout(Duration::from_secs(45)),
                 ),
                 gossipsub,
                 identify: identify::Behaviour::new(identify::Config::new(
@@ -571,7 +572,10 @@ async fn run_p2p_service_async(
                             // branch while header/body responses are still arriving.
                             for peer_id in peers
                                 .keys()
-                                .filter(|peer_id| !pending_branches.contains_key(peer_id))
+                                .filter(|peer_id| {
+                                    !pending_branches.contains_key(peer_id)
+                                        && !peer_is_active_sync_target(&status, &peers, peer_id)
+                                })
                                 .copied()
                                 .collect::<Vec<_>>()
                             {
@@ -853,6 +857,7 @@ fn handle_swarm_event(
             // libp2p can temporarily maintain multiple links to one PeerId (simultaneous dial or
             // seed redial). Closing one link must not erase the still-live peer or its sync state.
             if num_established == 0 {
+                let closed_sync_target = peer_is_active_sync_target(status, peers, &peer_id);
                 if let Some(peer) = peers.remove(&peer_id) {
                     reputation.observe_disconnect(&peer_id.to_string());
                     if peer.outbound {
@@ -860,6 +865,9 @@ fn handle_swarm_event(
                     }
                 }
                 pending_branches.remove(&peer_id);
+                if closed_sync_target {
+                    clear_sync_target(status);
+                }
             }
         }
         SwarmEvent::Behaviour(AlvenqisBehaviourEvent::Sync(event)) => match event {
@@ -937,9 +945,13 @@ fn handle_swarm_event(
             },
             request_response::Event::OutboundFailure { peer, error, .. } => {
                 let message = error.to_string();
+                let failed_sync_target = peer_is_active_sync_target(status, peers, &peer);
                 // Release any staged request chain so the periodic Hello retry can
                 // restart ancestor discovery after a timeout or connection reset.
                 pending_branches.remove(&peer);
+                if failed_sync_target {
+                    clear_sync_target(status);
+                }
                 if let Some(remote) = peers.get_mut(&peer) {
                     remote.last_error = Some(message.clone());
                 }
@@ -1437,6 +1449,18 @@ fn clear_sync_target(status: &mut P2pStatus) {
     status.sync_resume_height = None;
 }
 
+fn peer_is_active_sync_target(
+    status: &P2pStatus,
+    peers: &BTreeMap<PeerId, ConnectedPeer>,
+    peer_id: &PeerId,
+) -> bool {
+    status.syncing
+        && status.sync_target_hash.as_deref()
+            == peers
+                .get(peer_id)
+                .and_then(|peer| peer.best_hash.as_deref())
+}
+
 fn parse_chain_work(value: &str) -> NodeResult<u128> {
     value
         .parse::<u128>()
@@ -1753,6 +1777,7 @@ fn update_validated_peer(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn persist_status(
     runtime_dir: &Path,
     config: &NetworkConfig,
@@ -1941,7 +1966,11 @@ fn dial_due_seeds(
             break;
         }
         let attempt = seed.attempts;
-        if let Err(error) = swarm.dial(seed.address.clone()) {
+        let dial_options = DialOpts::unknown_peer_id()
+            .address(seed.address.clone())
+            .allocate_new_port()
+            .build();
+        if let Err(error) = swarm.dial(dial_options) {
             status.last_error = Some(format!("seed dial failed for {}: {error}", seed.configured));
         }
         seed.attempts = seed.attempts.saturating_add(1);
