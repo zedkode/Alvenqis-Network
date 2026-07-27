@@ -299,3 +299,4 @@ docker-compose.override.yaml
 # -----------------------------------------------------------------------------
 AUDIT_ALVENQIS_NETWORK.md
 PLAN_IMBUNATATIRI_ALVENQIS_NETWORK.md
+CLOUDFLARE_DNS_PORTS.md
