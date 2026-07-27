@@ -21,26 +21,38 @@ export function Analytics() {
 
   useEffect(() => {
     const ts = Date.now();
-    if (n.miner_hashrate_hs !== null) {
+    if (
+      n.miner_hashrate_hs !== null
+      && (n.stratum_connection.status === "online" || n.rpc_connection.status === "online")
+    ) {
       setHashrateHistory((v) => appendSample(v, Math.round(n.miner_hashrate_hs!), 90, ts));
     }
-    if (n.height !== null) {
+    if (n.rpc_connection.status === "online" && n.height !== null) {
       setHeightHistory((v) => appendSample(v, n.height!, 90, ts));
     }
-    setMempoolHistory((v) => appendSample(v, n.mempool_count, 90, ts));
-    setPeerHistory((v) => appendSample(v, n.connected_peer_count, 90, ts));
+    if (n.rpc_connection.status === "online") {
+      setMempoolHistory((v) => appendSample(v, n.mempool_count, 90, ts));
+    }
+    if (n.p2p_connection.status === "online") {
+      setPeerHistory((v) => appendSample(v, n.connected_peer_count, 90, ts));
+    }
     const lag =
       n.height != null && n.indexed_height != null
         ? Math.max(0, n.height - n.indexed_height)
         : 0;
-    setIndexLagHistory((v) => appendSample(v, lag, 90, ts));
+    if (n.rpc_connection.status === "online") {
+      setIndexLagHistory((v) => appendSample(v, lag, 90, ts));
+    }
   }, [
     n.height,
     n.indexed_height,
     n.mempool_count,
     n.miner_hashrate_hs,
     n.connected_peer_count,
-    n.tip_hash
+    n.tip_hash,
+    n.rpc_connection.status,
+    n.p2p_connection.status,
+    n.stratum_connection.status
   ]);
 
   const txPerBlock = useMemo(

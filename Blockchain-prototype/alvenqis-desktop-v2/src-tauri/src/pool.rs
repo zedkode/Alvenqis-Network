@@ -1,18 +1,32 @@
 //! Public mining-pool snapshot for Control Center (multi-pool aware).
 //! Fetches only public pool HTTP APIs — never admin tokens or wallet secrets.
 
+use crate::availability::{self, ConnectionAvailability};
 use crate::error::{AppError, AppResult};
 use crate::settings;
 use serde_json::{json, Value};
-use std::time::Duration;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 const TIMEOUT_MS: u64 = 8_000;
+const MAX_ATTEMPTS: u32 = 2;
 
 fn client() -> AppResult<reqwest::Client> {
-    reqwest::Client::builder()
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    if let Some(client) = CLIENT.get() {
+        return Ok(client.clone());
+    }
+    let built = reqwest::Client::builder()
         .timeout(Duration::from_millis(TIMEOUT_MS))
+        .connect_timeout(Duration::from_secs(4))
+        .pool_max_idle_per_host(4)
+        .pool_idle_timeout(Duration::from_secs(60))
+        .tcp_keepalive(Duration::from_secs(30))
+        .user_agent("Alvenqis-Control-Center/2.0")
         .build()
-        .map_err(|e| AppError::msg(format!("HTTP client init failed: {e}")))
+        .map_err(|e| AppError::msg(format!("HTTP client init failed: {e}")))?;
+    let _ = CLIENT.set(built.clone());
+    Ok(built)
 }
 
 /// Normalize a pool base URL (no trailing slash).
@@ -52,7 +66,7 @@ pub fn normalize_pool_url(raw: &str) -> AppResult<String> {
     Ok(out)
 }
 
-async fn get_json(url: &str) -> AppResult<Value> {
+async fn get_json_once(url: &str) -> AppResult<Value> {
     let response = client()?
         .get(url)
         .send()
@@ -68,6 +82,75 @@ async fn get_json(url: &str) -> AppResult<Value> {
         .json()
         .await
         .map_err(|e| AppError::msg(format!("Invalid JSON from pool ({url}): {e}")))
+}
+
+fn retryable(error: &AppError) -> bool {
+    let message = error.to_string().to_ascii_lowercase();
+    [
+        "408",
+        "425",
+        "429",
+        "500",
+        "502",
+        "503",
+        "504",
+        "timeout",
+        "timed out",
+        "connection",
+    ]
+    .iter()
+    .any(|needle| message.contains(needle))
+}
+
+async fn get_json(url: &str) -> AppResult<Value> {
+    let mut last_error = None;
+    for attempt in 0..MAX_ATTEMPTS {
+        match get_json_once(url).await {
+            Ok(value) => return Ok(value),
+            Err(error) => {
+                let should_retry = retryable(&error) && attempt + 1 < MAX_ATTEMPTS;
+                last_error = Some(error);
+                if !should_retry {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(300u64 << attempt)).await;
+            }
+        }
+    }
+    Err(last_error.unwrap_or_else(|| AppError::msg("Pool request failed.")))
+}
+
+async fn get_json_tracked(
+    url: &str,
+) -> Result<(Value, ConnectionAvailability), (AppError, ConnectionAvailability)> {
+    let key = format!("pool:{url}");
+    if let Err(connection) = availability::begin(&key, url) {
+        return Err((
+            AppError::msg(
+                connection
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "Pool connection circuit is open.".into()),
+            ),
+            connection,
+        ));
+    }
+    let started = Instant::now();
+    match get_json(url).await {
+        Ok(value) => Ok((
+            value,
+            availability::success(&key, url, started.elapsed().as_millis() as u64),
+        )),
+        Err(error) => {
+            let connection = availability::failure(
+                &key,
+                url,
+                started.elapsed().as_millis() as u64,
+                error.to_string(),
+            );
+            Err((error, connection))
+        }
+    }
 }
 
 async fn get_json_optional(url: &str) -> Option<Value> {
@@ -101,7 +184,30 @@ pub async fn pool_snapshot(
     let payouts_url = format!("{base}/api/v1/payouts");
     let health_url = format!("{base}/health");
 
-    let status = get_json(&status_url).await?;
+    let (status, connection) = match get_json_tracked(&status_url).await {
+        Ok(result) => result,
+        Err((error, connection)) => {
+            let settings = settings::get();
+            return Ok(json!({
+                "online": false,
+                "pool_url": base,
+                "fetched_at_unix_seconds": unix_now(),
+                "connection": connection,
+                "error": error.to_string(),
+                "health": null,
+                "status": {},
+                "history_available": false,
+                "workers": [],
+                "blocks": [],
+                "shares": [],
+                "payouts": [],
+                "accounts": [],
+                "miner": null,
+                "configured_pools": settings.pool_urls,
+                "default_pool_url": settings.default_pool_url,
+            }));
+        }
+    };
     let history = get_json_optional(&history_url).await;
     let payouts = get_json_optional(&payouts_url)
         .await
@@ -151,6 +257,8 @@ pub async fn pool_snapshot(
         "online": true,
         "pool_url": base,
         "fetched_at_unix_seconds": unix_now(),
+        "connection": connection,
+        "error": null,
         "health": health,
         "status": status,
         "history_available": history.is_some(),
@@ -193,11 +301,12 @@ pub async fn pool_catalog() -> AppResult<Value> {
             }
         };
         let status_url = format!("{base}/api/v1/pool/status");
-        match get_json(&status_url).await {
-            Ok(status) => {
+        match get_json_tracked(&status_url).await {
+            Ok((status, connection)) => {
                 entries.push(json!({
                     "pool_url": base,
                     "online": true,
+                    "connection": connection,
                     "pool_name": status.get("pool_name"),
                     "status_label": status.get("status_label"),
                     "network_id": status.get("network_id"),
@@ -209,11 +318,12 @@ pub async fn pool_catalog() -> AppResult<Value> {
                     "pool_address": status.get("pool_address"),
                 }));
             }
-            Err(err) => {
+            Err((err, connection)) => {
                 entries.push(json!({
                     "pool_url": base,
                     "online": false,
                     "error": err.to_string(),
+                    "connection": connection,
                 }));
             }
         }

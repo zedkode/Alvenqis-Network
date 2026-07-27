@@ -12,17 +12,48 @@ templates, submitted-block validation, and libp2p synchronization around
 - persistent node identity and handshake binding to protocol version, network
   ID, chain magic, and actual genesis hash;
 - signed transaction and miner-presence gossip;
+- independent seed dialing with exponential backoff and deterministic per-node
+  jitter, plus discovery accounting learned only from identified Alvenqis
+  connections;
 - exponential block locators and header-first verification before bodies;
 - bounded direct-extension and divergent-branch synchronization;
 - adoption only after full validation and strictly greater cumulative work;
 - deterministic equal-work retention;
 - transactional SQLite canonical-chain replacement, detached-block archival,
   and detached-transaction mempool recovery;
-- persistent peer reputation, temporary bans, and refusal of banned peers.
+- atomic, fail-closed peer reputation persistence, observed connected uptime,
+  temporary or permanent operator bans, explicit unban, and refusal of banned
+  peers before application admission;
+- libp2p connection limits before handshake: at most 128 peers, eight outbound
+  connections, 32 pending inbound connections, eight pending outbound
+  connections, two links per peer, 32 Yamux streams per link, and four
+  concurrent staged branch synchronizations.
 
 All connected nodes must use P2P protocol v3. Staged reorganization is bounded
-to 2,048 blocks. Durable branch storage, deep-reorg recovery, broader discovery,
-resume, and multi-host soak remain production gates.
+to 2,048 blocks. Deep-reorg recovery and multi-host soak remain production
+gates.
+
+The limits above are the supported ceiling for a combined 6 vCPU / 12 GB node
+host. Lower `max_peers` for hosts that also run indexing or explorer workloads.
+Values above 128 and more than 32 configured seeds are rejected at startup.
+
+## Peer administration
+
+Peer IDs are authenticated libp2p identities. Operator actions are written to
+an atomic, locked queue and are applied by the P2P service; malformed
+reputation or administration files stop startup instead of silently discarding
+ban state.
+
+```text
+alvenqis-node --config configs/mainnet-candidate.toml --data-dir /var/lib/alvenqis/.alvenqis-mainnet/chain ban-peer 12D3KooW... --reason "protocol abuse" --duration-seconds 3600
+alvenqis-node --config configs/mainnet-candidate.toml --data-dir /var/lib/alvenqis/.alvenqis-mainnet/chain unban-peer 12D3KooW...
+```
+
+`--duration-seconds 0` creates a permanent operator ban. Non-zero durations are
+capped at 30 days. Operator actions do not fabricate positive or negative
+rating events. `peers` reports observed uptime seconds, successful/failed
+connections, validated handshakes, useful events, protocol faults, discovery
+count, and active bans.
 
 ## Persistence and safety
 

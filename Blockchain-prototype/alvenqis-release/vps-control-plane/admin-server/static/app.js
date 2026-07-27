@@ -10,6 +10,8 @@ const titles = {
   enroll: ["Add node", "SECURE ENROLLMENT"],
   invites: ["Invitations", "TOKEN LEDGER"],
   poolView: ["Mining pool", "REFERENCE POOL"],
+  bootstrapView: ["Easy-install manifest", "SECRET-FREE GENERATOR"],
+  auditView: ["Audit operations", "DURABLE CONTROL LOG"],
 };
 
 let lastCommand = "";
@@ -67,6 +69,7 @@ function goView(view) {
   $("pageTitle").textContent = title;
   $("pageKicker").textContent = kicker;
   if (view === "invites") void loadInvitations();
+  if (view === "auditView") void loadAudit();
   if (view === "enroll") setWizard(lastInvite ? 3 : 1);
 }
 
@@ -113,6 +116,12 @@ function render(data) {
   $("hashrate").textContent = formatHashrate(topology.observed_hashrate_hs);
   serviceMatrix(local.services || {});
   serviceMatrix(local.services || {}, "servicesFull");
+  Object.entries(local.probes || {}).forEach(([name, probe]) => {
+    $("servicesFull").insertAdjacentHTML(
+      "beforeend",
+      `<div class="service"><span>${escapeHtml(name.replaceAll("_", " "))} · ${probe.latency_ms ?? "—"} ms</span><b class="${probe.healthy ? "active" : "down"}">${probe.configured ? (probe.healthy ? "healthy" : "failed") : "not configured"}</b></div>`
+    );
+  });
 
   const status = local.status || {};
   const sync = local.sync || {};
@@ -171,24 +180,30 @@ function renderNodes(nodes) {
       <td>${node.connected_peers ?? 0}</td>
       <td>${node.mining_peers ?? 0}</td>
       <td>${formatHashrate(node.observed_hashrate_hs)}</td>
+      <td>${node.health?.score ?? "—"} <small>${escapeHtml(node.health?.grade || "insufficient-data")}</small></td>
       <td>${formatTime(node.last_seen_unix_seconds)}</td>
       <td class="row-actions">
         <button type="button" class="btn tiny" data-action="detail" data-id="${escapeAttr(node.node_id)}">Detail</button>
         ${
           isLocal
             ? ""
-            : `<button type="button" class="btn tiny danger" data-action="remove" data-id="${escapeAttr(node.node_id)}">Remove</button>`
+            : `${node.banned
+                ? `<button type="button" class="btn tiny" data-action="unban" data-id="${escapeAttr(node.node_id)}">Unban</button>`
+                : `<button type="button" class="btn tiny danger" data-action="ban" data-id="${escapeAttr(node.node_id)}">Ban</button>`}
+               <button type="button" class="btn tiny danger" data-action="remove" data-id="${escapeAttr(node.node_id)}">Remove</button>`
         }
       </td>
     </tr>`;
       })
       .join("") ||
-    `<tr><td colspan="8" class="muted">No enrolled VPS yet. Use <b>Add node</b> to generate an invitation.</td></tr>`;
+    `<tr><td colspan="9" class="muted">No enrolled VPS yet. Use <b>Add node</b> to generate an invitation.</td></tr>`;
 
   $("nodeRows").querySelectorAll("button[data-action]").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.dataset.action === "detail") void openNodeDetail(btn.dataset.id);
       if (btn.dataset.action === "remove") void removeNode(btn.dataset.id);
+      if (btn.dataset.action === "ban") void banNode(btn.dataset.id);
+      if (btn.dataset.action === "unban") void unbanNode(btn.dataset.id);
     });
   });
 }
@@ -234,6 +249,8 @@ async function openNodeDetail(nodeId) {
       <div><span>Multiaddr</span><b class="mono">${escapeHtml(node.p2p_multiaddr || "—")}</b></div>
       <div><span>Peer ID</span><b class="mono">${escapeHtml(node.peer_id || "—")}</b></div>
       <div><span>Online</span><b class="${node.online ? "online-text" : "offline-text"}">${node.online ? "YES" : "NO"}</b></div>
+      <div><span>Banned</span><b>${node.banned ? escapeHtml(node.ban_reason || "YES") : "NO"}</b></div>
+      <div><span>Uptime / rating</span><b>${node.health?.uptime_percent ?? "—"}% / ${node.health?.score ?? "—"} (${escapeHtml(node.health?.grade || "insufficient-data")})</b></div>
       <div><span>Height</span><b>${node.height ?? "—"}</b></div>
       <div><span>Connected peers</span><b>${node.connected_peers ?? 0}</b></div>
       <div><span>Validating</span><b>${node.validating_peers ?? 0}</b></div>
@@ -261,7 +278,7 @@ $("closeNodeDetail").addEventListener("click", () => {
 async function removeNode(nodeId) {
   if (!confirm(`Remove node ${nodeId} from inventory? This does not wipe the remote host.`)) return;
   try {
-    const res = await fetch(`./api/nodes/${encodeURIComponent(nodeId)}`, { method: "DELETE" });
+    const res = await controlFetch(`./api/nodes/${encodeURIComponent(nodeId)}`, { method: "DELETE" });
     if (!res.ok) {
       const p = await res.json().catch(() => ({}));
       throw new Error(p.error || `HTTP ${res.status}`);
@@ -270,6 +287,44 @@ async function removeNode(nodeId) {
     await refresh();
   } catch (e) {
     showError(e.message);
+  }
+}
+
+function idempotencyKey() {
+  return globalThis.crypto?.randomUUID?.() || `admin-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function controlFetch(url, options = {}) {
+  return fetch(url, {
+    ...options,
+    headers: { ...(options.headers || {}), "Idempotency-Key": idempotencyKey() },
+  });
+}
+
+async function banNode(nodeId) {
+  const reason = prompt("Ban reason (stored in audit log):");
+  if (!reason) return;
+  await nodeControl(nodeId, "ban", { reason });
+}
+
+async function unbanNode(nodeId) {
+  if (!confirm(`Unban node ${nodeId}?`)) return;
+  await nodeControl(nodeId, "unban");
+}
+
+async function nodeControl(nodeId, action, payload) {
+  try {
+    const res = await controlFetch(`./api/nodes/${encodeURIComponent(nodeId)}/${action}`, {
+      method: "POST",
+      headers: payload ? { "content-type": "application/json" } : {},
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    toast(`Node ${action} applied`);
+    await refresh();
+  } catch (error) {
+    showError(error.message);
   }
 }
 
@@ -358,7 +413,7 @@ async function loadInvitations() {
 
 async function revokeInvite(id) {
   if (!confirm("Revoke this invitation? Existing install scripts with this token will fail.")) return;
-  const res = await fetch(`./api/invitations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const res = await controlFetch(`./api/invitations/${encodeURIComponent(id)}`, { method: "DELETE" });
   if (!res.ok) {
     const p = await res.json().catch(() => ({}));
     showError(p.error || `HTTP ${res.status}`);
@@ -438,10 +493,11 @@ $("inviteForm").addEventListener("submit", async (event) => {
   $("genInviteBtn").disabled = true;
   setWizard(2);
   try {
-    const response = await fetch("./api/invitations", {
+    const response = await controlFetch("./api/invitations", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        role: $("inviteRole").value,
         node_name: $("nodeName").value.trim(),
         advertise_host: $("advertiseHost").value.trim(),
         admin_domain: $("adminDomain").value.trim() || null,
@@ -461,6 +517,47 @@ $("inviteForm").addEventListener("submit", async (event) => {
     $("genInviteBtn").disabled = false;
   }
 });
+
+$("manifestForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const response = await fetch("./api/bootstrap/manifests", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        role: $("manifestRole").value,
+        node_name: $("manifestNodeName").value.trim(),
+        advertise_host: $("manifestHost").value.trim(),
+        acme_email: $("manifestEmail").value.trim(),
+        admin_domain: $("manifestAdminDomain").value.trim() || null,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    $("manifestOutput").textContent = JSON.stringify(payload, null, 2);
+    toast("Secret-free manifest generated");
+  } catch (error) {
+    showError(error.message);
+  }
+});
+
+async function loadAudit() {
+  try {
+    const response = await fetch("./api/audit", { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    $("auditRows").innerHTML = payload.map((entry) => `<tr>
+      <td>${formatTime(entry.occurred_at_unix_seconds)}</td>
+      <td>${escapeHtml(entry.actor)}</td><td>${escapeHtml(entry.action)}</td>
+      <td class="mono">${escapeHtml(entry.target)}</td><td>${escapeHtml(entry.outcome)}</td>
+      <td class="mono">${escapeHtml(entry.operation_id)}</td></tr>`).join("") ||
+      '<tr><td colspan="6" class="muted">No control mutations recorded.</td></tr>';
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+$("refreshAudit").addEventListener("click", () => void loadAudit());
 
 $("copyCommand").addEventListener("click", async () => {
   if (!lastCommand) return;

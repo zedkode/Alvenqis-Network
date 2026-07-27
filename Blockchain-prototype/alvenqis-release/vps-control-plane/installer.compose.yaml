@@ -1,4 +1,11 @@
 name: alvenqis-installer
+
+x-installer-logging: &installer-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "2"
+
 services:
   docker-broker:
     image: ${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
@@ -26,6 +33,10 @@ services:
     tmpfs: [/tmp:size=256m]
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+    pids_limit: 256
+    mem_limit: 384M
+    cpus: 0.35
+    logging: *installer-logging
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
       interval: 10s
@@ -55,6 +66,15 @@ services:
     tmpfs: [/tmp:size=128m]
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+    pids_limit: 256
+    mem_limit: 384M
+    cpus: 0.35
+    logging: *installer-logging
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 networks:
   installer-internal: {name: alvenqis-installer-internal, driver: bridge}
 secrets:

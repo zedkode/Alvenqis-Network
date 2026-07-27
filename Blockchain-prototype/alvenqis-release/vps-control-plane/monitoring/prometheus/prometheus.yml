@@ -1,6 +1,7 @@
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  evaluation_interval: 30s
   external_labels:
     project: alvenqis-network
     brand: alvenqis
@@ -33,13 +34,15 @@ scrape_configs:
   - job_name: alvenqis-metrics
     metrics_path: /metrics
     scrape_interval: 15s
+    scrape_timeout: 10s
     static_configs:
       - targets: [alvenqis-metrics-exporter:9101]
         labels:
           service: alvenqis-metrics
           brand: alvenqis
 
-  # Blackbox HTTP health probes against real service endpoints
+  # Blackbox only probes liveness. The metrics exporter owns the heavier
+  # status/indexer/P2P reads and caches one real sample per scrape window.
   - job_name: alvenqis-http
     metrics_path: /probe
     params:
@@ -47,11 +50,6 @@ scrape_configs:
     static_configs:
       - targets:
           - http://alvenqis-rpc:10787/health
-          - http://alvenqis-rpc:10787/status
-          - http://alvenqis-rpc:10787/indexer/status
-          - http://alvenqis-rpc:10787/sync/status
-          - http://alvenqis-rpc:10787/p2p/status
-          - http://alvenqis-rpc:10787/mempool/status
           - http://alvenqis-control:10788/health
           - http://alvenqis-ops:8080/health
           - http://alvenqis-metrics-exporter:9101/health
@@ -67,8 +65,8 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
-  # Optional pool HTTP probe (target is always listed; probe fails when pool profile is off)
-  # Operators should silence AlvenqisPoolEndpointDown when ENABLE_POOL=false.
+  # Optional pool liveness. Readiness/upstream state comes from the cached
+  # exporter sample and only alerts when ENABLE_POOL=true.
   - job_name: alvenqis-pool-http
     metrics_path: /probe
     params:
@@ -76,7 +74,6 @@ scrape_configs:
     static_configs:
       - targets:
           - http://alvenqis-pool:30787/health
-          - http://alvenqis-pool:30787/api/v1/pool/status
         labels:
           brand: alvenqis
           service: pool

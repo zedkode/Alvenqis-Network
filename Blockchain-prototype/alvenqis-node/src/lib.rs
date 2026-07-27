@@ -35,12 +35,13 @@ pub use mempool::{
     MEMPOOL_FILE_NAME,
 };
 pub use p2p::{
-    load_p2p_status, local_p2p_handshake, run_p2p_service, validate_p2p_handshake, ConnectedPeer,
-    NetworkMinerPresence, P2pHandshake, P2pStatus, PeerHello, P2P_PROTOCOL_VERSION,
-    P2P_STATUS_FILE_NAME,
+    load_p2p_status, local_p2p_handshake, queue_peer_ban, queue_peer_unban, run_p2p_service,
+    validate_p2p_handshake, ConnectedPeer, NetworkMinerPresence, P2pHandshake, P2pStatus,
+    PeerHello, P2P_PROTOCOL_VERSION, P2P_STATUS_FILE_NAME,
 };
 pub use peer_reputation::{
-    ReputationStore, DEFAULT_BAN_SECONDS, DEFAULT_SCORE, REPUTATION_FILE_NAME, SEVERE_BAN_SECONDS,
+    PeerAdminAction, PeerAdminRequest, ReputationStore, DEFAULT_BAN_SECONDS, DEFAULT_SCORE,
+    PEER_ADMIN_QUEUE_FILE_NAME, REPUTATION_FILE_NAME, SEVERE_BAN_SECONDS,
 };
 pub use storage::{
     append_block, append_block_unchecked, backup_chain_database, chain_database_path,

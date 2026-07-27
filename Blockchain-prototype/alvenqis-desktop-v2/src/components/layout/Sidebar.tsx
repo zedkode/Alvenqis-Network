@@ -63,7 +63,6 @@ const groups: Array<{ label: string; items: NavItem[] }> = [
 export function Sidebar({
   page,
   setPage,
-  nodeRunning,
   height,
   online,
   unreadMessages = 0,
@@ -72,14 +71,13 @@ export function Sidebar({
 }: {
   page: PageId;
   setPage(page: PageId): void;
-  nodeRunning: boolean;
   height?: number | null;
   online?: boolean;
   unreadMessages?: number;
   peers?: number;
   mempool?: number;
 }) {
-  const live = online || nodeRunning;
+  const live = Boolean(online);
 
   return (
     <aside className="sidebar" data-v2="sidebar">

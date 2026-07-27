@@ -11,6 +11,7 @@ import { pageTitle } from "../../shared/i18n";
 import { useTheme } from "../../shared/theme";
 import { useAppSettings } from "../../hooks/useAppSettings";
 import { useApp } from "../../model";
+import { connectionAgeLabel, connectionLabel } from "../../shared/connectivity";
 
 export function TopBar({
   page,
@@ -34,7 +35,8 @@ export function TopBar({
   const { wallets, selectWallet, setPage } = useApp();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [title, subtitle] = pageTitle(page, settings.language);
-  const online = snapshot.online || snapshot.rpc_running;
+  const rpc = snapshot.rpc_connection;
+  const online = rpc.status === "online";
   const runtimeLabel = online
     ? `Gateway · H ${snapshot.height ?? "—"}`
     : "Gateway offline";
@@ -66,12 +68,21 @@ export function TopBar({
           <span className="active">MAINNET</span>
           <span className="net-tag">CANDIDATE</span>
         </div>
-        <div className={`status-pill ${online ? "online" : ""}`}>
+        <div
+          className={`status-pill ${online ? "online" : ""}`}
+          title={[
+            rpc.endpoint,
+            connectionLabel(rpc),
+            `circuit ${rpc.circuit}`,
+            `last success ${connectionAgeLabel(rpc)}`,
+            rpc.error
+          ].filter(Boolean).join(" · ")}
+        >
           <i className="status-dot" />
           {runtimeLabel}
         </div>
         <span className="live-cadence">
-          <i /> LIVE {cadence}s
+          <i /> {online ? `LIVE ${cadence}s` : "AUTO RETRY"}
         </span>
         {wallet ? (
           <button

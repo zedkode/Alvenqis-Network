@@ -92,7 +92,7 @@ export function StartupGate(props: StartupGateProps) {
   const bootMessages = [
     "Starting Alvenqis Control Center…",
     "Checking RPC gateway connection…",
-    props.snapshot.online || props.snapshot.rpc_running
+    props.snapshot.online
       ? "RPC gateway is reachable."
       : "Waiting for RPC gateway…",
     props.snapshot.sync_status === "syncing"
@@ -280,7 +280,7 @@ export function StartupGate(props: StartupGateProps) {
                     <span>
                       <small>RPC</small>
                       <b className={props.snapshot.online ? "positive" : "negative"}>
-                        {props.snapshot.online || props.snapshot.rpc_running ? "Online" : "Offline"}
+                        {props.snapshot.online ? "Online" : "Offline"}
                       </b>
                     </span>
                   </div>

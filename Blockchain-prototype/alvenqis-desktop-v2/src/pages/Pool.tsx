@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
   Layers,
@@ -28,6 +28,11 @@ import { KeyValue, Panel } from "../components/ui/Panel";
 import { StatCard } from "../components/ui/StatCard";
 import { useAppSettings } from "../hooks/useAppSettings";
 import { useApp } from "../model";
+import {
+  connectionAgeLabel,
+  connectionLabel,
+  connectionPollDelay
+} from "../shared/connectivity";
 
 type TabId = "overview" | "workers" | "blocks" | "shares" | "payouts" | "accounts";
 
@@ -161,6 +166,7 @@ export function Pool() {
   const [blockDetail, setBlockDetail] = useState<PoolBlockRow | null>(null);
   const [shareDetail, setShareDetail] = useState<PoolShareRow | null>(null);
   const [payoutDetail, setPayoutDetail] = useState<PoolPayoutRow | null>(null);
+  const failStreak = useRef(0);
 
   const poolList = useMemo(() => {
     const fromSettings = settings.pool_urls?.length
@@ -187,16 +193,33 @@ export function Pool() {
         return;
       }
       setBusy(true);
-      setError(null);
       try {
-        const [cat, snap] = await Promise.all([
+        const [catalogResult, snapshotResult] = await Promise.allSettled([
           window.alvenqis.pool.catalog(),
           window.alvenqis.pool.snapshot(target, wallet?.address ?? null)
         ]);
-        setCatalog(cat);
+        if (catalogResult.status === "fulfilled") {
+          setCatalog(catalogResult.value);
+        }
+        if (snapshotResult.status === "rejected") {
+          throw snapshotResult.reason;
+        }
+        const snap = snapshotResult.value;
         setSnapshot(snap);
         setSelectedUrl(snap.pool_url || target);
+        if (snap.online) {
+          failStreak.current = 0;
+          setError(null);
+        } else {
+          failStreak.current = Math.min(8, failStreak.current + 1);
+          setError(
+            snap.error
+              || snap.connection.error
+              || "Pool status is offline; retry is automatic."
+          );
+        }
       } catch (err) {
+        failStreak.current = Math.min(8, failStreak.current + 1);
         setSnapshot(null);
         setError(String(err).replace(/^Error:\s*/i, ""));
       } finally {
@@ -212,12 +235,25 @@ export function Pool() {
   }, [settings.default_pool_url, wallet?.address]);
 
   useEffect(() => {
-    const ms = Math.max(5_000, settings.refresh_interval_ms || 5_000);
-    const timer = window.setInterval(() => {
+    const ms = connectionPollDelay(
+      settings.refresh_interval_ms || 5_000,
+      5_000,
+      failStreak.current,
+      snapshot?.connection
+    );
+    const timer = window.setTimeout(() => {
       void loadAll(selectedUrl);
     }, ms);
-    return () => window.clearInterval(timer);
-  }, [loadAll, selectedUrl, settings.refresh_interval_ms]);
+    return () => window.clearTimeout(timer);
+  }, [
+    loadAll,
+    selectedUrl,
+    settings.refresh_interval_ms,
+    snapshot?.connection.circuit,
+    snapshot?.connection.next_retry_at_unix_seconds,
+    snapshot?.connection.status,
+    snapshot?.fetched_at_unix_seconds
+  ]);
 
   const selectPool = async (url: string) => {
     setSelectedUrl(url);
@@ -300,6 +336,8 @@ export function Pool() {
       p.pool_url.trim().toLowerCase().replace(/\/$/, "") ===
       selectedUrl.trim().toLowerCase().replace(/\/$/, "")
   );
+  const poolConnection = snapshot?.connection ?? catalogEntry?.connection ?? network.pool_connection;
+  const poolOnline = snapshot?.online === true && poolConnection.status === "online";
 
   const tabs: Array<{ id: TabId; label: string; count?: number }> = [
     { id: "overview", label: "Overview" },
@@ -332,22 +370,31 @@ export function Pool() {
             <div className="page-hero-metric">
               <small>Workers</small>
               <strong>
-                {onlineWorkers}/{workers.length}
+                {poolOnline ? `${onlineWorkers}/${workers.length}` : "—"}
               </strong>
             </div>
             <div className="page-hero-metric">
               <small>Pool H/s</small>
               <strong style={{ fontSize: 14 }}>
-                {formatHashrate(asNum(status.estimated_hashrate_hs ?? snapshot?.status?.estimated_hashrate_hs))}
+                {poolOnline
+                  ? formatHashrate(asNum(status.estimated_hashrate_hs ?? snapshot?.status?.estimated_hashrate_hs))
+                  : "—"}
               </strong>
             </div>
             <div className="page-hero-metric">
               <small>Blocks</small>
-              <strong>{asNum(status.blocks_found)}</strong>
+              <strong>{poolOnline ? asNum(status.blocks_found) : "—"}</strong>
             </div>
           </>
         }
       />
+
+      <div className={poolOnline ? "notice" : "notice error"}>
+        Pool {connectionLabel(poolConnection)} · circuit {poolConnection.circuit} · last success{" "}
+        {connectionAgeLabel(poolConnection)}
+        {poolConnection.latency_ms !== null ? ` · ${poolConnection.latency_ms} ms` : ""}
+        {poolConnection.error ? ` · ${poolConnection.error}` : ""}
+      </div>
 
       <Panel title="Pool selection" detail="Multi-pool · set default for miner">
         <div className="pool-select-grid">

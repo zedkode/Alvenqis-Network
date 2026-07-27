@@ -10,6 +10,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 pub const INDEX_FILE_NAME: &str = "index.json";
 pub const INDEX_DB_FILE_NAME: &str = "index.sqlite3";
@@ -31,8 +32,14 @@ fn open_db(index_dir: &Path) -> IndexerResult<Connection> {
     ensure_index_dir(index_dir)?;
     let path = index_db_path(index_dir);
     let connection = Connection::open(&path)?;
+    connection.busy_timeout(Duration::from_secs(5))?;
     connection.pragma_update(None, "journal_mode", "WAL")?;
-    connection.pragma_update(None, "synchronous", "FULL")?;
+    // The explorer index is rebuildable from the consensus database. NORMAL keeps
+    // WAL durability while avoiding an fsync for every page on resource-bound VPSes.
+    connection.pragma_update(None, "synchronous", "NORMAL")?;
+    connection.pragma_update(None, "temp_store", "MEMORY")?;
+    connection.pragma_update(None, "cache_size", -32_768_i64)?;
+    connection.pragma_update(None, "wal_autocheckpoint", 1_000_i64)?;
     connection.pragma_update(None, "foreign_keys", "ON")?;
     initialize_schema(&connection)?;
     Ok(connection)

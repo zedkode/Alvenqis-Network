@@ -42,6 +42,8 @@
           <button data-view="poolView" type="button">
             <span class="nav-ico">⛏</span> Pool
           </button>
+          <button data-view="bootstrapView" type="button">Bootstrap</button>
+          <button data-view="auditView" type="button">Audit</button>
         </nav>
         <div class="truth">
           <img src="./logo-mark.png" alt="" class="truth-mark" width="28" height="28" />
@@ -164,6 +166,7 @@
                   <th>Peers</th>
                   <th>Miners</th>
                   <th>Hashrate</th>
+                  <th>Rating</th>
                   <th>Last report</th>
                   <th></th>
                 </tr>
@@ -197,6 +200,16 @@
           <div class="grid two enroll-grid">
             <form id="inviteForm" class="panel form">
               <h3 class="form-title">Node identity</h3>
+              <label>Deployment role
+                <select id="inviteRole">
+                  <option value="node">Node</option>
+                  <option value="validator">Validator</option>
+                  <option value="indexer" selected>Indexer</option>
+                  <option value="explorer">Explorer</option>
+                  <option value="stratum">Stratum TLS</option>
+                  <option value="full-stack">Full stack</option>
+                </select>
+              </label>
               <label>Node name
                 <input id="nodeName" required pattern="[A-Za-z0-9._-]+" maxlength="64" placeholder="bootstrap-eu-2" autocomplete="off" />
                 <small>Alphanumeric, dots, dashes. Label only — not a privilege.</small>
@@ -266,6 +279,31 @@
             <div class="panel-head"><h3>Status detail</h3><span>/pool/api/v1/pool/status</span></div>
             <div id="poolDetail" class="service-list large"></div>
           </article>
+        </section>
+        <section id="bootstrapView" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">SECRET-FREE GENERATOR</p><h2>Easy-install manifest</h2></div>
+            <p>Validated command template; enrollment secrets stay out of the response.</p>
+          </div>
+          <div class="grid two">
+            <form id="manifestForm" class="panel form">
+              <label>Role<select id="manifestRole"><option value="node">Node</option><option value="validator">Validator</option><option value="indexer">Indexer</option><option value="explorer">Explorer</option><option value="stratum">Stratum TLS</option><option value="full-stack">Full stack</option></select></label>
+              <label>Node name<input id="manifestNodeName" required pattern="[A-Za-z0-9._-]+" maxlength="64" /></label>
+              <label>Advertise host<input id="manifestHost" required pattern="[A-Za-z0-9._-]+" maxlength="64" /></label>
+              <label>ACME email<input id="manifestEmail" required type="email" /></label>
+              <label>Controller domain<input id="manifestAdminDomain" pattern="[A-Za-z0-9._-]+" maxlength="64" /></label>
+              <button type="submit" class="btn primary">Generate manifest</button>
+            </form>
+            <article class="panel"><div class="panel-head"><h3>Manifest JSON</h3><span>alvenqis.bootstrap/v1</span></div><pre id="manifestOutput" class="code-block">No manifest generated.</pre></article>
+          </div>
+        </section>
+
+        <section id="auditView" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">DURABLE CONTROL LOG</p><h2>Audit operations</h2></div>
+            <button id="refreshAudit" class="btn" type="button">Refresh audit</button>
+          </div>
+          <div class="panel table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>Outcome</th><th>Operation</th></tr></thead><tbody id="auditRows"></tbody></table></div>
         </section>
       </main>
     </div>

@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+pub const MAX_P2P_PEERS: usize = 128;
+pub const MAX_SEED_NODES: usize = 32;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NetworkConfig {
     pub network: Network,
@@ -141,16 +144,33 @@ impl NetworkConfig {
                 "p2p_listen_port must be greater than zero".to_owned(),
             ));
         }
-        if self.max_peers == 0 || self.max_peers > 4096 {
-            return Err(NodeError::ConfigMismatch(
-                "max_peers must be between 1 and 4096".to_owned(),
-            ));
+        if self.max_peers == 0 || self.max_peers > MAX_P2P_PEERS {
+            return Err(NodeError::ConfigMismatch(format!(
+                "max_peers must be between 1 and {MAX_P2P_PEERS}"
+            )));
         }
+        if self.seed_nodes.len() > MAX_SEED_NODES {
+            return Err(NodeError::ConfigMismatch(format!(
+                "seed_nodes cannot contain more than {MAX_SEED_NODES} entries"
+            )));
+        }
+        let mut unique_seeds = std::collections::BTreeSet::new();
         for seed in &self.seed_nodes {
-            if seed.trim().is_empty() {
+            let seed = seed.trim();
+            if seed.is_empty() {
                 return Err(NodeError::ConfigMismatch(
                     "seed_nodes cannot contain empty entries".to_owned(),
                 ));
+            }
+            if seed.len() > 512 || seed.chars().any(char::is_control) {
+                return Err(NodeError::ConfigMismatch(
+                    "seed_nodes contains an invalid or oversized entry".to_owned(),
+                ));
+            }
+            if !unique_seeds.insert(seed.to_ascii_lowercase()) {
+                return Err(NodeError::ConfigMismatch(format!(
+                    "seed_nodes contains duplicate entry {seed}"
+                )));
             }
         }
         if self.max_mempool_transactions == 0 {

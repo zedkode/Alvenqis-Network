@@ -31,7 +31,9 @@ values = {
     "SEED_NODES_TOML": ", ".join(json.dumps(seed) for seed in seeds),
     "CLOUDFLARE_MODE": "disabled",
     "ENABLE_POOL": "false",
-    "INDEXER_INTERVAL_SECONDS": "15",
+    "INDEXER_INTERVAL_SECONDS": "5",
+    "INDEXER_FAILURE_BACKOFF_MAX_SECONDS": "60",
+    "P2P_MIN_VALIDATED_PEERS": "1",
 }
 Path(".env").write_text(
     "\n".join(f"{key}={json.dumps(value)}" for key, value in values.items()) + "\n",

@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Activity, Download, Play, Radio, RefreshCw, ShieldCheck, Square } from "lucide-react";
-import {
-  LIVE_LOG_INTERVAL_MS,
-  LOCAL_REFRESH_MIN_MS,
-  REFRESH_INTERVAL_MS,
-  REMOTE_REFRESH_MIN_MS
-} from "@shared/constants";
+import { LIVE_LOG_INTERVAL_MS } from "@shared/constants";
 import { formatHashrate, shortHash } from "@shared/format";
 import { Gauge } from "../components/charts/Gauge";
 import { TelemetryChart } from "../components/charts/TelemetryChart";
@@ -16,15 +11,7 @@ import { StatCard } from "../components/ui/StatCard";
 import { useAppSettings } from "../hooks/useAppSettings";
 import type { SeriesPoint } from "../shared/chartPath";
 import { useApp } from "../model";
-
-function isLocalRpc(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    return host === "127.0.0.1" || host === "localhost" || host === "::1";
-  } catch {
-    return false;
-  }
-}
+import { connectionAgeLabel, connectionLabel } from "../shared/connectivity";
 
 function peerHealth(
   validated: boolean,
@@ -52,20 +39,9 @@ export function Node() {
 
   const loadLogs = async () => setLogs(await window.alvenqis.logs.recent(logService, 220));
 
-  // Do not double-hammer RPC: App.tsx already polls. Only extra refresh when opening Node,
-  // plus a slow cadence aligned with VPS-friendly settings.
   useEffect(() => {
     void refresh();
-    const remote = !isLocalRpc(settings.rpc_url);
-    const floor = remote ? REMOTE_REFRESH_MIN_MS : LOCAL_REFRESH_MIN_MS;
-    const interval = Math.max(
-      floor,
-      settings.refresh_interval_ms || REFRESH_INTERVAL_MS,
-      remote ? 12_000 : 5_000
-    );
-    const timer = window.setInterval(() => void refresh(), interval);
-    return () => window.clearInterval(timer);
-  }, [refresh, settings.refresh_interval_ms, settings.rpc_url]);
+  }, [refresh, settings.rpc_url]);
 
   useEffect(() => {
     void loadLogs();
@@ -79,12 +55,20 @@ export function Node() {
 
   useEffect(() => {
     const ts = Date.now();
-    if (n.height !== null) {
+    if (n.rpc_connection.status === "online" && n.height !== null) {
       setHeightHistory((v) => [...v, { value: n.height!, ts }].slice(-60));
     }
-    setPeerHistory((v) => [...v, { value: n.connected_peer_count, ts }].slice(-60));
+    if (n.p2p_connection.status === "online") {
+      setPeerHistory((v) => [...v, { value: n.connected_peer_count, ts }].slice(-60));
+    }
     setLastUpdated(new Date());
-  }, [n.height, n.connected_peer_count, n.tip_hash]);
+  }, [
+    n.height,
+    n.connected_peer_count,
+    n.tip_hash,
+    n.rpc_connection.status,
+    n.p2p_connection.status
+  ]);
 
   useEffect(() => {
     if (logsRef.current) logsRef.current.scrollTop = logsRef.current.scrollHeight;
@@ -128,15 +112,19 @@ export function Node() {
           <>
             <div className="page-hero-metric">
               <small>Peers</small>
-              <strong>{n.connected_peer_count}</strong>
+              <strong>{n.p2p_connection.status === "online" ? n.connected_peer_count : "—"}</strong>
             </div>
             <div className="page-hero-metric">
               <small>Validated</small>
-              <strong>{n.validated_peer_count}</strong>
+              <strong>{n.p2p_connection.status === "online" ? n.validated_peer_count : "—"}</strong>
             </div>
             <div className="page-hero-metric">
               <small>Observed HR</small>
-              <strong>{formatHashrate(n.observed_network_hashrate_hs)}</strong>
+              <strong>
+                {n.p2p_connection.status === "online"
+                  ? formatHashrate(n.observed_network_hashrate_hs)
+                  : "—"}
+              </strong>
             </div>
           </>
         }
@@ -182,13 +170,40 @@ export function Node() {
         />
       </div>
 
+      <div className="grid cols-2">
+        {[["RPC", n.rpc_connection], ["P2P", n.p2p_connection]].map(([name, connection]) => (
+          <Panel
+            key={name as string}
+            title={`${name} ${connectionLabel(connection as typeof n.rpc_connection)}`}
+            detail={`circuit ${(connection as typeof n.rpc_connection).circuit}`}
+          >
+            <KeyValue label="Endpoint" mono>
+              {(connection as typeof n.rpc_connection).endpoint}
+            </KeyValue>
+            <KeyValue label="Last success">
+              {connectionAgeLabel(connection as typeof n.rpc_connection)}
+            </KeyValue>
+            <KeyValue label="Latency">
+              {(connection as typeof n.rpc_connection).latency_ms !== null
+                ? `${(connection as typeof n.rpc_connection).latency_ms} ms`
+                : "—"}
+            </KeyValue>
+            {(connection as typeof n.rpc_connection).error ? (
+              <p className="hw-error">{(connection as typeof n.rpc_connection).error}</p>
+            ) : null}
+          </Panel>
+        ))}
+      </div>
+
       <div className="node-command-deck">
         <Panel title="Command center" detail="VPS mode — no local stack" className="node-controls">
-          <div className={`node-beacon ${n.node_running ? "online" : ""}`}>
+          <div className={`node-beacon ${n.rpc_connection.status === "online" ? "online" : ""}`}>
             <div className="beacon-rings">
               <ShieldCheck size={34} />
             </div>
-            <strong>{n.node_running ? "VPS VALIDATOR ONLINE" : "GATEWAY OFFLINE"}</strong>
+            <strong>
+              RPC {connectionLabel(n.rpc_connection)}
+            </strong>
             <span>
               {n.detail
                 || n.p2p_error
@@ -236,10 +251,12 @@ export function Node() {
         </Panel>
 
         <Panel title="Network pulse" detail="P2P view" className="network-pulse-panel">
-          <div className={`network-pulse ${n.node_running ? "online" : ""}`}>
+          <div className={`network-pulse ${n.p2p_connection.status === "online" ? "online" : ""}`}>
             <div className="pulse-center">
               <Radio size={25} />
-              <strong>{n.connected_peer_count}</strong>
+              <strong>
+                {n.p2p_connection.status === "online" ? n.connected_peer_count : "—"}
+              </strong>
               <small>CONNECTED</small>
             </div>
             {Array.from({ length: Math.min(8, n.connected_peer_count) }, (_, index) => (
@@ -248,13 +265,18 @@ export function Node() {
           </div>
           <div className="network-counters">
             <span>
-              <b>{n.validated_peer_count}</b> validated
+              <b>{n.p2p_connection.status === "online" ? n.validated_peer_count : "—"}</b> validated
             </span>
             <span>
-              <b>{n.mining_peer_count}</b> mining
+              <b>{n.p2p_connection.status === "online" ? n.mining_peer_count : "—"}</b> mining
             </span>
             <span>
-              <b>{formatHashrate(n.observed_network_hashrate_hs)}</b> observed
+              <b>
+                {n.p2p_connection.status === "online"
+                  ? formatHashrate(n.observed_network_hashrate_hs)
+                  : "—"}
+              </b>{" "}
+              observed
             </span>
           </div>
         </Panel>

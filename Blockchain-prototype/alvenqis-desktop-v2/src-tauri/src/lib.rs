@@ -1,3 +1,4 @@
+mod availability;
 mod commands;
 mod error;
 mod health;

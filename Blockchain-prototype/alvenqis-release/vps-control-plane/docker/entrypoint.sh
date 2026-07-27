@@ -18,7 +18,12 @@ export BASE_DOMAIN="${BASE_DOMAIN:-example.invalid}" NODE_NAME="${NODE_NAME:-alv
 export STRATUM_HOST="${STRATUM_HOST:-stratum.${BASE_DOMAIN}}"
 export STRATUM_INTERNAL_PORT="${STRATUM_INTERNAL_PORT:-3333}"
 export STRATUM_PORT="${STRATUM_PORT:-3333}"
+export MAX_P2P_PEERS="${MAX_P2P_PEERS:-64}"
 export RPC_ACCESS_MODE="${RPC_ACCESS_MODE:-public-submit}" RPC_EXPOSE_MINING="${RPC_EXPOSE_MINING:-false}"
+[[ "$MAX_P2P_PEERS" =~ ^[0-9]+$ ]] && (( MAX_P2P_PEERS >= 8 && MAX_P2P_PEERS <= 256 )) || {
+  echo "ERROR: MAX_P2P_PEERS must be between 8 and 256." >&2
+  exit 64
+}
 export CONTROLLER_URL_TOML='""'; [[ -n "${CONTROLLER_URL:-}" ]] && CONTROLLER_URL_TOML="\"${CONTROLLER_URL}\""
 case "$component" in
  node)
@@ -34,19 +39,15 @@ case "$component" in
  rpc)
   render /app/templates/node.toml.template "$config_dir/rpc-node.toml"; render /app/templates/rpc.toml.template "$config_dir/rpc.toml"
   exec alvenqis-rpc-gateway --config "$config_dir/rpc.toml" --node-config "$config_dir/rpc-node.toml" ;;
- mining-rpc)
-  # Private mining RPC for the pool only (not public). Separate from public-submit gateway.
-  render /app/templates/node.toml.template "$config_dir/mining-node.toml"
-  render /app/templates/rpc.toml.template "$config_dir/mining-rpc.toml"
-  exec alvenqis-rpc-gateway --config "$config_dir/mining-rpc.toml" --node-config "$config_dir/mining-node.toml" ;;
  indexer)
-  interval="${INDEXER_INTERVAL_SECONDS:-15}"
-  while true; do if alvenqis-indexer --network mainnet-candidate --chain-data-dir "$chain_dir" --index-dir "$index_dir" sync; then date -u +%FT%TZ > "$index_dir/.last-success"; else echo "Indexer refresh failed" >&2; fi; sleep "$interval"; done ;;
+  exec /usr/local/bin/alvenqis-indexer-loop ;;
  control)
   render /app/templates/admin.toml.template "$config_dir/admin.toml"
   if [[ -n "${CONTROLLER_URL:-}" && -n "${ENROLLMENT_TOKEN:-}" && ! -s /data/control/agent-credentials.json ]]; then umask 077; printf '%s' "$ENROLLMENT_TOKEN" > /data/control/enrollment.token; fi
   exec alvenqis-vps-admin --config "$config_dir/admin.toml" ;;
  pool)
-  required_env POOL_ADDRESS; render /app/templates/pool.toml.template "$config_dir/pool.toml"; exec alvenqis-mining-pool --config "$config_dir/pool.toml" ;;
+  required_env POOL_ADDRESS
+  render /app/templates/pool.toml.template "$config_dir/pool.toml"
+  exec /usr/local/bin/alvenqis-pool-supervisor "$config_dir/pool.toml" ;;
  *) echo "ERROR: invalid ALVENQIS_COMPONENT" >&2; exit 64 ;;
 esac

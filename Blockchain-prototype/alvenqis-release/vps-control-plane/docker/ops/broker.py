@@ -42,7 +42,7 @@ def schedule_installer_stop():
   subprocess.run(['docker','stop','alvenqis-installer-broker'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=False)
  threading.Thread(target=stop_later,daemon=True).start()
 def deploy():
- e=cfg(); out=[run(compose('config'),120)]
+ e=cfg(); out=[run(['bash',str(WORKSPACE/'scripts/runtime-preflight.sh')],120),run(compose('config'),120)]
  if e.get('CLOUDFLARE_MODE','disabled')=='tunnel': out.append(run([str(WORKSPACE/'scripts/cloudflare-bootstrap.sh'),'--prepare'],600))
  # Deliberately build from the checked-out repository. No pull, updater, mutable tag refresh or scheduled image replacement.
  args=('up','-d','--build')

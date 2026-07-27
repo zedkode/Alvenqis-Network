@@ -558,8 +558,8 @@ export function Settings() {
               <KeyValue label="Network ID" mono>{NETWORK_ID}</KeyValue>
               <KeyValue label="Mode">Remote VPS · no local chain stack</KeyValue>
               <KeyValue label="Live RPC status">
-                <span className={snapshot.rpc_running ? "positive" : "negative"}>
-                  {snapshot.rpc_running ? "ONLINE" : "OFFLINE"}
+                <span className={snapshot.rpc_connection.status === "online" ? "positive" : "negative"}>
+                  {snapshot.rpc_connection.status.toUpperCase()} · circuit {snapshot.rpc_connection.circuit}
                 </span>
               </KeyValue>
               <KeyValue label="Gateway height">{snapshot.height ?? "—"}</KeyValue>

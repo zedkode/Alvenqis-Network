@@ -34,10 +34,13 @@ export function Overview() {
 
   useEffect(() => {
     const ts = Date.now();
-    if (n.miner_hashrate_hs !== null) {
+    if (
+      n.miner_hashrate_hs !== null
+      && (n.stratum_connection.status === "online" || n.rpc_connection.status === "online")
+    ) {
       setHashrateHistory((v) => appendSample(v, Math.round(n.miner_hashrate_hs!), 60, ts));
     }
-    if (n.height !== null) {
+    if (n.rpc_connection.status === "online" && n.height !== null) {
       setHeightHistory((v) => appendSample(v, n.height!, 60, ts));
       if (prevHeight.current !== null && n.height > prevHeight.current) {
         setHeightPulse(true);
@@ -45,8 +48,17 @@ export function Overview() {
       }
       prevHeight.current = n.height;
     }
-    setMempoolHistory((v) => appendSample(v, n.mempool_count, 60, ts));
-  }, [n.height, n.mempool_count, n.miner_hashrate_hs, n.tip_hash]);
+    if (n.rpc_connection.status === "online") {
+      setMempoolHistory((v) => appendSample(v, n.mempool_count, 60, ts));
+    }
+  }, [
+    n.height,
+    n.mempool_count,
+    n.miner_hashrate_hs,
+    n.tip_hash,
+    n.rpc_connection.status,
+    n.stratum_connection.status
+  ]);
 
   const txPerBlock = [...n.recent_blocks].reverse().map((b) => b.transaction_count);
   const rewardSeries = [...n.recent_blocks].reverse().map((b) => ({
@@ -54,8 +66,8 @@ export function Overview() {
     ts: b.timestamp * 1000
   }));
   const serviceStates = [
-    ["NODE", n.node_running, ShieldCheck],
-    ["RPC", n.rpc_running, Radio],
+    ["NODE", n.p2p_connection.status === "online", ShieldCheck],
+    ["RPC", n.rpc_connection.status === "online", Radio],
     ["INDEXER", n.indexer_ready, Database],
     ["MINER", n.miner_running, Cpu]
   ] as const;

@@ -10,9 +10,10 @@ not delete legacy units, containers or data.
 ## Services
 
 - non-mining full validation and P2P node;
-- non-published RPC gateway with public `/mining/*` retired at Caddy;
-- TLS-only Stratum pool (`ENABLE_POOL`) using that gateway only over the private Docker network;
-- read-only indexer loop;
+- one RPC gateway for chain reads, transaction submission and Docker-internal
+  pool templates; Caddy always returns 410 for public `/mining/*`;
+- TLS-only Stratum pool (`ENABLE_POOL`) with direct DNS-only TCP routing;
+- supervised read-only indexer loop with bounded exponential retry;
 - authenticated controller or fleet agent;
 - Caddy with optional Cloudflare Tunnel or direct DNS;
 - Prometheus, Alertmanager, Grafana, Loki, Alloy, node exporter and alvenqis-metrics-exporter (chain/RPC/indexer/pool gauges);
@@ -22,10 +23,28 @@ not delete legacy units, containers or data.
 The VPS image does not contain the CUDA miner or wallet keys. Pool payouts
 remain a separate offline or HSM-backed operator responsibility.
 
+## Capacity and availability boundary
+
+The default limits are designed for one 6 vCPU, 12 GB RAM, 100 GB NVMe host.
+The maximum active container limits stay below 10.5 GiB even with pool,
+Cloudflare and backup profiles enabled. Docker logs are rotated, Prometheus is
+bounded to 8 GB/15 days and Loki defaults to seven days.
+
+This single-host deployment cannot truthfully guarantee zero downtime. It uses
+healthchecks, readiness gates, restart policies, bounded retries, TLS
+certificate reload and dependency isolation so monitoring failures do not take
+RPC offline. Real host, chain, P2P, indexer, pool-upstream and TLS checks run
+before a deploy is accepted.
+
+The current Rust indexer is correct but rebuilds O(n) after a tip divergence.
+This runtime prevents overlapping rebuilds and backs off failures; incremental
+index attach/detach requires a future change outside this control-plane scope.
+
 ## Validate
 
 ```bash
 cd alvenqis-release/vps-control-plane
+./scripts/runtime-preflight.sh
 ./scripts/validate-stack.sh --require-docker
 ```
 

@@ -1,14 +1,26 @@
 name: ${COMPOSE_PROJECT_NAME:-alvenqis-control-plane}
 
-x-runtime-image: &runtime-image
-  image: ${ALVENQIS_RUNTIME_IMAGE:-ghcr.io/zedkode/alvenqis-runtime}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
-  build:
-    context: ${ALVENQIS_HOST_REPO:-../..}
-    dockerfile: alvenqis-release/vps-control-plane/docker/Dockerfile
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${CONTAINER_LOG_MAX_SIZE:-20m}
+    max-file: ${CONTAINER_LOG_MAX_FILES:-3}
+
+x-service-guardrails: &service-guardrails
   restart: unless-stopped
   networks: [alvenqis-internal]
   security_opt: [no-new-privileges:true]
   cap_drop: [ALL]
+  pids_limit: 256
+  stop_grace_period: 30s
+  logging: *default-logging
+
+x-runtime-image: &runtime-image
+  <<: *service-guardrails
+  image: ${ALVENQIS_RUNTIME_IMAGE:-ghcr.io/zedkode/alvenqis-runtime}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+  build:
+    context: ${ALVENQIS_HOST_REPO:-../..}
+    dockerfile: alvenqis-release/vps-control-plane/docker/Dockerfile
 
 x-runtime-common: &runtime-common
   <<: *runtime-image
@@ -32,65 +44,59 @@ services:
       timeout: 5s
       retries: 12
       start_period: 60s
-    mem_limit: ${NODE_MEMORY_LIMIT:-3G}
-    cpus: 2.0
+    mem_limit: ${NODE_MEMORY_LIMIT:-2304M}
+    cpus: ${NODE_CPU_LIMIT:-2.25}
+    pids_limit: 512
+    stop_grace_period: 90s
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
+    sysctls:
+      net.core.somaxconn: "4096"
+      net.ipv4.tcp_keepalive_time: "60"
+      net.ipv4.tcp_keepalive_intvl: "15"
+      net.ipv4.tcp_keepalive_probes: "4"
 
   alvenqis-rpc:
     <<: *runtime-common
     container_name: alvenqis-rpc
     environment:
       ALVENQIS_COMPONENT: rpc
-      # Public gateway: submit/status/health only. Mining is on alvenqis-mining-rpc.
+      # One gateway owns chain reads/writes. Mining remains Docker-internal:
       # Caddy retires every public /mining route with HTTP 410.
       RPC_ACCESS_MODE: public-submit
-      RPC_EXPOSE_MINING: "false"
-    depends_on:
-      alvenqis-node: {condition: service_healthy}
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:10787/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 12
-      start_period: 30s
-    mem_limit: ${RPC_MEMORY_LIMIT:-3G}
-    cpus: 1.0
-
-  # Private mining template/submit for the pool (Docker network only).
-  alvenqis-mining-rpc:
-    <<: *runtime-common
-    container_name: alvenqis-mining-rpc
-    profiles: [pool]
-    environment:
-      ALVENQIS_COMPONENT: mining-rpc
-      RPC_ACCESS_MODE: private-mining
       RPC_EXPOSE_MINING: "true"
     depends_on:
       alvenqis-node: {condition: service_healthy}
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:10787/health"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:10787/health >/dev/null && curl -fsS http://127.0.0.1:10787/status | grep -q '\"initialized\":true'"]
       interval: 15s
       timeout: 5s
       retries: 12
       start_period: 30s
-    mem_limit: ${MINING_RPC_MEMORY_LIMIT:-2G}
-    cpus: 0.75
+    mem_limit: ${RPC_MEMORY_LIMIT:-1536M}
+    cpus: ${RPC_CPU_LIMIT:-1.25}
+    pids_limit: 384
+    ulimits:
+      nofile: {soft: 32768, hard: 32768}
 
   alvenqis-indexer:
     <<: *runtime-common
     container_name: alvenqis-indexer
     environment:
       ALVENQIS_COMPONENT: indexer
-      INDEXER_INTERVAL_SECONDS: ${INDEXER_INTERVAL_SECONDS:-15}
+      INDEXER_INTERVAL_SECONDS: ${INDEXER_INTERVAL_SECONDS:-5}
+      INDEXER_FAILURE_BACKOFF_MAX_SECONDS: ${INDEXER_FAILURE_BACKOFF_MAX_SECONDS:-60}
     depends_on:
-      alvenqis-rpc: {condition: service_healthy}
+      alvenqis-node: {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "test -f /data/.alvenqis-mainnet/indexer/.last-success && find /data/.alvenqis-mainnet/indexer/.last-success -mmin -5 | grep -q ."]
+      test: ["CMD-SHELL", "pgrep -f '^alvenqis-indexer ' >/dev/null && test -s /data/.alvenqis-mainnet/indexer/.last-success && find /data/.alvenqis-mainnet/indexer/.last-success -mmin -10 | grep -q ."]
       interval: 30s
       timeout: 5s
       retries: 8
-      start_period: 90s
-    mem_limit: ${INDEXER_MEMORY_LIMIT:-1G}
-    cpus: 0.5
+      start_period: 180s
+    mem_limit: ${INDEXER_MEMORY_LIMIT:-768M}
+    cpus: ${INDEXER_CPU_LIMIT:-0.75}
+    pids_limit: 256
 
   alvenqis-control:
     <<: *runtime-image
@@ -112,13 +118,13 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
-    mem_limit: ${CONTROL_MEMORY_LIMIT:-1G}
-    cpus: 0.5
+    mem_limit: ${CONTROL_MEMORY_LIMIT:-384M}
+    cpus: ${CONTROL_CPU_LIMIT:-0.35}
 
   stratum-certbot:
+    <<: *service-guardrails
     image: certbot/dns-cloudflare:v5.7.0
     container_name: alvenqis-stratum-certbot
-    restart: unless-stopped
     profiles: [pool]
     env_file: [.env]
     entrypoint: ["/bin/sh", "/scripts/certbot-loop.sh"]
@@ -128,13 +134,14 @@ services:
       - ./state/stratum/lib:/var/lib/letsencrypt
     secrets: [cloudflare_api_token]
     healthcheck:
-      test: ["CMD-SHELL", "test -s /etc/letsencrypt/live/${STRATUM_HOST}/fullchain.pem && test -s /etc/letsencrypt/live/${STRATUM_HOST}/privkey.pem"]
+      test: ["CMD-SHELL", "test -s /etc/letsencrypt/live/${STRATUM_HOST}/fullchain.pem && test -s /etc/letsencrypt/live/${STRATUM_HOST}/privkey.pem && test -s /etc/letsencrypt/.stratum-cert-ready"]
       interval: 15s
       timeout: 5s
       retries: 40
       start_period: 15s
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    mem_limit: ${CERTBOT_MEMORY_LIMIT:-256M}
+    cpus: ${CERTBOT_CPU_LIMIT:-0.20}
+    pids_limit: 128
 
   alvenqis-pool:
     <<: *runtime-image
@@ -149,26 +156,36 @@ services:
       - ./state/stratum/letsencrypt:/certs:ro
     secrets: [pool_admin_token]
     depends_on:
-      alvenqis-mining-rpc: {condition: service_healthy}
+      alvenqis-rpc: {condition: service_healthy}
       stratum-certbot: {condition: service_healthy}
     read_only: true
     tmpfs: [/tmp:size=64m]
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:30787/health"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:30787/health | grep -q '\"stratum_tls\":true' && curl -fsS http://127.0.0.1:30787/api/v1/pool/status | grep -q '\"upstream_status\":\"healthy\"'"]
       interval: 15s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      start_period: 60s
+    mem_limit: ${POOL_MEMORY_LIMIT:-768M}
+    cpus: ${POOL_CPU_LIMIT:-0.75}
+    pids_limit: 512
+    stop_grace_period: 60s
+    ulimits:
+      nofile: {soft: 65536, hard: 65536}
+    sysctls:
+      net.core.somaxconn: "4096"
+      net.ipv4.tcp_keepalive_time: "60"
+      net.ipv4.tcp_keepalive_intvl: "15"
+      net.ipv4.tcp_keepalive_probes: "4"
 
   docker-broker:
+    <<: *service-guardrails
     image: ${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
     build:
       context: ${ALVENQIS_HOST_WORKSPACE:-.}
       dockerfile: docker/ops/Dockerfile
     container_name: alvenqis-docker-broker
-    restart: unless-stopped
     working_dir: /app
-    networks: [alvenqis-internal]
     env_file: [.env]
     environment:
       ALVENQIS_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
@@ -184,22 +201,24 @@ services:
     secrets: [broker_token, cloudflare_api_token, backup_passphrase, r2_secret_access_key]
     read_only: true
     tmpfs: [/tmp:size=256m]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
       interval: 15s
       timeout: 5s
       retries: 8
+    mem_limit: ${BROKER_MEMORY_LIMIT:-384M}
+    cpus: ${BROKER_CPU_LIMIT:-0.35}
+    pids_limit: 256
+    ulimits:
+      nofile: {soft: 32768, hard: 32768}
 
   alvenqis-ops:
+    <<: *service-guardrails
     image: ${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
     build:
       context: ${ALVENQIS_HOST_WORKSPACE:-.}
       dockerfile: docker/ops/Dockerfile
     container_name: alvenqis-ops
-    restart: unless-stopped
-    networks: [alvenqis-internal]
     env_file: [.env]
     environment:
       ALVENQIS_WORKSPACE: /workspace
@@ -216,20 +235,20 @@ services:
       docker-broker: {condition: service_healthy}
     read_only: true
     tmpfs: [/tmp:size=128m]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
     cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 15s
       timeout: 5s
       retries: 8
+    mem_limit: ${OPS_MEMORY_LIMIT:-384M}
+    cpus: ${OPS_CPU_LIMIT:-0.35}
+    pids_limit: 256
 
   caddy:
+    <<: *service-guardrails
     image: caddy:2.9-alpine
     container_name: alvenqis-caddy
-    restart: unless-stopped
-    networks: [alvenqis-internal]
     env_file: [.env]
     entrypoint: ["/usr/local/bin/alvenqis-caddy-entrypoint.sh"]
     volumes:
@@ -239,38 +258,44 @@ services:
       - ./state/caddy/config:/config
     secrets: [admin_password]
     depends_on:
-      alvenqis-control: {condition: service_healthy}
-      alvenqis-rpc: {condition: service_healthy}
-      alvenqis-ops: {condition: service_healthy}
-      grafana: {condition: service_healthy}
+      alvenqis-control: {condition: service_started}
+      alvenqis-rpc: {condition: service_started}
+      alvenqis-ops: {condition: service_started}
+      grafana: {condition: service_started}
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:2019/config/"]
       interval: 20s
       timeout: 5s
       retries: 8
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]
+    mem_limit: ${CADDY_MEMORY_LIMIT:-256M}
+    cpus: ${CADDY_CPU_LIMIT:-0.35}
+    pids_limit: 256
 
   cloudflared:
+    <<: *service-guardrails
     image: cloudflare/cloudflared:2026.7.2
     container_name: alvenqis-cloudflared
-    restart: unless-stopped
     profiles: [cloudflare]
     networks: [alvenqis-internal, onepanel-runtime]
     command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:20241", "run", "--token-file", "/run/secrets/cloudflare_tunnel_token"]
     secrets: [cloudflare_tunnel_token]
     depends_on:
       caddy: {condition: service_healthy}
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "cloudflared", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: ${CLOUDFLARED_MEMORY_LIMIT:-256M}
+    cpus: ${CLOUDFLARED_CPU_LIMIT:-0.20}
+    pids_limit: 128
 
   prometheus:
+    <<: *service-guardrails
     image: prom/prometheus:v3.5.0
     container_name: alvenqis-prometheus
-    restart: unless-stopped
-    networks: [alvenqis-internal]
-    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}", "--web.enable-lifecycle"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}", "--storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-8GB}", "--web.enable-lifecycle"]
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -284,14 +309,14 @@ services:
       interval: 15s
       timeout: 5s
       retries: 8
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    mem_limit: ${PROMETHEUS_MEMORY_LIMIT:-768M}
+    cpus: ${PROMETHEUS_CPU_LIMIT:-0.50}
+    pids_limit: 256
 
   alertmanager:
+    <<: *service-guardrails
     image: prom/alertmanager:v0.28.1
     container_name: alvenqis-alertmanager
-    restart: unless-stopped
-    networks: [alvenqis-internal]
     command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
     volumes:
       - ./state/config/generated/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
@@ -302,40 +327,50 @@ services:
       interval: 15s
       timeout: 5s
       retries: 8
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    mem_limit: ${ALERTMANAGER_MEMORY_LIMIT:-128M}
+    cpus: ${ALERTMANAGER_CPU_LIMIT:-0.10}
+    pids_limit: 128
 
   blackbox-exporter:
+    <<: *service-guardrails
     image: prom/blackbox-exporter:v0.27.0
     container_name: alvenqis-blackbox-exporter
-    restart: unless-stopped
-    networks: [alvenqis-internal]
     command: ["--config.file=/etc/blackbox_exporter/config.yml"]
     volumes: ["./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro"]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "/bin/blackbox_exporter", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: ${BLACKBOX_MEMORY_LIMIT:-128M}
+    cpus: ${BLACKBOX_CPU_LIMIT:-0.10}
+    pids_limit: 128
 
   node-exporter:
+    <<: *service-guardrails
     image: prom/node-exporter:v1.9.1
     container_name: alvenqis-node-exporter
-    restart: unless-stopped
     pid: host
-    networks: [alvenqis-internal]
     command: ["--path.rootfs=/host", "--collector.textfile.directory=/textfile"]
     volumes:
       - /:/host:ro,rslave
       - ./state/metrics:/textfile:ro
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "/bin/node_exporter", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: ${NODE_EXPORTER_MEMORY_LIMIT:-128M}
+    cpus: ${NODE_EXPORTER_CPU_LIMIT:-0.10}
+    pids_limit: 128
 
   alvenqis-metrics-exporter:
+    <<: *service-guardrails
     build:
       context: ${ALVENQIS_HOST_WORKSPACE:-.}/docker/metrics-exporter
       dockerfile: Dockerfile
     image: ${ALVENQIS_METRICS_IMAGE:-ghcr.io/zedkode/alvenqis-metrics-exporter}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
     container_name: alvenqis-metrics-exporter
-    restart: unless-stopped
-    networks: [alvenqis-internal]
     environment:
       ALVENQIS_RPC_URL: http://alvenqis-rpc:10787
       ALVENQIS_POOL_URL: http://alvenqis-pool:30787
@@ -344,9 +379,10 @@ services:
       ENABLE_POOL: ${ENABLE_POOL:-false}
       LISTEN_HOST: 0.0.0.0
       LISTEN_PORT: "9101"
-      SCRAPE_TIMEOUT_SECONDS: "5"
+      SCRAPE_TIMEOUT_SECONDS: ${METRICS_SCRAPE_TIMEOUT_SECONDS:-3}
+      CACHE_TTL_SECONDS: ${METRICS_CACHE_TTL_SECONDS:-10}
     depends_on:
-      alvenqis-rpc: {condition: service_healthy}
+      alvenqis-rpc: {condition: service_started}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9101/health"]
       interval: 15s
@@ -355,15 +391,17 @@ services:
       start_period: 15s
     read_only: true
     tmpfs: [/tmp:size=16m]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    mem_limit: ${METRICS_MEMORY_LIMIT:-192M}
+    cpus: ${METRICS_CPU_LIMIT:-0.20}
+    pids_limit: 128
 
   loki:
+    <<: *service-guardrails
     image: grafana/loki:3.5.1
     container_name: alvenqis-loki
-    restart: unless-stopped
-    networks: [alvenqis-internal]
-    command: ["-config.file=/etc/loki/local-config.yaml"]
+    command: ["-config.file=/etc/loki/local-config.yaml", "-config.expand-env=true"]
+    environment:
+      LOKI_RETENTION_HOURS: ${LOKI_RETENTION_HOURS:-168}
     volumes:
       - ./monitoring/loki/loki.yml:/etc/loki/local-config.yaml:ro
       - ./state/loki:/loki
@@ -372,32 +410,37 @@ services:
       interval: 15s
       timeout: 5s
       retries: 8
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    mem_limit: ${LOKI_MEMORY_LIMIT:-768M}
+    cpus: ${LOKI_CPU_LIMIT:-0.40}
+    pids_limit: 256
 
   alloy:
+    <<: *service-guardrails
     image: grafana/alloy:v1.9.2
     container_name: alvenqis-alloy
-    restart: unless-stopped
     user: "473:0"
-    networks: [alvenqis-internal]
     command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
     volumes:
       - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - ./state/alloy:/var/lib/alloy/data
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     depends_on:
-      loki: {condition: service_healthy}
+      loki: {condition: service_started}
     read_only: true
     tmpfs: [/tmp:size=64m]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "/bin/alloy", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: ${ALLOY_MEMORY_LIMIT:-256M}
+    cpus: ${ALLOY_CPU_LIMIT:-0.20}
+    pids_limit: 256
 
   grafana:
+    <<: *service-guardrails
     image: grafana/grafana:12.0.2
     container_name: alvenqis-grafana
-    restart: unless-stopped
-    networks: [alvenqis-internal]
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_password
@@ -410,25 +453,25 @@ services:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
-      prometheus: {condition: service_healthy}
-      loki: {condition: service_healthy}
+      prometheus: {condition: service_started}
+      loki: {condition: service_started}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/health | grep -q 'ok'"]
       interval: 15s
       timeout: 5s
       retries: 12
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    mem_limit: ${GRAFANA_MEMORY_LIMIT:-512M}
+    cpus: ${GRAFANA_CPU_LIMIT:-0.35}
+    pids_limit: 256
 
   backup-scheduler:
+    <<: *service-guardrails
     build:
       context: ${ALVENQIS_HOST_WORKSPACE:-.}
       dockerfile: docker/backup-scheduler/Dockerfile
     image: ${ALVENQIS_BACKUP_IMAGE:-ghcr.io/zedkode/alvenqis-backup-scheduler}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
     container_name: alvenqis-backup-scheduler
-    restart: unless-stopped
     profiles: [backup]
-    networks: [alvenqis-internal]
     environment:
       BROKER_URL: http://docker-broker:8090
       BROKER_TOKEN_FILE: /run/secrets/broker_token
@@ -439,8 +482,14 @@ services:
       docker-broker: {condition: service_healthy}
     read_only: true
     tmpfs: [/tmp:size=16m]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    mem_limit: ${BACKUP_MEMORY_LIMIT:-128M}
+    cpus: ${BACKUP_CPU_LIMIT:-0.10}
+    pids_limit: 128
 
 networks:
   alvenqis-internal:

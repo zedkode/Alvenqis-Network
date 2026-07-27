@@ -57,7 +57,7 @@ groups:
           description: "Indexer tip does not match chain tip for more than fifteen minutes."
 
       - alert: AlvenqisNoPeers
-        expr: alvenqis_p2p_connected_peers == 0 and alvenqis_chain_ready == 1
+        expr: alvenqis_p2p_validated_peers == 0 and alvenqis_chain_ready == 1
         for: 15m
         labels:
           severity: warning
@@ -65,7 +65,18 @@ groups:
           service: p2p
         annotations:
           summary: "Alvenqis node has no P2P peers"
-          description: "connected_peer_count has remained 0 for fifteen minutes."
+          description: "validated_peer_count has remained 0 for fifteen minutes."
+
+      - alert: AlvenqisP2pStatusUnreachable
+        expr: alvenqis_p2p_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: p2p
+        annotations:
+          summary: "Alvenqis P2P status is unreachable"
+          description: "The live /p2p/status endpoint has failed for more than two minutes."
 
       - alert: AlvenqisPoolDown
         expr: alvenqis_pool_enabled == 1 and alvenqis_pool_up == 0
@@ -93,6 +104,22 @@ groups:
         annotations:
           summary: "Host disk has less than 10% free space"
           description: "Filesystem {{ $labels.mountpoint }} is nearly full."
+
+      - alert: HostDiskPressure
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+          ) < 0.15
+        for: 15m
+        labels:
+          severity: warning
+          brand: alvenqis
+          service: host-storage
+        annotations:
+          summary: "Host disk has less than 15% free space"
+          description: "Filesystem {{ $labels.mountpoint }} is approaching the retention safety threshold."
 
       - alert: HostMemoryPressure
         expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10

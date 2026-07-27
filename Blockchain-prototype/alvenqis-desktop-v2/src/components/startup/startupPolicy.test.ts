@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
-import type { NetworkSnapshot } from "@shared/types";
+import type { ConnectionAvailability, NetworkSnapshot } from "@shared/types";
 import { startupAccessMode } from "./startupPolicy";
+
+const connection: ConnectionAvailability = {
+  status: "offline",
+  circuit: "closed",
+  endpoint: "https://rpc.example/status",
+  checked_at_unix_seconds: 0,
+  last_success_at_unix_seconds: null,
+  next_retry_at_unix_seconds: null,
+  consecutive_failures: 0,
+  latency_ms: null,
+  error: null
+};
 
 function snapshot(overrides: Partial<NetworkSnapshot>): NetworkSnapshot {
   return {
-    online: false, status_label: "Mainnet Candidate", height: null, block_count: 0,
+    online: false, generated_at_unix_seconds: 0, rpc_connection: connection,
+    p2p_connection: connection, pool_connection: connection, stratum_connection: connection,
+    status_label: "Mainnet Candidate", height: null, block_count: 0,
     mempool_count: 0, mempool_transactions: [], mempool_anticipated_base_fee_atomic: "0",
     mempool_total_fees_atomic: "0", mempool_total_burned_fees_atomic: "0",
     mempool_total_priority_fees_atomic: "0", balance_atomic: null, emitted_supply_atomic: null,

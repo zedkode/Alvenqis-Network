@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -30,7 +31,11 @@ ENABLE_POOL = os.environ.get("ENABLE_POOL", "false").strip().lower() in (
 LISTEN_HOST = os.environ.get("LISTEN_HOST", "0.0.0.0")
 LISTEN_PORT = int(os.environ.get("LISTEN_PORT", "9101"))
 TIMEOUT = float(os.environ.get("SCRAPE_TIMEOUT_SECONDS", "5"))
-VERSION = "1.0.0"
+CACHE_TTL = max(1.0, float(os.environ.get("CACHE_TTL_SECONDS", "10")))
+VERSION = "1.1.0"
+_cache_lock = threading.Lock()
+_cache_body = ""
+_cache_created = 0.0
 
 
 def _fnum(value: Any, default: float = 0.0) -> float:
@@ -435,6 +440,18 @@ def collect() -> str:
     return "\n".join(lines) + "\n"
 
 
+def collect_cached() -> str:
+    global _cache_body, _cache_created
+    now = time.monotonic()
+    with _cache_lock:
+        if _cache_body and now - _cache_created < CACHE_TTL:
+            return _cache_body
+        body = collect()
+        _cache_body = body
+        _cache_created = time.monotonic()
+        return body
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = f"AlvenqisMetricsExporter/{VERSION}"
 
@@ -464,7 +481,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path.startswith("/metrics"):
             try:
-                body = collect().encode("utf-8")
+                body = collect_cached().encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))

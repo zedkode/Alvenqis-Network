@@ -81,6 +81,21 @@ export interface DesktopFleetNode {
   last_seen_unix_seconds: number;
 }
 
+export type ConnectionStatus = "online" | "degraded" | "offline" | "idle";
+export type CircuitState = "closed" | "open" | "half_open" | "not_applicable";
+
+export interface ConnectionAvailability {
+  status: ConnectionStatus;
+  circuit: CircuitState;
+  endpoint: string;
+  checked_at_unix_seconds: number;
+  last_success_at_unix_seconds: number | null;
+  next_retry_at_unix_seconds: number | null;
+  consecutive_failures: number;
+  latency_ms: number | null;
+  error: string | null;
+}
+
 export interface NetworkSnapshot {
   online: boolean;
   /**
@@ -88,6 +103,11 @@ export interface NetworkSnapshot {
    * UI should stay on last-known data and slow down polling — not treat as full outage.
    */
   degraded?: boolean;
+  generated_at_unix_seconds: number;
+  rpc_connection: ConnectionAvailability;
+  p2p_connection: ConnectionAvailability;
+  pool_connection: ConnectionAvailability;
+  stratum_connection: ConnectionAvailability;
   status_label: string;
   height: number | null;
   block_count: number;
@@ -420,12 +440,15 @@ export interface PoolCatalogEntry {
   accepted_shares?: number;
   upstream_status?: string | null;
   pool_address?: string | null;
+  connection?: ConnectionAvailability;
 }
 
 export interface PoolSnapshot {
   online: boolean;
   pool_url: string;
   fetched_at_unix_seconds: number;
+  connection: ConnectionAvailability;
+  error?: string | null;
   health?: Record<string, unknown> | null;
   status: Record<string, unknown>;
   history_available: boolean;

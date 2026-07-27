@@ -3,9 +3,10 @@ use alvenqis_node::{
     approve_genesis, backup_chain_database, balance, default_data_dir, default_mempool_dir,
     default_miner_address, export_genesis_block, format_status, genesis_approval_status,
     genesis_hash_hex_from_config, genesis_review_manifest, import_genesis_block, mempool_status,
-    mine_block, mine_pending_block, node_status, peers, print_chain, shutdown, start_node, state,
-    status, submit_transaction, validate_chain, verify_database_integrity,
-    write_genesis_review_manifest, NetworkConfig, DEFAULT_CONFIG_PATH,
+    mine_block, mine_pending_block, node_status, peers, print_chain, queue_peer_ban,
+    queue_peer_unban, runtime_dir_for_data_dir, shutdown, start_node, state, status,
+    submit_transaction, validate_chain, verify_database_integrity, write_genesis_review_manifest,
+    NetworkConfig, DEFAULT_CONFIG_PATH,
 };
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -50,6 +51,17 @@ enum Command {
     NodeStatus,
     MineBlock,
     Peers,
+    BanPeer {
+        peer_id: String,
+        #[arg(long)]
+        reason: String,
+        /// Ban duration in seconds; 0 means permanent.
+        #[arg(long, default_value_t = 3_600)]
+        duration_seconds: u64,
+    },
+    UnbanPeer {
+        peer_id: String,
+    },
     Shutdown,
     PrintGenesisHash,
     ExportGenesisReview {
@@ -144,6 +156,22 @@ fn main() {
         Command::Peers => peers(&config_path, &data_dir).and_then(|summary| {
             serde_json::to_string_pretty(&summary).map_err(alvenqis_node::NodeError::from)
         }),
+        Command::BanPeer {
+            peer_id,
+            reason,
+            duration_seconds,
+        } => queue_peer_ban(
+            &runtime_dir_for_data_dir(&data_dir),
+            &peer_id,
+            &reason,
+            duration_seconds,
+        )
+        .map(|request_id| format!("queued peer ban request_id={request_id} peer_id={peer_id}")),
+        Command::UnbanPeer { peer_id } => {
+            queue_peer_unban(&runtime_dir_for_data_dir(&data_dir), &peer_id).map(|request_id| {
+                format!("queued peer unban request_id={request_id} peer_id={peer_id}")
+            })
+        }
         Command::Shutdown => shutdown(configured_network, &data_dir),
         Command::PrintGenesisHash => genesis_hash_hex_from_config(&config_path),
         Command::ExportGenesisBlock { output } => export_genesis_block(&config_path, &output)

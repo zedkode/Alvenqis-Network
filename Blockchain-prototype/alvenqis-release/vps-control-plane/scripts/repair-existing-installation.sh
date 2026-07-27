@@ -13,8 +13,28 @@ python3 - "$root" "$repo" <<'P'
 from pathlib import Path
 import re,sys
 p=Path('.env'); s=p.read_text(); root,repo=sys.argv[1:]
+def set_value(key, value):
+ global s
+ line=f"{key}={__import__('json').dumps(value)}"
+ s=re.sub(rf'^{key}=.*$',line,s,flags=re.M) if re.search(rf'^{key}=',s,re.M) else s+'\n'+line+'\n'
 for k,v in [('STACK_VERSION','2.1.0-no-autoupdate'),('ALVENQIS_HOST_WORKSPACE',root),('ALVENQIS_HOST_REPO',repo),('ALVENQIS_BACKUP_IMAGE','ghcr.io/zedkode/alvenqis-backup-scheduler')]:
- line=f"{k}={__import__('json').dumps(v)}"; s=re.sub(rf'^{k}=.*$',line,s,flags=re.M) if re.search(rf'^{k}=',s,re.M) else s+'\n'+line+'\n'
+ set_value(k,v)
+legacy_defaults = {
+ 'NODE_MEMORY_LIMIT': ('3G', '2304M'),
+ 'RPC_MEMORY_LIMIT': ('3G', '1536M'),
+ 'CONTROL_MEMORY_LIMIT': ('1G', '384M'),
+ 'INDEXER_MEMORY_LIMIT': ('1G', '768M'),
+ 'INDEXER_INTERVAL_SECONDS': ('15', '5'),
+ 'PROMETHEUS_RETENTION': ('30d', '15d'),
+ 'LOKI_RETENTION_HOURS': ('720', '168'),
+}
+for key,(old,new) in legacy_defaults.items():
+ match=re.search(rf'^{key}=(.*)$',s,flags=re.M)
+ if match is None or match.group(1).strip().strip('"').strip("'") == old:
+  set_value(key,new)
+for key,value in [('INDEXER_FAILURE_BACKOFF_MAX_SECONDS','60'),('PROMETHEUS_RETENTION_SIZE','8GB'),('P2P_MIN_VALIDATED_PEERS','0'),('MAX_P2P_PEERS','64'),('CONTAINER_LOG_MAX_SIZE','20m'),('CONTAINER_LOG_MAX_FILES','3')]:
+ if not re.search(rf'^{key}=',s,flags=re.M):
+  set_value(key,value)
 for k in ['POSTGRES_DB','POSTGRES_USER','POSTGRES_MEMORY_LIMIT']: s=re.sub(rf'^{k}=.*\n?','',s,flags=re.M)
 p.write_text(s)
 P

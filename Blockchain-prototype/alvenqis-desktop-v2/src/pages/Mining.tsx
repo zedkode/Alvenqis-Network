@@ -26,6 +26,7 @@ import { useAppSettings } from "../hooks/useAppSettings";
 import { formatPrediction, predictFromMessage } from "../shared/errorPrediction";
 import { useNotificationsOptional } from "../shared/notifications";
 import { appendSample, type SeriesPoint } from "../shared/chartPath";
+import { connectionAgeLabel, connectionLabel } from "../shared/connectivity";
 import { useApp } from "../model";
 
 type BackendMode = "cuda";
@@ -573,7 +574,8 @@ export function Mining() {
   const poolWorkers = n.pool_workers ?? 0;
   const p2pMiners = n.miners?.length ?? 0;
   const localSolo = n.miner_running && mode === "solo" ? 1 : 0;
-  const localStratum = n.miner_running && mode === "stratum" ? 1 : 0;
+  const localStratum =
+    n.miner_running && mode === "stratum" && n.stratum_connection.status === "online" ? 1 : 0;
   // Local activity can already be present in the remote aggregate; never double-count it.
   // Stratum is the supported persistent pool connection.
   const soloMiners = Math.max(p2pMiners, localSolo);
@@ -586,13 +588,21 @@ export function Mining() {
     mode === "solo" ? localHs : 0,
     mode === "stratum" ? Math.max(poolHs, localHs) : 0
   );
+  const workConnection = mode === "stratum" ? n.stratum_connection : n.rpc_connection;
+  const workOnline = workConnection.status === "online";
 
   const fullConsole = [commandOutput, consoleOutput].filter(Boolean).join("\n\n");
 
   return (
     <div className="page grid miner-page">
       <PageHero
-        kicker={n.miner_running ? "POW ACTIVE" : "MINER STANDBY"}
+        kicker={
+          !n.miner_running
+            ? "MINER STANDBY"
+            : workOnline
+              ? "POW ACTIVE"
+              : `WORK LINK ${connectionLabel(workConnection)}`
+        }
         title="FiroPoW"
         titleAccent="mining deck"
         description="GPU-only FiroPoW 0.9.4 mining on real NVIDIA CUDA kernels, with the DAG generated directly in VRAM. Work comes from your own RPC (solo) or a persistent verified Stratum TLS socket."
@@ -638,6 +648,13 @@ export function Mining() {
         }
       />
 
+      <div className={workOnline || workConnection.status === "idle" ? "notice" : "notice error"}>
+        {mode === "stratum" ? "Stratum" : "Solo RPC"} {connectionLabel(workConnection)} · circuit{" "}
+        {workConnection.circuit} · last success {connectionAgeLabel(workConnection)}
+        {workConnection.latency_ms !== null ? ` · ${workConnection.latency_ms} ms` : ""}
+        {workConnection.error ? ` · ${workConnection.error}` : ""}
+      </div>
+
       <div className="grid cols-4 telemetry-strip">
         <StatCard
           label="Hashrate"
@@ -651,6 +668,10 @@ export function Mining() {
           value={
             !n.miner_running
               ? "IDLE"
+              : !workOnline
+                ? workConnection.circuit === "half_open"
+                  ? "RECOVERING"
+                  : "LINK DOWN"
               : n.miner_status === "building_dag" || n.miner_status === "starting"
                 ? "WARMING"
                 : n.miner_status === "waiting_work" || n.miner_status === "refreshing_work"
@@ -671,7 +692,7 @@ export function Mining() {
               .join(" · ")
           }
           tone={
-            n.miner_status === "gpu_error" || n.miner_status === "waiting_work"
+            !workOnline || n.miner_status === "gpu_error" || n.miner_status === "waiting_work"
               ? "negative"
               : n.miner_running
                 ? "positive"

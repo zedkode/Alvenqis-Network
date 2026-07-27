@@ -59,7 +59,7 @@ assert installer.count('/var/run/docker.sock:/var/run/docker.sock') == 1
 assert 'alvenqis-mining-rpc:' not in main
 assert 'ALVENQIS_COMPONENT: mining-rpc' not in main
 assert 'profiles: [pool]' in main
-assert 'RPC_ACCESS_MODE: private-mining' in main
+assert 'RPC_ACCESS_MODE: public-submit' in main
 assert 'RPC_EXPOSE_MINING: "true"' in main
 assert 'ENABLE_MINING_RPC' not in (root/'.env.example').read_text()
 assert 'working_dir: /app' in main
@@ -68,9 +68,17 @@ assert 'create_owned 473 473 state/alloy' in (root/'scripts/prepare-state.sh').r
 assert 'user: "473:0"' in main
 assert 'chmod 0444' in (root/'scripts/prepare-state.sh').read_text()
 assert 'http://alvenqis-rpc:10787' in (root/'docker/templates/pool.toml.template').read_text()
+assert 'exec /usr/local/bin/alvenqis-indexer-loop' in (root/'docker/entrypoint.sh').read_text()
+assert 'exec /usr/local/bin/alvenqis-pool-supervisor' in (root/'docker/entrypoint.sh').read_text()
+assert (root/'docker/indexer-loop.sh').is_file()
+assert (root/'docker/pool-supervisor.sh').is_file()
+assert (root/'scripts/runtime-preflight.sh').is_file()
+assert 'runtime-preflight.sh' in (root/'docker/ops/broker.py').read_text()
 health=(root/'scripts/health-check-docker.sh').read_text()
 assert 'Public mining route must return HTTP 410' in health
 assert 'alvenqis-mining-rpc' not in health
+assert 'P2P_MIN_VALIDATED_PEERS' in health
+assert 'Private mining RPC did not return a valid live template.' in health
 proxy=(root/'docker/caddy/Caddyfile.template').read_text()
 assert 'handle_path /pool/*' in proxy
 assert 'reverse_proxy alvenqis-pool:30787' in proxy
@@ -101,6 +109,20 @@ assert '/data/.alvenqis-mainnet/chain' in operational
 assert '/data/.alvenqis-mainnet/mempool' in operational
 assert 'alvenqis-metrics-exporter' in main
 assert 'veiron' not in main.lower() and 'vireon' not in main.lower()
+compose_data=yaml.safe_load(main)
+for name,service in compose_data['services'].items():
+ assert service.get('restart') == 'unless-stopped', f'{name} must restart unless-stopped'
+ assert 'healthcheck' in service, f'{name} lacks healthcheck'
+ assert service.get('mem_limit'), f'{name} lacks mem_limit'
+ assert service.get('cpus'), f'{name} lacks cpus'
+ assert service.get('pids_limit'), f'{name} lacks pids_limit'
+ assert service.get('logging', {}).get('driver') == 'json-file', f'{name} lacks bounded json logging'
+assert compose_data['services']['caddy']['depends_on']['grafana']['condition'] == 'service_started'
+assert compose_data['services']['alvenqis-indexer']['depends_on'] == {'alvenqis-node': {'condition': 'service_healthy'}}
+prometheus=(root/'monitoring/prometheus/prometheus.yml').read_text()
+for expensive_probe in ('http://alvenqis-rpc:10787/status','http://alvenqis-rpc:10787/indexer/status','http://alvenqis-rpc:10787/p2p/status'):
+ assert expensive_probe not in prometheus, f'duplicate heavy blackbox probe remains: {expensive_probe}'
+assert 'collect_cached()' in (root/'docker/metrics-exporter/exporter.py').read_text()
 assert 'uid": "alvenqis-docker-overview"' in (root/'monitoring/grafana/dashboards/alvenqis-overview.json').read_text()
 assert 'uid": "alvenqis-host"' in (root/'monitoring/grafana/dashboards/alvenqis-host.json').read_text()
 assert 'uid": "alvenqis-chain"' in (root/'monitoring/grafana/dashboards/alvenqis-chain.json').read_text()

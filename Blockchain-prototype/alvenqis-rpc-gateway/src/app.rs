@@ -679,6 +679,13 @@ pub fn load_chain(state: &RpcState) -> RpcResult<LoadedChain> {
     })
 }
 
+async fn load_chain_async(state: &RpcState) -> RpcResult<LoadedChain> {
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || load_chain(&state))
+        .await
+        .map_err(|error| RpcError::Config(format!("chain read task failed: {error}")))?
+}
+
 fn load_cached_index(state: &RpcState) -> RpcResult<CachedIndex> {
     // The dedicated indexer writes atomically; request handlers only read/cache.
     let index_path = FsPath::new(&state.config.indexer_data_path);
@@ -718,6 +725,28 @@ fn load_cached_index(state: &RpcState) -> RpcResult<CachedIndex> {
     };
     *guard = Some(cached.clone());
     Ok(cached)
+}
+
+async fn load_cached_index_async(state: &RpcState) -> RpcResult<CachedIndex> {
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || load_cached_index(&state))
+        .await
+        .map_err(|error| RpcError::Config(format!("index read task failed: {error}")))?
+}
+
+async fn load_index_data_async(state: &RpcState) -> RpcResult<Arc<IndexData>> {
+    Ok(load_cached_index_async(state).await?.data)
+}
+
+async fn cached_indexer_status_async(
+    state: &RpcState,
+    chain_height: Option<u64>,
+    chain_tip_hash: Option<String>,
+) -> RpcResult<IndexerStatus> {
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || cached_indexer_status(&state, chain_height, chain_tip_hash))
+        .await
+        .map_err(|error| RpcError::Config(format!("index status task failed: {error}")))?
 }
 
 pub fn load_index_data(state: &RpcState) -> RpcResult<Arc<IndexData>> {
@@ -859,9 +888,11 @@ async fn network(State(state): State<RpcState>) -> Json<NetworkResponse> {
 }
 
 async fn status(State(state): State<RpcState>) -> Result<Json<StatusResponse>, RpcError> {
-    match load_chain(&state) {
+    match load_chain_async(&state).await {
         Ok(loaded) => {
-            let idx = cached_indexer_status(&state, loaded.height, loaded.tip_hash.clone()).ok();
+            let idx = cached_indexer_status_async(&state, loaded.height, loaded.tip_hash.clone())
+                .await
+                .ok();
             Ok(Json(StatusResponse {
                 network_id: state.config.network_id.clone(),
                 network_name: state.config.human_name.clone(),
@@ -900,7 +931,7 @@ async fn status(State(state): State<RpcState>) -> Result<Json<StatusResponse>, R
 }
 
 async fn sync_status(State(state): State<RpcState>) -> Result<Json<SyncStatusResponse>, RpcError> {
-    let local_height = match load_chain(&state) {
+    let local_height = match load_chain_async(&state).await {
         Ok(loaded) => loaded.height,
         Err(RpcError::Node(alvenqis_node::NodeError::ChainNotInitialized(_))) => None,
         Err(error) => return Err(error),
@@ -972,7 +1003,7 @@ async fn sync_status(State(state): State<RpcState>) -> Result<Json<SyncStatusRes
 }
 
 async fn chain_tip(State(state): State<RpcState>) -> Result<Json<ChainTipResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     let height = loaded
         .height
         .ok_or_else(|| RpcError::NotFound("no chain tip available".to_owned()))?;
@@ -985,7 +1016,7 @@ async fn chain_tip(State(state): State<RpcState>) -> Result<Json<ChainTipRespons
 async fn chain_height(
     State(state): State<RpcState>,
 ) -> Result<Json<ChainHeightResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     let height = loaded
         .height
         .ok_or_else(|| RpcError::NotFound("no chain height available".to_owned()))?;
@@ -993,7 +1024,7 @@ async fn chain_height(
 }
 
 async fn blocks_latest(State(state): State<RpcState>) -> Result<Json<BlockResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     let block = loaded
         .blocks
         .last()
@@ -1005,7 +1036,7 @@ async fn addresses(
     State(state): State<RpcState>,
     Path(address): Path<String>,
 ) -> Result<Json<AddressResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     Ok(Json(address_response(&loaded.chain, &address)))
 }
 
@@ -1013,7 +1044,7 @@ async fn address_balance(
     State(state): State<RpcState>,
     Path(address): Path<String>,
 ) -> Result<Json<AddressBalanceResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     Ok(Json(address_balance_response(&loaded.chain, &address)))
 }
 
@@ -1021,7 +1052,7 @@ async fn address_account(
     State(state): State<RpcState>,
     Path(address): Path<String>,
 ) -> Result<Json<AddressAccountResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     let pending = load_mempool_transactions(&state).unwrap_or_default();
     let mempool_nonces = pending.iter().filter_map(|record| {
         let from = record.transaction.from.as_deref()?;
@@ -1041,12 +1072,12 @@ async fn address_account(
 }
 
 async fn state_snapshot(State(state): State<RpcState>) -> Result<Json<StateResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     Ok(Json(state_response(&loaded.chain)?))
 }
 
 async fn supply(State(state): State<RpcState>) -> Result<Json<SupplyResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     Ok(Json(supply_response(&loaded.chain)))
 }
 
@@ -1054,7 +1085,7 @@ async fn blocks_by_height(
     State(state): State<RpcState>,
     Path(height): Path<u64>,
 ) -> Result<Json<BlockResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     let block = loaded
         .blocks
         .iter()
@@ -1067,7 +1098,7 @@ async fn blocks_by_hash(
     State(state): State<RpcState>,
     Path(hash): Path<String>,
 ) -> Result<Json<BlockResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     let block = loaded
         .blocks
         .iter()
@@ -1080,7 +1111,7 @@ async fn transactions_by_hash(
     State(state): State<RpcState>,
     Path(hash): Path<String>,
 ) -> Result<Json<TransactionResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     let anticipated_base_fee = next_base_fee(loaded.blocks.last());
     let pending_transactions = load_mempool_transactions(&state)?;
     if let Some(record) = pending_transactions
@@ -1142,7 +1173,7 @@ async fn submit_transaction(
 }
 
 async fn mempool(State(state): State<RpcState>) -> Result<Json<MempoolResponse>, RpcError> {
-    let loaded = load_chain(&state)?;
+    let loaded = load_chain_async(&state).await?;
     let anticipated_base_fee = next_base_fee(loaded.blocks.last());
     let summary = load_mempool_status(
         FsPath::new(&state.config.chain_data_path),
@@ -1195,20 +1226,18 @@ async fn mempool_status(
 }
 
 async fn indexer_status(State(state): State<RpcState>) -> Result<Json<IndexerStatus>, RpcError> {
-    let (chain_height, chain_tip_hash) = match load_chain(&state) {
+    let (chain_height, chain_tip_hash) = match load_chain_async(&state).await {
         Ok(loaded) => (loaded.height, loaded.tip_hash),
         Err(RpcError::Node(alvenqis_node::NodeError::ChainNotInitialized(_))) => (None, None),
         Err(error) => return Err(error),
     };
-    Ok(Json(cached_indexer_status(
-        &state,
-        chain_height,
-        chain_tip_hash,
-    )?))
+    Ok(Json(
+        cached_indexer_status_async(&state, chain_height, chain_tip_hash).await?,
+    ))
 }
 
 async fn indexer_summary(State(state): State<RpcState>) -> Result<Json<IndexData>, RpcError> {
-    Ok(Json((*load_index_data(&state)?).clone()))
+    Ok(Json((*load_index_data_async(&state).await?).clone()))
 }
 
 #[derive(Debug, Deserialize)]
@@ -1234,7 +1263,7 @@ async fn indexer_overview(
     State(state): State<RpcState>,
     Query(query): Query<IndexerOverviewQuery>,
 ) -> Result<Json<IndexerOverviewResponse>, RpcError> {
-    let cached = load_cached_index(&state)?;
+    let cached = load_cached_index_async(&state).await?;
     let index = &cached.data;
     let block_limit = query.blocks.unwrap_or(12).clamp(1, 100);
     let transaction_limit = query.transactions.unwrap_or(20).clamp(1, 200);
@@ -1262,7 +1291,7 @@ async fn indexer_blocks_page(
     State(state): State<RpcState>,
     Query(query): Query<IndexerPageQuery>,
 ) -> Result<Json<IndexedBlocksPageResponse>, RpcError> {
-    let index = load_index_data(&state)?;
+    let index = load_index_data_async(&state).await?;
     let (offset, limit) = page_bounds(query);
     let items = index
         .blocks_by_height
@@ -1284,7 +1313,7 @@ async fn indexer_transactions_page(
     State(state): State<RpcState>,
     Query(query): Query<IndexerPageQuery>,
 ) -> Result<Json<IndexedTransactionsPageResponse>, RpcError> {
-    let cached = load_cached_index(&state)?;
+    let cached = load_cached_index_async(&state).await?;
     let (offset, limit) = page_bounds(query);
     let total = cached.transactions.len();
     let items = cached
@@ -1306,7 +1335,7 @@ async fn indexer_addresses_page(
     State(state): State<RpcState>,
     Query(query): Query<IndexerPageQuery>,
 ) -> Result<Json<IndexedAddressesPageResponse>, RpcError> {
-    let cached = load_cached_index(&state)?;
+    let cached = load_cached_index_async(&state).await?;
     let (offset, limit) = page_bounds(query);
     let total = cached.addresses.len();
     let items = cached
@@ -1327,7 +1356,7 @@ async fn indexer_addresses_page(
 async fn indexer_blocks_latest(
     State(state): State<RpcState>,
 ) -> Result<Json<IndexedBlock>, RpcError> {
-    let index = load_index_data(&state)?;
+    let index = load_index_data_async(&state).await?;
     let block = index
         .summary
         .indexed_height
@@ -1341,7 +1370,7 @@ async fn indexer_blocks_by_height(
     State(state): State<RpcState>,
     Path(height): Path<u64>,
 ) -> Result<Json<IndexedBlock>, RpcError> {
-    let index = load_index_data(&state)?;
+    let index = load_index_data_async(&state).await?;
     let block = index
         .blocks_by_height
         .get(&height)
@@ -1354,7 +1383,7 @@ async fn indexer_blocks_by_hash(
     State(state): State<RpcState>,
     Path(hash): Path<String>,
 ) -> Result<Json<IndexedBlock>, RpcError> {
-    let index = load_index_data(&state)?;
+    let index = load_index_data_async(&state).await?;
     let block = index
         .blocks_by_hash
         .get(&hash)
@@ -1367,7 +1396,7 @@ async fn indexer_transaction_by_hash(
     State(state): State<RpcState>,
     Path(hash): Path<String>,
 ) -> Result<Json<IndexedTransaction>, RpcError> {
-    let index = load_index_data(&state)?;
+    let index = load_index_data_async(&state).await?;
     let transaction = index
         .transactions_by_hash
         .get(&hash)
@@ -1380,7 +1409,7 @@ async fn indexer_address(
     State(state): State<RpcState>,
     Path(address): Path<String>,
 ) -> Result<Json<AddressActivity>, RpcError> {
-    let index = load_index_data(&state)?;
+    let index = load_index_data_async(&state).await?;
     let activity = index
         .addresses
         .get(&address)

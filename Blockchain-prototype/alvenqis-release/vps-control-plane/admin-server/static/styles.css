@@ -226,11 +226,11 @@ td small { color: var(--muted); }
 .form-title { margin-bottom: 4px; }
 label { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
 label small { color: #5f7d8c; font-size: 11px; line-height: 1.4; }
-input {
+input, select {
   font: inherit; color: var(--text); background: #04141c;
   border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px;
 }
-input:focus { outline: 1px solid rgba(32,213,255,.55); border-color: rgba(32,213,255,.55); }
+input:focus, select:focus { outline: 1px solid rgba(32,213,255,.55); border-color: rgba(32,213,255,.55); }
 
 .wizard-steps {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px;

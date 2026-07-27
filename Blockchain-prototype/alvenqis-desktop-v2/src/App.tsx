@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
-import type { MinerStartOptions, NetworkSnapshot, OperatorCommand, WalletMetadata } from "@shared/types";
+import type {
+  ConnectionAvailability,
+  MinerStartOptions,
+  NetworkSnapshot,
+  OperatorCommand,
+  WalletMetadata
+} from "@shared/types";
 import {
   LOCAL_REFRESH_MIN_MS,
   REFRESH_INTERVAL_MS,
@@ -33,6 +39,7 @@ import { Settings } from "./pages/Settings";
 import { Transactions } from "./pages/Transactions";
 import { Wallet } from "./pages/Wallet";
 import { useNotificationsOptional } from "./shared/notifications";
+import { connectionLabel, connectionPollDelay } from "./shared/connectivity";
 
 function isLocalRpcUrl(url: string): boolean {
   try {
@@ -49,23 +56,41 @@ function snapshotPollMs(
   rpcUrl: string,
   failStreak: number,
   degraded: boolean,
-  online: boolean
+  online: boolean,
+  connection?: ConnectionAvailability
 ): number {
   const remote = !isLocalRpcUrl(rpcUrl || RPC_URL);
   const floor = remote ? REMOTE_REFRESH_MIN_MS : LOCAL_REFRESH_MIN_MS;
-  let ms = Math.max(floor, settingsMs || REFRESH_INTERVAL_MS);
-  if (degraded || !online || failStreak > 0) {
-    // Exponential backoff while the gateway is throttling / stalling (cap 60s).
-    const boost = Math.min(4, Math.max(1, failStreak + (degraded ? 1 : 0)));
-    ms = Math.min(60_000, ms * (1 + boost));
-    if (remote) ms = Math.max(ms, 15_000);
-  }
-  return ms;
+  return connectionPollDelay(
+    settingsMs || REFRESH_INTERVAL_MS,
+    floor,
+    failStreak + (degraded || !online ? 1 : 0),
+    connection
+  );
+}
+
+function emptyConnection(endpoint: string): ConnectionAvailability {
+  return {
+    status: "idle",
+    circuit: "closed",
+    endpoint,
+    checked_at_unix_seconds: 0,
+    last_success_at_unix_seconds: null,
+    next_retry_at_unix_seconds: null,
+    consecutive_failures: 0,
+    latency_ms: null,
+    error: null
+  };
 }
 
 const empty: NetworkSnapshot = {
   online: false,
   degraded: false,
+  generated_at_unix_seconds: 0,
+  rpc_connection: emptyConnection(RPC_URL),
+  p2p_connection: emptyConnection(`${RPC_URL}/p2p/status`),
+  pool_connection: emptyConnection(`${RPC_URL}/pool/api/v1/pool/status`),
+  stratum_connection: emptyConnection("local miner"),
   status_label: "Mainnet Candidate",
   height: null,
   block_count: 0,
@@ -224,6 +249,12 @@ export default function App() {
       const prevStreak = pollFailStreak.current;
       if (next.online && !next.degraded) {
         pollFailStreak.current = 0;
+        if (prevStreak > 0) {
+          setNotice({
+            error: false,
+            text: `RPC connectivity recovered (${next.rpc_connection.latency_ms ?? "?"} ms).`
+          });
+        }
       } else if (next.degraded || !next.online) {
         pollFailStreak.current = Math.min(8, pollFailStreak.current + 1);
         // Degraded / brief throttle is not a hard error toast every few seconds.
@@ -235,21 +266,33 @@ export default function App() {
         } else if (next.degraded && pollFailStreak.current === 1) {
           setNotice({
             error: false,
-            text: next.detail || "RPC degraded — using last-known data; slowing poll"
+            text: next.detail || "RPC degraded; live telemetry is unavailable and retry is automatic."
           });
         }
       }
-      if (prevStreak !== pollFailStreak.current) {
-        setPollTick((t) => t + 1);
-      }
     } catch (error) {
       pollFailStreak.current = Math.min(8, pollFailStreak.current + 1);
-      setPollTick((t) => t + 1);
-      setNotice({ error: true, text: String(error) });
+      const now = Math.floor(Date.now() / 1000);
+      const message = String(error).replace(/^Error:\s*/i, "");
+      setSnapshot({
+        ...empty,
+        generated_at_unix_seconds: now,
+        degraded: true,
+        rpc_connection: {
+          ...emptyConnection(settings.rpc_url || RPC_URL),
+          status: "offline",
+          checked_at_unix_seconds: now,
+          consecutive_failures: pollFailStreak.current,
+          error: message
+        },
+        detail: `Desktop RPC command failed: ${message}`
+      });
+      setNotice({ error: true, text: message });
     } finally {
+      setPollTick((tick) => tick + 1);
       if (showBusy) setBusy(false);
     }
-  }, []);
+  }, [settings.rpc_url]);
 
   const operator = useCallback(async (command: OperatorCommand, minerOptions?: MinerStartOptions) => {
     const destructive = command === "stop" || command === "restart" || command === "miner-stop";
@@ -278,31 +321,28 @@ export default function App() {
       settings.rpc_url,
       pollFailStreak.current,
       Boolean(snapshot.degraded),
-      snapshot.online
+      snapshot.online,
+      snapshot.rpc_connection
     );
-    let inFlight = false;
-    const timer = window.setInterval(() => {
-      if (inFlight) return;
-      inFlight = true;
-      void refresh()
-        .catch(() => undefined)
-        .finally(() => {
-          inFlight = false;
-        });
+    const timer = window.setTimeout(() => {
+      void refresh().catch(() => undefined);
     }, interval);
-    return () => window.clearInterval(timer);
+    return () => window.clearTimeout(timer);
   }, [
     refresh,
     settings.refresh_interval_ms,
     settings.rpc_url,
     snapshot.degraded,
     snapshot.online,
+    snapshot.rpc_connection.circuit,
+    snapshot.rpc_connection.next_retry_at_unix_seconds,
+    snapshot.rpc_connection.status,
     pollTick
   ]);
 
   useAlvenqisEvents({
     minerWasRunning: snapshot.miner_running,
-    online: snapshot.online || snapshot.rpc_running
+    online: snapshot.online
   });
 
   useEffect(() => {
@@ -345,8 +385,8 @@ export default function App() {
 
   const Page = pages[page];
   const noticeClass = notice?.error ? "notice error" : "notice";
-  const rpcLabel = snapshot.rpc_running ? "ONLINE" : "OFFLINE";
-  const detailClass = snapshot.online ? "positive" : "negative";
+  const rpcLabel = snapshot.rpc_connection.status.toUpperCase();
+  const detailClass = snapshot.online && !snapshot.degraded ? "positive" : "negative";
 
   const createWallet = async (displayName: string) => {
     setBusy(true);
@@ -444,9 +484,8 @@ export default function App() {
             <Sidebar
               page={page}
               setPage={setPage}
-              nodeRunning={snapshot.node_running}
               height={snapshot.height}
-              online={snapshot.online || snapshot.rpc_running}
+              online={snapshot.online}
               unreadMessages={unreadMessages}
               peers={snapshot.connected_peer_count}
               mempool={snapshot.mempool_count}
@@ -472,7 +511,16 @@ export default function App() {
               RPC <b>{rpcLabel}</b>
             </span>
             <span>
-              PEERS <b>{snapshot.connected_peer_count}</b>
+              P2P <b>{connectionLabel(snapshot.p2p_connection)}</b>
+            </span>
+            <span>
+              PEERS <b>{snapshot.p2p_connection.status === "online" ? snapshot.connected_peer_count : "—"}</b>
+            </span>
+            <span>
+              POOL <b>{connectionLabel(snapshot.pool_connection)}</b>
+            </span>
+            <span>
+              STRATUM <b>{connectionLabel(snapshot.stratum_connection)}</b>
             </span>
             <span>
               MEMPOOL <b>{snapshot.mempool_count}</b>

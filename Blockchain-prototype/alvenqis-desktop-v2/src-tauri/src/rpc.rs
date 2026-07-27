@@ -1,15 +1,15 @@
+use crate::availability::{self, ConnectionAvailability};
 use crate::error::AppResult;
 use crate::keystore::WalletMetadata;
 use crate::process::{is_local_rpc_url, managed_process_running};
 use crate::settings::get_rpc_url;
 use crate::workspace::{find_workspace_root, local_root};
-use parking_lot::Mutex;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Local loopback RPC is usually fast.
 const LOCAL_TIMEOUT_MS: u64 = 8_000;
@@ -19,17 +19,17 @@ const REMOTE_HEALTH_TIMEOUT_MS: u64 = 8_000;
 /// Retries for transient proxy pressure (429/503/504/timeout).
 const MAX_STATUS_ATTEMPTS: u32 = 3;
 
-fn last_good_snapshot() -> &'static Mutex<Option<NetworkSnapshot>> {
-    static LAST: OnceLock<Mutex<Option<NetworkSnapshot>>> = OnceLock::new();
-    LAST.get_or_init(|| Mutex::new(None))
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct NetworkSnapshot {
     pub online: bool,
-    /// True when the gateway is reachable but a poll was throttled/stalled; UI keeps last-known data.
+    /// True when at least one required connection is unavailable.
     #[serde(default)]
     pub degraded: bool,
+    pub generated_at_unix_seconds: u64,
+    pub rpc_connection: ConnectionAvailability,
+    pub p2p_connection: ConnectionAvailability,
+    pub pool_connection: ConnectionAvailability,
+    pub stratum_connection: ConnectionAvailability,
     pub status_label: String,
     pub height: Option<u64>,
     pub block_count: u64,
@@ -193,6 +193,43 @@ async fn request(base: &str, endpoint: &str) -> AppResult<Value> {
         }
     }
     Err(last_err.unwrap_or_else(|| crate::error::AppError::msg("RPC request failed")))
+}
+
+async fn tracked_request(
+    service: &str,
+    base: &str,
+    endpoint: &str,
+) -> Result<(Value, ConnectionAvailability), (crate::error::AppError, ConnectionAvailability)> {
+    let url = format!("{}{}", base.trim_end_matches('/'), endpoint);
+    let key = format!("{service}:{url}");
+    if let Err(connection) = availability::begin(&key, &url) {
+        return Err((
+            crate::error::AppError::msg(
+                connection
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "Connection circuit is open.".into()),
+            ),
+            connection,
+        ));
+    }
+
+    let started = Instant::now();
+    match request(base, endpoint).await {
+        Ok(value) => Ok((
+            value,
+            availability::success(&key, &url, started.elapsed().as_millis() as u64),
+        )),
+        Err(error) => {
+            let connection = availability::failure(
+                &key,
+                &url,
+                started.elapsed().as_millis() as u64,
+                error.to_string(),
+            );
+            Err((error, connection))
+        }
+    }
 }
 
 async fn optional(base: &str, endpoint: &str, fallback: Value) -> Value {
@@ -368,10 +405,116 @@ fn read_miner_metrics() -> Option<Value> {
     best.map(|(_, v)| v)
 }
 
-fn empty_snapshot(node_running: bool, miner_running: bool, detail: String) -> NetworkSnapshot {
+fn stratum_availability(
+    miner_running: bool,
+    metrics: Option<&Value>,
+    now: u64,
+) -> ConnectionAvailability {
+    let settings = crate::settings::get();
+    let endpoint = format!(
+        "{}://{}:{}",
+        if settings.stratum_use_tls {
+            "stratum+tls"
+        } else {
+            "stratum+tcp"
+        },
+        settings.stratum_host,
+        settings.stratum_port
+    );
+    if !miner_running {
+        return ConnectionAvailability::idle(endpoint);
+    }
+    let Some(metrics) = metrics else {
+        return ConnectionAvailability::unavailable(
+            endpoint,
+            "Miner is running but no live metrics are available.",
+        );
+    };
+
+    let work_source = metrics
+        .get("work_source")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if work_source.starts_with("http://") || work_source.starts_with("https://") {
+        return ConnectionAvailability::idle("solo RPC work source");
+    }
+
+    let updated_at = metrics
+        .get("updated_at_unix_seconds")
+        .and_then(Value::as_u64);
+    let stale_after = settings
+        .default_status_interval_seconds
+        .saturating_mul(4)
+        .clamp(10, 60);
+    let age = updated_at.map(|timestamp| now.saturating_sub(timestamp));
+    let status = metrics
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let error = metrics
+        .get("last_error")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_owned);
+    let live = age.is_some_and(|seconds| seconds <= stale_after)
+        && matches!(status, "mining" | "running")
+        && error.is_none();
+
+    ConnectionAvailability {
+        status: if live {
+            "online".into()
+        } else if age.is_some_and(|seconds| seconds <= stale_after) {
+            "degraded".into()
+        } else {
+            "offline".into()
+        },
+        circuit: "not_applicable".into(),
+        endpoint,
+        checked_at_unix_seconds: now,
+        last_success_at_unix_seconds: if live { updated_at } else { None },
+        next_retry_at_unix_seconds: None,
+        consecutive_failures: if live { 0 } else { 1 },
+        latency_ms: None,
+        error: if age.is_some_and(|seconds| seconds > stale_after) {
+            Some(format!(
+                "Miner telemetry is stale ({}s old; expected within {}s).",
+                age.unwrap_or_default(),
+                stale_after
+            ))
+        } else {
+            error.or_else(|| (!live).then(|| format!("Miner reports Stratum state \"{status}\".")))
+        },
+    }
+}
+
+fn empty_snapshot(
+    node_running: bool,
+    miner_running: bool,
+    detail: String,
+    rpc_connection: ConnectionAvailability,
+) -> NetworkSnapshot {
+    let base = get_rpc_url();
     NetworkSnapshot {
         online: false,
-        degraded: false,
+        degraded: rpc_connection.status != "online",
+        generated_at_unix_seconds: availability::unix_now(),
+        rpc_connection,
+        p2p_connection: ConnectionAvailability::unavailable(
+            format!("{}/p2p/status", base.trim_end_matches('/')),
+            "P2P status was not queried because RPC status is unavailable.",
+        ),
+        pool_connection: ConnectionAvailability::unavailable(
+            format!("{}/pool/api/v1/pool/status", base.trim_end_matches('/')),
+            "Pool status was not queried because RPC status is unavailable.",
+        ),
+        stratum_connection: if miner_running {
+            ConnectionAvailability::unavailable(
+                "local miner metrics",
+                "Stratum state is unavailable while RPC status is offline.",
+            )
+        } else {
+            ConnectionAvailability::idle("local miner")
+        },
         status_label: "Mainnet Candidate".into(),
         height: None,
         block_count: 0,
@@ -455,45 +598,27 @@ pub async fn network_snapshot(wallet: Option<WalletMetadata>) -> NetworkSnapshot
     let miner_managed = managed_process_running("miner").await;
     let base = get_rpc_url();
     let remote_gateway = !is_local_rpc_url(&base);
-    let status = match request(&base, "/status").await {
-        Ok(value) => value,
-        Err(err) => {
-            // Transient VPS pressure: if /health still answers, keep last-known snapshot
-            // as degraded instead of flipping the UI offline every few seconds.
+    let (status, rpc_connection) = match tracked_request("rpc", &base, "/status").await {
+        Ok(result) => result,
+        Err((error, mut connection)) => {
             let gateway_alive = health_ok(&base).await;
             if gateway_alive {
-                if let Some(mut cached) = last_good_snapshot().lock().clone() {
-                    cached.degraded = true;
-                    cached.online = true;
-                    cached.rpc_running = true;
-                    cached.detail = format!(
-                        "{} RPC degraded ({base}): {err}. Gateway /health OK — using last-known tip.",
-                        if remote_gateway { "VPS" } else { "Local" }
-                    );
-                    return cached;
-                }
-                // No cache yet: report online-but-thin so the UI does not hard-fail.
-                let mut thin = empty_snapshot(
-                    node_managed || remote_gateway,
-                    miner_managed,
-                    format!(
-                        "{} RPC degraded ({base}): {err}. Gateway alive; waiting for /status.",
-                        if remote_gateway { "VPS" } else { "Local" }
-                    ),
-                );
-                thin.online = true;
-                thin.degraded = true;
-                thin.rpc_running = true;
-                thin.sync_status = "degraded".into();
-                return thin;
+                connection.status = "degraded".into();
             }
             return empty_snapshot(
                 node_managed,
                 miner_managed,
                 format!(
-                    "{} RPC is offline ({base}): {err}",
-                    if remote_gateway { "VPS" } else { "Local" }
+                    "{} RPC data plane is {} ({base}): {error}.{} No cached telemetry is presented as live.",
+                    if remote_gateway { "VPS" } else { "Local" },
+                    if gateway_alive { "degraded" } else { "offline" },
+                    if gateway_alive {
+                        " Gateway health responds, but /status does not."
+                    } else {
+                        ""
+                    }
                 ),
+                connection,
             );
         }
     };
@@ -503,7 +628,7 @@ pub async fn network_snapshot(wallet: Option<WalletMetadata>) -> NetworkSnapshot
     let balance_path = wallet
         .as_ref()
         .map(|w| format!("/addresses/{}/balance", urlencoding_lite(&w.address)));
-    let (mempool, indexer, index_data, sync_gateway, p2p, fleet, pool, balance_json) = tokio::join!(
+    let (mempool, indexer, index_data, sync_gateway, p2p_result, fleet, pool_result, balance_json) = tokio::join!(
         optional(&base, "/mempool", json!({})),
         optional(&base, "/indexer/status", json!({})),
         optional(
@@ -512,9 +637,9 @@ pub async fn network_snapshot(wallet: Option<WalletMetadata>) -> NetworkSnapshot
             json!({}),
         ),
         optional(&base, "/sync/status", json!({})),
-        p2p_status(&base),
+        tracked_request("p2p", &base, "/p2p/status"),
         optional(&base, "/fleet/status", json!({})),
-        optional(&base, "/pool/api/v1/pool/status", json!({})),
+        tracked_request("pool", &base, "/pool/api/v1/pool/status"),
         async {
             if let Some(path) = balance_path.as_deref() {
                 optional(&base, path, json!({})).await
@@ -523,6 +648,17 @@ pub async fn network_snapshot(wallet: Option<WalletMetadata>) -> NetworkSnapshot
             }
         },
     );
+    let (p2p, p2p_connection) = match p2p_result {
+        Ok(result) => result,
+        Err((error, connection)) => (
+            json!({ "error": format!("P2P status unavailable: {error}") }),
+            connection,
+        ),
+    };
+    let (pool, pool_connection) = match pool_result {
+        Ok(result) => result,
+        Err((_error, connection)) => (json!({}), connection),
+    };
     let metrics = read_miner_metrics();
 
     let balance = if wallet.is_some() {
@@ -744,10 +880,20 @@ pub async fn network_snapshot(wallet: Option<WalletMetadata>) -> NetworkSnapshot
         .ok()
         .and_then(|u| u.host_str().map(|h| h.to_string()))
         .unwrap_or_else(|| base.clone());
+    let stratum_connection =
+        stratum_availability(miner_managed || miner_fresh, metrics.as_ref(), now);
+    let degraded = p2p_connection.status != "online"
+        || pool_connection.status != "online"
+        || matches!(stratum_connection.status.as_str(), "offline" | "degraded");
 
     let snapshot = NetworkSnapshot {
         online: true,
-        degraded: false,
+        degraded,
+        generated_at_unix_seconds: now,
+        rpc_connection,
+        p2p_connection,
+        pool_connection,
+        stratum_connection,
         status_label: status
             .get("status_label")
             .and_then(|v| v.as_str())
@@ -1076,7 +1222,6 @@ pub async fn network_snapshot(wallet: Option<WalletMetadata>) -> NetworkSnapshot
             format!("Local RPC verified at {host}")
         },
     };
-    *last_good_snapshot().lock() = Some(snapshot.clone());
     snapshot
 }
 

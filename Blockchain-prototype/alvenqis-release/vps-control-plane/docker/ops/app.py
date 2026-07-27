@@ -25,7 +25,7 @@ LOG_DIR = STATE_DIR / "ops"
 SETUP_TOKEN_FILE = Path(os.environ.get("SETUP_TOKEN_FILE", SECRETS_DIR / "setup_token"))
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[A-Za-z]{2,63}$")
 NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-MULTIADDR_RE = re.compile(r"^/(?:dns4|ip4|ip6)/[^/]+/tcp/[0-9]{1,5}$")
+MULTIADDR_RE = re.compile(r"^/(?:dns4|dns6|ip4|ip6)/[^/]+/tcp/[0-9]{1,5}$")
 
 job_lock = threading.Lock()
 job_state: dict[str, Any] = {
@@ -97,9 +97,35 @@ def write_secret(name: str, value: str, keep_existing: bool = True) -> None:
     path = SECRETS_DIR / name
     if keep_existing and not value and path.exists():
         return
-    if not value:
-        value = secrets.token_urlsafe(32)
-    path.write_text(value.strip() + "\n", encoding="utf-8")
+    path.write_text(value.strip() + ("\n" if value.strip() else ""), encoding="utf-8")
+    os.chmod(path, 0o600)
+
+def write_access_summary(
+    data: dict[str, Any],
+    hosts: dict[str, str],
+    admin_password: str,
+    grafana_password: str,
+) -> None:
+    control_dir = STATE_DIR / "control"
+    control_dir.mkdir(parents=True, exist_ok=True)
+    path = control_dir / "LOGIN.txt"
+    content = "\n".join(
+        [
+            "Alvenqis Control Plane access",
+            f"Generated UTC: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
+            "",
+            f"Master panel: https://{hosts['CONTROL_HOST']}",
+            f"Master user: {data.get('admin_user', 'alvenqis-admin')}",
+            f"Master password: {admin_password}",
+            "",
+            f"Grafana: https://{hosts['GRAFANA_HOST']}",
+            f"Grafana user: {data.get('grafana_admin_user', 'admin')}",
+            f"Grafana password: {grafana_password}",
+            "",
+            "Keep this file private. Permissions must remain 0600.",
+        ]
+    )
+    path.write_text(content + "\n", encoding="utf-8")
     os.chmod(path, 0o600)
 
 def env_quote(value: Any) -> str:
@@ -130,6 +156,9 @@ def validate_payload(data: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("node_name must use letters, digits, dot, underscore or hyphen")
     if "@" not in admin_email:
         raise ValueError("admin_email is invalid")
+    for field in ("admin_password", "grafana_password"):
+        if not str(data.get(field, "")).strip():
+            raise ValueError(f"{field} is required")
 
     cloudflare_mode = str(data.get("cloudflare_mode", "disabled"))
     if cloudflare_mode not in {"disabled", "dns", "tunnel"}:
@@ -148,6 +177,8 @@ def validate_payload(data: dict[str, Any]) -> dict[str, Any]:
     enable_pool = bool(data.get("enable_pool"))
     if enable_pool and not str(data.get("pool_address", "")).strip():
         raise ValueError("pool_address is required when the pool is enabled")
+    if enable_pool and not str(data.get("cloudflare_api_token", "")).strip():
+        raise ValueError("cloudflare_api_token is required for Stratum DNS-01 TLS")
 
     if cloudflare_mode != "disabled":
         for field in ("cloudflare_account_id", "cloudflare_zone_id", "cloudflare_api_token"):
@@ -173,6 +204,10 @@ def validate_payload(data: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"invalid P2P seed port: {seed}") from exc
         if port < 1 or port > 65535:
             raise ValueError(f"P2P seed port is out of range: {seed}")
+    if len(seed_nodes) != len(set(seed_nodes)):
+        raise ValueError("duplicate P2P seeds are not allowed")
+    if control_role == "agent" and not seed_nodes:
+        raise ValueError("agent role requires at least one P2P seed")
 
     return {
         **data,
@@ -285,9 +320,17 @@ def configure(data: dict[str, Any]) -> None:
 
     write_secret("admin_password", admin_password)
     write_secret("grafana_password", grafana_password)
-    write_secret("pool_admin_token", str(data.get("pool_admin_token", "")))
+    pool_admin_token = str(data.get("pool_admin_token", "")).strip()
+    if pool_admin_token:
+        write_secret("pool_admin_token", pool_admin_token)
+    else:
+        read_or_create_secret(SECRETS_DIR / "pool_admin_token", 48)
     read_or_create_secret(SECRETS_DIR / "broker_token", 48)
-    write_secret("backup_passphrase", str(data.get("backup_passphrase", "")))
+    backup_passphrase = str(data.get("backup_passphrase", "")).strip()
+    if backup_passphrase:
+        write_secret("backup_passphrase", backup_passphrase)
+    else:
+        read_or_create_secret(SECRETS_DIR / "backup_passphrase", 48)
     write_secret("cloudflare_api_token", str(data.get("cloudflare_api_token", "")), keep_existing=False)
     write_secret("r2_secret_access_key", str(data.get("r2_secret_access_key", "")), keep_existing=False)
     write_secret("discord_webhook", str(data.get("discord_webhook", "")), keep_existing=False)
@@ -323,6 +366,7 @@ def configure(data: dict[str, Any]) -> None:
         "STRATUM_PORT": data.get("stratum_port", 3333),
         "STRATUM_INTERNAL_PORT": 3333,
         "SEED_NODES_TOML": ", ".join(json.dumps(seed) for seed in data.get("seed_nodes", [])),
+        "P2P_MIN_VALIDATED_PEERS": data.get("p2p_min_validated_peers", 0),
         "OPS_BOOTSTRAP_PORT": data.get("ops_bootstrap_port", 8080),
         "CLOUDFLARE_MODE": data["cloudflare_mode"],
         "CLOUDFLARE_ACCOUNT_ID": data.get("cloudflare_account_id", ""),
@@ -333,9 +377,11 @@ def configure(data: dict[str, Any]) -> None:
         "ENABLE_POOL": bool_text(data["enable_pool"]),
         "POOL_NAME": data.get("pool_name", "Alvenqis Reference Pool"),
         "POOL_ADDRESS": data.get("pool_address", ""),
-        "INDEXER_INTERVAL_SECONDS": data.get("indexer_interval_seconds", 15),
-        "PROMETHEUS_RETENTION": data.get("prometheus_retention", "30d"),
-        "LOKI_RETENTION_HOURS": data.get("loki_retention_hours", 720),
+        "INDEXER_INTERVAL_SECONDS": data.get("indexer_interval_seconds", 5),
+        "INDEXER_FAILURE_BACKOFF_MAX_SECONDS": data.get("indexer_failure_backoff_max_seconds", 60),
+        "PROMETHEUS_RETENTION": data.get("prometheus_retention", "15d"),
+        "PROMETHEUS_RETENTION_SIZE": data.get("prometheus_retention_size", "8GB"),
+        "LOKI_RETENTION_HOURS": data.get("loki_retention_hours", 168),
         "GRAFANA_ADMIN_USER": data.get("grafana_admin_user", "admin"),
         "ALERT_DISCORD_ENABLED": bool_text(bool(data.get("discord_webhook"))),
         "ALERT_TELEGRAM_ENABLED": bool_text(bool(data.get("telegram_bot_token"))),
@@ -356,10 +402,10 @@ def configure(data: dict[str, Any]) -> None:
         "R2_BUCKET": data.get("r2_bucket", ""),
         "R2_ACCESS_KEY_ID": data.get("r2_access_key_id", ""),
         "R2_REGION": data.get("r2_region", "auto"),
-        "NODE_MEMORY_LIMIT": data.get("node_memory_limit", "3G"),
-        "RPC_MEMORY_LIMIT": data.get("rpc_memory_limit", "3G"),
-        "CONTROL_MEMORY_LIMIT": data.get("control_memory_limit", "1G"),
-        "INDEXER_MEMORY_LIMIT": data.get("indexer_memory_limit", "1G"),
+        "NODE_MEMORY_LIMIT": data.get("node_memory_limit", "2304M"),
+        "RPC_MEMORY_LIMIT": data.get("rpc_memory_limit", "1536M"),
+        "CONTROL_MEMORY_LIMIT": data.get("control_memory_limit", "384M"),
+        "INDEXER_MEMORY_LIMIT": data.get("indexer_memory_limit", "768M"),
     }
 
     lines = ["# Generated by Alvenqis Docker Setup. Do not commit this file."]
@@ -367,6 +413,7 @@ def configure(data: dict[str, Any]) -> None:
         lines.append(f"{key}={env_quote(value)}")
     (WORKSPACE / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.chmod(WORKSPACE / ".env", 0o600)
+    write_access_summary(data, hosts, admin_password, grafana_password)
 
     write_alertmanager_config(data)
 

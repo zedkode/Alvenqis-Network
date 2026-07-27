@@ -295,6 +295,8 @@ pub struct PeersSummary {
     pub connected_peers: Vec<String>,
     pub local_peer_id: String,
     pub listen_addresses: Vec<String>,
+    pub configured_seed_count: usize,
+    pub discovered_peer_count: usize,
     pub connected_peer_count: usize,
     pub validated_peer_count: usize,
     pub mining_peer_count: usize,
@@ -302,6 +304,7 @@ pub struct PeersSummary {
     pub miners: Vec<crate::p2p::NetworkMinerPresence>,
     pub validating_peer_count: usize,
     pub syncing: bool,
+    pub banned_peer_count: usize,
     pub peers: Vec<crate::p2p::ConnectedPeer>,
     pub last_error: Option<String>,
 }
@@ -1185,6 +1188,8 @@ pub fn peers(config_path: &Path, data_dir: &Path) -> NodeResult<PeersSummary> {
             .collect(),
         local_peer_id: status.local_peer_id,
         listen_addresses: status.listen_addresses,
+        configured_seed_count: status.configured_seed_count,
+        discovered_peer_count: status.discovered_peer_count,
         connected_peer_count: status.connected_peer_count,
         validated_peer_count: status.validated_peer_count,
         mining_peer_count: status.mining_peer_count,
@@ -1192,6 +1197,7 @@ pub fn peers(config_path: &Path, data_dir: &Path) -> NodeResult<PeersSummary> {
         miners: status.miners,
         validating_peer_count: status.validating_peer_count,
         syncing: status.syncing,
+        banned_peer_count: status.banned_peer_count,
         peers: status.peers,
         last_error: status.last_error,
     })

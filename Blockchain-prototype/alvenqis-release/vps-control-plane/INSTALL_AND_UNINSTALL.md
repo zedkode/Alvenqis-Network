@@ -8,7 +8,9 @@ Status: Mainnet Candidate / Prototype
 - Docker Engine with Compose v2;
 - `bash`, `curl`, `openssl`, `python3`, `jq` and `tar`;
 - inbound TCP 20787 for P2P;
+- inbound TCP 3333 when the Stratum pool is enabled;
 - inbound 80/443 only for direct-DNS mode;
+- 6 vCPU, 12 GB RAM and 100 GB NVMe for the complete stack;
 - an immutable Alvenqis Docker control-plane archive and SHA-256 file.
 
 ## Verify and extract a release
@@ -29,12 +31,17 @@ wallet data.
 ## Fresh controller
 
 ```bash
-sudo ./scripts/install-docker-stack.sh
+sudo ./scripts/bootstrap-host.sh
 ```
 
 Create the printed loopback SSH tunnel, open the setup page and provide the
 controller, DNS, monitoring and optional pool values. Do not enable the pool
 without an approved reward address and offline signing process.
+
+The bootstrap installs all required APT packages and Docker Compose, enables
+Docker at boot, starts the installer and writes `/root/alvenqis-login.txt` with
+mode `0600`. After deployment, the final panel and Grafana credentials are
+written to `state/control/LOGIN.txt`, also with mode `0600`.
 
 ## Existing systemd or earlier Docker installation
 
@@ -53,12 +60,21 @@ The repair path is intentionally non-destructive:
 ## Health
 
 ```bash
+sudo ./scripts/runtime-preflight.sh
 sudo ./scripts/health-check-docker.sh
 docker compose --env-file .env -f compose.yaml ps
 ```
 
+The health script requires every enabled container to be healthy and bounded,
+then checks the real chain tip, index lag, configured/validated P2P peers,
+private mining template, pool upstream and Stratum certificate. Set
+`P2P_MIN_VALIDATED_PEERS=1` on non-bootstrap nodes. A controller bootstrap may
+use `0` while waiting for its first inbound peer; monitoring still alerts on
+zero validated peers.
+
 When Cloudflare is enabled, also verify every configured public hostname after
-the tunnel or DNS activation completes.
+the tunnel or DNS activation completes. P2P and Stratum records must remain
+DNS-only because Cloudflare's HTTP proxy is not transparent blockchain TCP.
 
 ## Uninstall
 

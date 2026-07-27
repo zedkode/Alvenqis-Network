@@ -29,6 +29,8 @@ COPY --from=builder /out/alvenqis-indexer /usr/local/bin/alvenqis-indexer
 COPY --from=builder /out/alvenqis-vps-admin /usr/local/bin/alvenqis-vps-admin
 COPY --from=builder /out/alvenqis-mining-pool /usr/local/bin/alvenqis-mining-pool
 COPY alvenqis-release/vps-control-plane/docker/entrypoint.sh /usr/local/bin/alvenqis-entrypoint
+COPY alvenqis-release/vps-control-plane/docker/indexer-loop.sh /usr/local/bin/alvenqis-indexer-loop
+COPY alvenqis-release/vps-control-plane/docker/pool-supervisor.sh /usr/local/bin/alvenqis-pool-supervisor
 COPY alvenqis-release/vps-control-plane/docker/templates /app/templates
 COPY configs /app/configs
 COPY docs/release /app/docs/release

@@ -90,7 +90,7 @@ export function useAlvenqisEvents(opts?: {
       api.notify({
         kind: "warning",
         title: "Gateway offline",
-        body: "RPC gateway is not reachable. Network views may be stale.",
+        body: "RPC gateway is not reachable. Live network telemetry is unavailable until automatic recovery.",
         severity: "both",
         sticky: true,
         source: "snapshot:online"

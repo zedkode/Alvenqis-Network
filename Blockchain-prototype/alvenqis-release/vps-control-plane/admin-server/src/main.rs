@@ -1,4 +1,6 @@
-use alvenqis_vps_admin::{router, run_agent_reporter, AdminConfig, AdminState, FleetStore};
+use alvenqis_vps_admin::{
+    router, run_agent_reporter, run_health_sampler, AdminConfig, AdminState, FleetStore,
+};
 use axum::serve;
 use clap::Parser;
 use std::net::SocketAddr;
@@ -39,6 +41,7 @@ async fn run() -> Result<(), String> {
     let store = FleetStore::load(config.state_dir.clone())?;
     let state = AdminState::new(config.clone(), store)?;
     tokio::spawn(run_agent_reporter(state.clone()));
+    tokio::spawn(run_health_sampler(state.clone()));
     let address: SocketAddr = format!("{}:{}", config.bind_host, config.bind_port)
         .parse()
         .map_err(|error| format!("invalid bind address: {error}"))?;

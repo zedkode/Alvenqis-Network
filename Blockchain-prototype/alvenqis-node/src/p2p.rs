@@ -3,10 +3,15 @@ use crate::config::NetworkConfig;
 use crate::devnet::genesis_hash_hex_from_config;
 use crate::devnet::{adopt_candidate_chain, submit_mined_block, submit_transaction};
 use crate::error::{NodeError, NodeResult};
-use crate::peer_reputation::{ReputationStore, DEFAULT_BAN_SECONDS};
+use crate::peer_reputation::{
+    acknowledge_admin_requests, enqueue_admin_request, load_admin_requests, PeerAdminAction,
+    ReputationStore, DEFAULT_BAN_SECONDS,
+};
 use crate::storage;
 use alvenqis_core::{cumulative_work, hash_to_hex, Block, Chain, Transaction};
+use atomic_write_file::AtomicWriteFile;
 use futures::StreamExt;
+use libp2p::connection_limits;
 use libp2p::gossipsub;
 use libp2p::identify;
 use libp2p::identity::Keypair;
@@ -17,17 +22,19 @@ use libp2p::{noise, yamux, Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilde
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::Write;
 use std::net::IpAddr;
+use std::num::NonZeroU8;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Protocol v3: peer scoring/bans + header-first branch verification (A-H05).
 pub const P2P_PROTOCOL_VERSION: u32 = 3;
 pub const P2P_STATUS_FILE_NAME: &str = "p2p-status.json";
 const P2P_IDENTITY_FILE_NAME: &str = "p2p-identity.key";
-const MAX_SYNC_BLOCKS: usize = 128;
+const MAX_SYNC_BLOCKS: usize = 32;
 const MAX_SYNC_HEADERS: usize = 512;
 const MAX_STAGED_REORG_BLOCKS: usize = 2_048;
 /// Hard cap on staged headers per peer branch (audit CR-H06 memory DoS).
@@ -36,6 +43,17 @@ const MAX_STAGED_HEADERS: usize = 2_048;
 /// Refuse advertised height deltas larger than this without intermediate checkpoints.
 const MAX_HEADER_HEIGHT_DELTA: u64 = 2_048;
 const MINER_PRESENCE_TTL_SECONDS: u64 = 30;
+const MAX_CONCURRENT_SYNC_BRANCHES: usize = 4;
+const MAX_OUTBOUND_PEERS: usize = 8;
+const MAX_PENDING_INBOUND_CONNECTIONS: u32 = 32;
+const MAX_PENDING_OUTBOUND_CONNECTIONS: u32 = 8;
+const MAX_CONNECTIONS_PER_PEER: u32 = 2;
+const MAX_NEGOTIATING_INBOUND_STREAMS: usize = 16;
+const MAX_STREAMS_PER_CONNECTION: usize = 32;
+const SEED_RECONNECT_BASE_SECONDS: u64 = 1;
+const SEED_RECONNECT_MAX_SECONDS: u64 = 300;
+const SEED_RECONNECT_JITTER_PERCENT: u64 = 25;
+const MAX_OPERATOR_BAN_SECONDS: u64 = 30 * 24 * 60 * 60;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct P2pHandshake {
@@ -99,11 +117,25 @@ pub struct ConnectedPeer {
     #[serde(default)]
     pub hashrate_hs: u64,
     pub connected_at_unix_seconds: u64,
+    #[serde(default)]
+    pub outbound: bool,
     pub last_error: Option<String>,
     #[serde(default)]
     pub reputation_score: i32,
     #[serde(default)]
     pub banned: bool,
+    #[serde(default)]
+    pub observed_uptime_seconds: u64,
+    #[serde(default)]
+    pub successful_connections: u64,
+    #[serde(default)]
+    pub failed_connections: u64,
+    #[serde(default)]
+    pub validated_handshakes: u64,
+    #[serde(default)]
+    pub good_events: u64,
+    #[serde(default)]
+    pub bad_events: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -152,6 +184,8 @@ pub struct P2pStatus {
     pub banned_peer_count: usize,
     #[serde(default)]
     pub reputation_enabled: bool,
+    #[serde(default)]
+    pub discovered_peer_count: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -201,6 +235,15 @@ struct AlvenqisBehaviour {
     gossipsub: gossipsub::Behaviour,
     identify: identify::Behaviour,
     ping: ping::Behaviour,
+    limits: connection_limits::Behaviour,
+}
+
+#[derive(Clone, Debug)]
+struct SeedDialState {
+    configured: String,
+    address: Multiaddr,
+    attempts: u32,
+    next_attempt: Instant,
 }
 
 #[derive(Deserialize)]
@@ -276,6 +319,7 @@ pub fn load_p2p_status(runtime_dir: &Path, config: &NetworkConfig) -> NodeResult
             updated_at_unix_seconds: unix_seconds(),
             banned_peer_count: 0,
             reputation_enabled: true,
+            discovered_peer_count: 0,
         });
     }
     let status: P2pStatus = serde_json::from_str(&fs::read_to_string(path)?)?;
@@ -295,6 +339,8 @@ pub fn run_p2p_service(
     stop: Arc<AtomicBool>,
 ) -> NodeResult<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .max_blocking_threads(8)
         .enable_all()
         .build()
         .map_err(|error| NodeError::P2p(error.to_string()))?;
@@ -348,12 +394,29 @@ async fn run_p2p_service_async(
     gossipsub
         .subscribe(&mining_topic)
         .map_err(|error| NodeError::P2p(error.to_string()))?;
+    let max_peers = u32::try_from(config.max_peers)
+        .map_err(|_| NodeError::P2p("max_peers exceeds libp2p limits".to_owned()))?;
+    let max_inbound = if max_peers > 1 {
+        max_peers.saturating_sub(1)
+    } else {
+        1
+    };
+    let max_outbound = max_peers.min(MAX_OUTBOUND_PEERS as u32);
+    let connection_limits = connection_limits::ConnectionLimits::default()
+        .with_max_pending_incoming(Some(MAX_PENDING_INBOUND_CONNECTIONS.min(max_peers)))
+        .with_max_pending_outgoing(Some(MAX_PENDING_OUTBOUND_CONNECTIONS.min(max_peers)))
+        .with_max_established_incoming(Some(max_inbound))
+        .with_max_established_outgoing(Some(max_outbound))
+        .with_max_established_per_peer(Some(MAX_CONNECTIONS_PER_PEER))
+        .with_max_established(Some(max_peers));
+    let mut yamux_config = yamux::Config::default();
+    yamux_config.set_max_num_streams(MAX_STREAMS_PER_CONNECTION);
     let mut swarm = SwarmBuilder::with_existing_identity(identity)
         .with_tokio()
         .with_tcp(
             libp2p::tcp::Config::default().nodelay(true),
             noise::Config::new,
-            yamux::Config::default,
+            move || yamux_config.clone(),
         )
         .map_err(|error| NodeError::P2p(error.to_string()))?
         .with_dns()
@@ -376,9 +439,18 @@ async fn run_p2p_service_async(
                     key.public(),
                 )),
                 ping: ping::Behaviour::new(ping::Config::new()),
+                limits: connection_limits::Behaviour::new(connection_limits),
             }
         })
         .map_err(|error| NodeError::P2p(error.to_string()))?
+        .with_swarm_config(|swarm_config| {
+            swarm_config
+                .with_idle_connection_timeout(Duration::from_secs(90))
+                .with_max_negotiating_inbound_streams(MAX_NEGOTIATING_INBOUND_STREAMS)
+                .with_dial_concurrency_factor(
+                    NonZeroU8::new(2).expect("dial concurrency factor is non-zero"),
+                )
+        })
         .build();
 
     let listen_address = listen_multiaddr(&config)?;
@@ -411,6 +483,7 @@ async fn run_p2p_service_async(
         updated_at_unix_seconds: unix_seconds(),
         banned_peer_count: 0,
         reputation_enabled: true,
+        discovered_peer_count: 0,
     };
     // Restore durable sync target from disk so restarts can continue toward the same tip.
     if let Ok(previous) = load_p2p_status(&runtime_dir, &config) {
@@ -423,21 +496,33 @@ async fn run_p2p_service_async(
         }
     }
     let mut peers = BTreeMap::<PeerId, ConnectedPeer>::new();
-    let mut reputation = ReputationStore::load(&runtime_dir);
+    let mut reputation = ReputationStore::load(&runtime_dir)?;
     reputation.prune_expired_bans();
+    process_admin_requests(&runtime_dir, &mut reputation, None)?;
     let mut pending_branches = BTreeMap::<PeerId, PendingBranch>::new();
     let mut network_miners = BTreeMap::<PeerId, NetworkMinerPresence>::new();
+    let mut discovered_peers = BTreeSet::<PeerId>::new();
     let mut published_transactions = BTreeSet::<String>::new();
-    for seed in &config.seed_nodes {
-        match seed_multiaddr(seed) {
-            Ok(address) => {
-                if let Err(error) = swarm.dial(address) {
-                    status.last_error = Some(format!("seed dial failed for {seed}: {error}"));
-                }
-            }
-            Err(error) => status.last_error = Some(error.to_string()),
-        }
-    }
+    let now = Instant::now();
+    let mut seed_states = config
+        .seed_nodes
+        .iter()
+        .map(|seed| {
+            Ok(SeedDialState {
+                configured: seed.clone(),
+                address: seed_multiaddr(seed)?,
+                attempts: 0,
+                next_attempt: now,
+            })
+        })
+        .collect::<NodeResult<Vec<_>>>()?;
+    dial_due_seeds(
+        &mut swarm,
+        &config,
+        &local_peer_id,
+        &mut seed_states,
+        &mut status,
+    );
     persist_status(
         &runtime_dir,
         &config,
@@ -447,6 +532,7 @@ async fn run_p2p_service_async(
         &peers,
         &mut network_miners,
         &reputation,
+        discovered_peers.len(),
     )?;
 
     let mut tick = tokio::time::interval(Duration::from_secs(1));
@@ -458,6 +544,24 @@ async fn run_p2p_service_async(
                     break;
                 }
                 tick_count = tick_count.saturating_add(1);
+                process_admin_requests(&runtime_dir, &mut reputation, Some(&mut swarm))?;
+                let newly_banned = peers
+                    .keys()
+                    .filter(|peer_id| reputation.is_banned(&peer_id.to_string()))
+                    .copied()
+                    .collect::<Vec<_>>();
+                for peer_id in newly_banned {
+                    reputation.observe_disconnect(&peer_id.to_string());
+                    peers.remove(&peer_id);
+                    pending_branches.remove(&peer_id);
+                }
+                dial_due_seeds(
+                    &mut swarm,
+                    &config,
+                    &local_peer_id,
+                    &mut seed_states,
+                    &mut status,
+                );
                 if tick_count.is_multiple_of(5) {
                     match local_hello(&config, &data_dir) {
                         Ok(hello) => {
@@ -512,29 +616,7 @@ async fn run_p2p_service_async(
                 // non-Alvenqis connection must not block bootstrap forever.
                 // Empty seed list is a valid solo-bootstrap configuration — do not surface noise.
                 let has_validated_peer = peers.values().any(|peer| peer.handshake_validated);
-                if tick_count.is_multiple_of(15)
-                    && !has_validated_peer
-                    && !config.seed_nodes.is_empty()
-                    && {
-                        let network_info = swarm.network_info();
-                        let counters = network_info.connection_counters();
-                        counters.num_pending_outgoing() == 0
-                            && counters.num_established_outgoing() == 0
-                    }
-                {
-                    for seed in &config.seed_nodes {
-                        match seed_multiaddr(seed) {
-                            Ok(address) => {
-                                if let Err(error) = swarm.dial(address) {
-                                    status.last_error = Some(format!(
-                                        "seed redial failed for {seed}: {error}"
-                                    ));
-                                }
-                            }
-                            Err(error) => status.last_error = Some(error.to_string()),
-                        }
-                    }
-                } else if config.seed_nodes.is_empty()
+                if config.seed_nodes.is_empty()
                     && !has_validated_peer
                     && tick_count.is_multiple_of(60)
                 {
@@ -572,13 +654,14 @@ async fn run_p2p_service_async(
                             reputation.score_of(&peer_id.to_string())
                         ));
                         let _ = swarm.disconnect_peer_id(peer_id);
+                        reputation.observe_disconnect(&peer_id.to_string());
                         peers.remove(&peer_id);
                         pending_branches.remove(&peer_id);
                     }
                 }
                 // Persist reputation periodically so bans survive process restarts.
                 if tick_count.is_multiple_of(10) {
-                    reputation.persist(&runtime_dir);
+                    reputation.persist(&runtime_dir)?;
                 }
                 if let Ok(records) = crate::mempool::load_pending_transactions(&mempool_dir) {
                     for record in records {
@@ -610,6 +693,7 @@ async fn run_p2p_service_async(
                     &peers,
                     &mut network_miners,
                     &reputation,
+                    discovered_peers.len(),
                 )?;
             }
             event = swarm.select_next_some() => {
@@ -627,8 +711,10 @@ async fn run_p2p_service_async(
                     &mining_topic.hash(),
                     &mut network_miners,
                     &mut reputation,
+                    &mut discovered_peers,
+                    &mut seed_states,
                 )?;
-                reputation.persist(&runtime_dir);
+                reputation.persist(&runtime_dir)?;
                 persist_status(
                     &runtime_dir,
                     &config,
@@ -638,16 +724,20 @@ async fn run_p2p_service_async(
                     &peers,
                     &mut network_miners,
                     &reputation,
+                    discovered_peers.len(),
                 )?;
             }
         }
     }
     status.mode = format!("{} / P2P stopped", config.status_label);
     status.syncing = false;
+    for peer_id in peers.keys() {
+        reputation.observe_disconnect(&peer_id.to_string());
+    }
     peers.clear();
     pending_branches.clear();
     network_miners.clear();
-    reputation.persist(&runtime_dir);
+    reputation.persist(&runtime_dir)?;
     persist_status(
         &runtime_dir,
         &config,
@@ -657,6 +747,7 @@ async fn run_p2p_service_async(
         &peers,
         &mut network_miners,
         &reputation,
+        discovered_peers.len(),
     )
 }
 
@@ -676,6 +767,8 @@ fn handle_swarm_event(
     mining_topic: &gossipsub::TopicHash,
     network_miners: &mut BTreeMap<PeerId, NetworkMinerPresence>,
     reputation: &mut ReputationStore,
+    discovered_peers: &mut BTreeSet<PeerId>,
+    seed_states: &mut [SeedDialState],
 ) -> NodeResult<()> {
     match event {
         SwarmEvent::NewListenAddr { address, .. } => {
@@ -707,6 +800,8 @@ fn handle_swarm_event(
                 let _ = swarm.disconnect_peer_id(peer_id);
                 return Ok(());
             }
+            let outbound = endpoint.is_dialer();
+            let is_new_peer = !peers.contains_key(&peer_id);
             peers.entry(peer_id).or_insert_with(|| ConnectedPeer {
                 peer_id: peer_id.to_string(),
                 address: Some(endpoint.get_remote_address().to_string()),
@@ -718,10 +813,20 @@ fn handle_swarm_event(
                 mining: false,
                 hashrate_hs: 0,
                 connected_at_unix_seconds: unix_seconds(),
+                outbound,
                 last_error: None,
                 reputation_score: reputation.score_of(&peer_id.to_string()),
                 banned: false,
+                observed_uptime_seconds: 0,
+                successful_connections: 0,
+                failed_connections: 0,
+                validated_handshakes: 0,
+                good_events: 0,
+                bad_events: 0,
             });
+            if is_new_peer {
+                reputation.observe_connection(&peer_id.to_string());
+            }
             // Handshake every newly established connection with this peer.
             // Multi-miner / multi-node sync requires Hello on each first link,
             // not only when the swarm-wide peer count happens to be one.
@@ -748,7 +853,12 @@ fn handle_swarm_event(
             // libp2p can temporarily maintain multiple links to one PeerId (simultaneous dial or
             // seed redial). Closing one link must not erase the still-live peer or its sync state.
             if num_established == 0 {
-                peers.remove(&peer_id);
+                if let Some(peer) = peers.remove(&peer_id) {
+                    reputation.observe_disconnect(&peer_id.to_string());
+                    if peer.outbound {
+                        reset_seed_backoff(seed_states);
+                    }
+                }
                 pending_branches.remove(&peer_id);
             }
         }
@@ -757,7 +867,20 @@ fn handle_swarm_event(
                 request_response::Message::Request {
                     request, channel, ..
                 } => {
+                    let was_validated = peers
+                        .get(&peer)
+                        .is_some_and(|remote| remote.handshake_validated);
                     let response = handle_sync_request(config, data_dir, &peer, request, peers);
+                    if !was_validated
+                        && peers
+                            .get(&peer)
+                            .is_some_and(|remote| remote.handshake_validated)
+                    {
+                        reputation.observe_validation(&peer.to_string());
+                        reputation.reward(&peer.to_string(), 2, "handshake validated");
+                        status.last_error = None;
+                        reset_seed_backoff(seed_states);
+                    }
                     if swarm
                         .behaviour_mut()
                         .sync
@@ -768,6 +891,9 @@ fn handle_swarm_event(
                     }
                 }
                 request_response::Message::Response { response, .. } => {
+                    let was_validated = peers
+                        .get(&peer)
+                        .is_some_and(|remote| remote.handshake_validated);
                     if let Err(error) = handle_sync_response(
                         config_path,
                         config,
@@ -794,8 +920,18 @@ fn handle_swarm_event(
                         let _ = swarm.disconnect_peer_id(peer);
                         if reputation.is_banned(&peer.to_string()) {
                             pending_branches.remove(&peer);
+                            reputation.observe_disconnect(&peer.to_string());
                             peers.remove(&peer);
                         }
+                    } else if !was_validated
+                        && peers
+                            .get(&peer)
+                            .is_some_and(|remote| remote.handshake_validated)
+                    {
+                        reputation.observe_validation(&peer.to_string());
+                        reputation.reward(&peer.to_string(), 2, "handshake validated");
+                        status.last_error = None;
+                        reset_seed_backoff(seed_states);
                     }
                 }
             },
@@ -822,6 +958,7 @@ fn handle_swarm_event(
                         DEFAULT_BAN_SECONDS / 2,
                     );
                     let _ = swarm.disconnect_peer_id(peer);
+                    reputation.observe_disconnect(&peer.to_string());
                     peers.remove(&peer);
                     pending_branches.remove(&peer);
                 }
@@ -882,7 +1019,21 @@ fn handle_swarm_event(
                 }
             }
         }
-        SwarmEvent::OutgoingConnectionError { error, .. } => {
+        SwarmEvent::Behaviour(AlvenqisBehaviourEvent::Identify(identify::Event::Received {
+            peer_id,
+            info,
+            ..
+        })) => {
+            if info.protocol_version == format!("alvenqis/{P2P_PROTOCOL_VERSION}")
+                && !reputation.is_banned(&peer_id.to_string())
+            {
+                discovered_peers.insert(peer_id);
+            }
+        }
+        SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+            if let Some(peer_id) = peer_id {
+                reputation.observe_failed_connection(&peer_id.to_string());
+            }
             status.last_error = Some(error.to_string());
         }
         SwarmEvent::IncomingConnectionError { error, .. } => {
@@ -1048,9 +1199,16 @@ fn handle_sync_response(
         SyncResponse::HelloAccepted(hello) => {
             validate_peer_hello(config, &local_genesis_hash(data_dir)?, &hello)?;
             update_validated_peer(peers, peer_id, &hello);
-            reputation.reward(&peer_id.to_string(), 2, "hello accepted");
             let local = local_hello(config, data_dir)?;
             if remote_has_more_work(&hello, &local)? && hello.best_hash != local.best_hash {
+                if !pending_branches.contains_key(peer_id)
+                    && pending_branches.len() >= MAX_CONCURRENT_SYNC_BRANCHES
+                {
+                    status.last_error = Some(format!(
+                        "sync branch limit {MAX_CONCURRENT_SYNC_BRANCHES} reached; deferred peer {peer_id}"
+                    ));
+                    return Ok(());
+                }
                 status.syncing = true;
                 remember_sync_target(status, &hello);
                 swarm.behaviour_mut().sync.send_request(
@@ -1604,6 +1762,7 @@ fn persist_status(
     peers: &BTreeMap<PeerId, ConnectedPeer>,
     network_miners: &mut BTreeMap<PeerId, NetworkMinerPresence>,
     reputation: &ReputationStore,
+    discovered_peer_count: usize,
 ) -> NodeResult<()> {
     status.local_cumulative_work = local_hello(config, data_dir)
         .map(|hello| hello.cumulative_work)
@@ -1612,6 +1771,14 @@ fn persist_status(
     for peer in &mut peer_list {
         peer.reputation_score = reputation.score_of(&peer.peer_id);
         peer.banned = reputation.is_banned(&peer.peer_id);
+        peer.observed_uptime_seconds = reputation.observed_uptime_seconds(&peer.peer_id);
+        if let Some(record) = reputation.record(&peer.peer_id) {
+            peer.successful_connections = record.successful_connections;
+            peer.failed_connections = record.failed_connections;
+            peer.validated_handshakes = record.validated_handshakes;
+            peer.good_events = record.good_events;
+            peer.bad_events = record.bad_events;
+        }
     }
     status.peers = peer_list;
     status.connected_peer_count = status.peers.len();
@@ -1641,11 +1808,13 @@ fn persist_status(
         .count();
     status.banned_peer_count = reputation.active_ban_count();
     status.reputation_enabled = true;
+    status.discovered_peer_count = discovered_peer_count;
     status.updated_at_unix_seconds = unix_seconds();
-    fs::write(
-        runtime_dir.join(P2P_STATUS_FILE_NAME),
-        serde_json::to_vec_pretty(status)?,
-    )?;
+    let mut file = AtomicWriteFile::open(runtime_dir.join(P2P_STATUS_FILE_NAME))?;
+    serde_json::to_writer_pretty(&mut file, status)?;
+    file.write_all(b"\n")?;
+    file.sync_all()?;
+    file.commit()?;
     Ok(())
 }
 
@@ -1675,6 +1844,145 @@ fn load_or_create_identity(runtime_dir: &Path) -> NodeResult<Keypair> {
         fs::write(&path, encoded)?;
     }
     Ok(identity)
+}
+
+pub fn queue_peer_ban(
+    runtime_dir: &Path,
+    peer_id: &str,
+    reason: &str,
+    duration_seconds: u64,
+) -> NodeResult<String> {
+    peer_id
+        .parse::<PeerId>()
+        .map_err(|error| NodeError::Input(format!("invalid peer ID: {error}")))?;
+    let reason = reason.trim();
+    if reason.is_empty() || reason.len() > 256 || reason.chars().any(char::is_control) {
+        return Err(NodeError::Input(
+            "ban reason must contain 1 to 256 printable characters".to_owned(),
+        ));
+    }
+    if duration_seconds > MAX_OPERATOR_BAN_SECONDS {
+        return Err(NodeError::Input(format!(
+            "ban duration cannot exceed {MAX_OPERATOR_BAN_SECONDS} seconds; use 0 for permanent"
+        )));
+    }
+    let request = enqueue_admin_request(
+        runtime_dir,
+        peer_id.to_owned(),
+        PeerAdminAction::Ban {
+            reason: reason.to_owned(),
+            duration_seconds,
+        },
+    )?;
+    Ok(request.request_id)
+}
+
+pub fn queue_peer_unban(runtime_dir: &Path, peer_id: &str) -> NodeResult<String> {
+    peer_id
+        .parse::<PeerId>()
+        .map_err(|error| NodeError::Input(format!("invalid peer ID: {error}")))?;
+    let request = enqueue_admin_request(runtime_dir, peer_id.to_owned(), PeerAdminAction::Unban)?;
+    Ok(request.request_id)
+}
+
+fn process_admin_requests(
+    runtime_dir: &Path,
+    reputation: &mut ReputationStore,
+    mut swarm: Option<&mut Swarm<AlvenqisBehaviour>>,
+) -> NodeResult<()> {
+    let requests = load_admin_requests(runtime_dir)?;
+    if requests.is_empty() {
+        return Ok(());
+    }
+    let mut request_ids = Vec::with_capacity(requests.len());
+    for request in &requests {
+        reputation.apply_admin_request(request);
+        if reputation.is_banned(&request.peer_id) {
+            if let (Some(swarm), Ok(peer_id)) =
+                (swarm.as_deref_mut(), request.peer_id.parse::<PeerId>())
+            {
+                let _ = swarm.disconnect_peer_id(peer_id);
+            }
+        }
+        request_ids.push(request.request_id.clone());
+    }
+    reputation.persist(runtime_dir)?;
+    acknowledge_admin_requests(runtime_dir, &request_ids)
+}
+
+fn dial_due_seeds(
+    swarm: &mut Swarm<AlvenqisBehaviour>,
+    config: &NetworkConfig,
+    local_peer_id: &PeerId,
+    seed_states: &mut [SeedDialState],
+    status: &mut P2pStatus,
+) {
+    if seed_states.is_empty() {
+        return;
+    }
+    let network_info = swarm.network_info();
+    let counters = network_info.connection_counters();
+    let target = seed_states
+        .len()
+        .min(MAX_OUTBOUND_PEERS)
+        .min(config.max_peers);
+    let active =
+        counters.num_established_outgoing() as usize + counters.num_pending_outgoing() as usize;
+    let mut available = target.saturating_sub(active);
+    if available == 0 {
+        return;
+    }
+    let now = Instant::now();
+    for seed in seed_states
+        .iter_mut()
+        .filter(|seed| seed.next_attempt <= now)
+    {
+        if available == 0 {
+            break;
+        }
+        let attempt = seed.attempts;
+        if let Err(error) = swarm.dial(seed.address.clone()) {
+            status.last_error = Some(format!("seed dial failed for {}: {error}", seed.configured));
+        }
+        seed.attempts = seed.attempts.saturating_add(1);
+        seed.next_attempt = now + seed_reconnect_delay(&seed.configured, local_peer_id, attempt);
+        available = available.saturating_sub(1);
+    }
+}
+
+fn reset_seed_backoff(seed_states: &mut [SeedDialState]) {
+    let now = Instant::now();
+    for seed in seed_states {
+        seed.attempts = 0;
+        seed.next_attempt = now;
+    }
+}
+
+fn seed_reconnect_delay(seed: &str, local_peer_id: &PeerId, attempt: u32) -> Duration {
+    let exponent = attempt.min(8);
+    let base = SEED_RECONNECT_BASE_SECONDS
+        .saturating_mul(1_u64 << exponent)
+        .min(SEED_RECONNECT_MAX_SECONDS);
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in seed
+        .bytes()
+        .chain(local_peer_id.to_bytes())
+        .chain(attempt.to_le_bytes())
+    {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    let spread = base.saturating_mul(SEED_RECONNECT_JITTER_PERCENT) / 100;
+    let jitter = if spread == 0 {
+        0
+    } else {
+        hash % spread.saturating_mul(2).saturating_add(1)
+    };
+    Duration::from_secs(
+        base.saturating_sub(spread)
+            .saturating_add(jitter)
+            .clamp(1, SEED_RECONNECT_MAX_SECONDS),
+    )
 }
 
 fn listen_multiaddr(config: &NetworkConfig) -> NodeResult<Multiaddr> {
@@ -1885,6 +2193,40 @@ allow_mainnet_candidate = false
     }
 
     #[test]
+    fn peer_limit_is_bounded_for_the_supported_vps_profile() {
+        let config_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("workspace root")
+            .join("configs/mainnet-candidate.toml");
+        let mut config = NetworkConfig::load_from_path(&config_path).expect("config");
+        config.max_peers = crate::config::MAX_P2P_PEERS;
+        config.validate().expect("supported limit");
+        config.max_peers = crate::config::MAX_P2P_PEERS + 1;
+        assert!(matches!(
+            config.validate(),
+            Err(NodeError::ConfigMismatch(message)) if message.contains("max_peers")
+        ));
+    }
+
+    #[test]
+    fn seed_reconnect_backoff_is_bounded_and_jittered_per_node() {
+        let first = Keypair::generate_ed25519().public().to_peer_id();
+        let second = Keypair::generate_ed25519().public().to_peer_id();
+        for attempt in 0..32 {
+            let first_delay = seed_reconnect_delay("seed.example:20787", &first, attempt);
+            let second_delay = seed_reconnect_delay("seed.example:20787", &second, attempt);
+            assert!(first_delay >= Duration::from_secs(1));
+            assert!(first_delay <= Duration::from_secs(SEED_RECONNECT_MAX_SECONDS));
+            assert!(second_delay >= Duration::from_secs(1));
+            assert!(second_delay <= Duration::from_secs(SEED_RECONNECT_MAX_SECONDS));
+        }
+        assert!((0..8).any(|attempt| {
+            seed_reconnect_delay("seed.example:20787", &first, attempt)
+                != seed_reconnect_delay("seed.example:20787", &second, attempt)
+        }));
+    }
+
+    #[test]
     fn plain_tcp_probe_does_not_become_a_p2p_outage() {
         assert!(is_expected_inbound_transport_noise(
             "Listen error: Failed to negotiate transport protocol(s)"
@@ -2048,11 +2390,37 @@ allow_mainnet_candidate = false
         });
 
         first_stop.store(true, Ordering::Relaxed);
-        second_stop.store(true, Ordering::Relaxed);
         first_handle
             .join()
             .expect("first thread")
             .expect("first P2P");
+        wait_until(|| {
+            let config = NetworkConfig::load_from_path(&second_config).expect("second config");
+            load_p2p_status(&second_runtime, &config)
+                .is_ok_and(|status| status.connected_peer_count == 0)
+        });
+
+        let restarted_stop = Arc::new(AtomicBool::new(false));
+        let restarted_handle = {
+            let stop = Arc::clone(&restarted_stop);
+            let config = first_config.clone();
+            let data = first_data.clone();
+            let mempool = first_mempool.clone();
+            let runtime = first_runtime.clone();
+            thread::spawn(move || run_p2p_service(config, data, mempool, runtime, stop))
+        };
+        wait_until(|| {
+            let config = NetworkConfig::load_from_path(&second_config).expect("second config");
+            load_p2p_status(&second_runtime, &config)
+                .is_ok_and(|status| status.validated_peer_count == 1)
+        });
+
+        restarted_stop.store(true, Ordering::Relaxed);
+        second_stop.store(true, Ordering::Relaxed);
+        restarted_handle
+            .join()
+            .expect("restarted first thread")
+            .expect("restarted first P2P");
         second_handle
             .join()
             .expect("second thread")

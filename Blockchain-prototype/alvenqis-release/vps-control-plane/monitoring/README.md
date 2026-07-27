@@ -9,8 +9,8 @@ Brand: **Alvenqis / ALVE** only. VPS roles: validator / full node / storage / op
 | Component | Role |
 | --- | --- |
 | `prometheus` | Scrapes jobs below; evaluates `alerts.yml` |
-| `alvenqis-metrics-exporter` | Polls live RPC/pool JSON APIs → Prometheus text on `:9101/metrics` |
-| `blackbox-exporter` | HTTP probes for RPC, control, ops, Grafana, Loki, pool |
+| `alvenqis-metrics-exporter` | Polls and caches live RPC/pool JSON APIs → Prometheus text on `:9101/metrics` |
+| `blackbox-exporter` | Lightweight liveness probes for RPC, control, ops, Grafana, Loki, pool |
 | `node-exporter` | Host CPU/RAM/disk/network + textfile dir `state/metrics` (backups) |
 | `grafana` | Provisioned datasources + file dashboards |
 | `loki` + `alloy` | Container logs |
@@ -32,7 +32,7 @@ Chain height, indexer lag, peer counts, mempool and pool hashrate/shares/blocks 
 | `node-exporter` | `node-exporter:9100` | Host + textfile (`alvenqis_backup_*`) |
 | `alvenqis-metrics` | `alvenqis-metrics-exporter:9101` | Chain, indexer, P2P, mempool, pool gauges |
 | `alvenqis-http` | blackbox → RPC/control/ops/metrics/Grafana/Loki | `probe_success`, `probe_duration_seconds` |
-| `alvenqis-pool-http` | blackbox → pool health/status | Pool HTTP probes (fails when pool profile off) |
+| `alvenqis-pool-http` | blackbox → pool health | Pool liveness probe (down when pool profile is off) |
 | `blackbox-exporter` | `blackbox-exporter:9115` | Exporter self metrics |
 
 Config file: `monitoring/prometheus/prometheus.yml`
@@ -126,6 +126,8 @@ Confirm jobs `alvenqis-metrics`, `node-exporter`, `alvenqis-http` show `health: 
 - Metrics exporter reads the same flag and only expects pool status when enabled.
 - Alert `AlvenqisPoolDown` fires only when `alvenqis_pool_enabled == 1`.
 - Blackbox job `alvenqis-pool-http` may show down when the pool profile is off; it is informational.
+- Heavy status/indexer/P2P reads are not duplicated by blackbox; one exporter
+  sample is cached for `METRICS_CACHE_TTL_SECONDS` (default ten seconds).
 
 ## Backup textfile metric
 

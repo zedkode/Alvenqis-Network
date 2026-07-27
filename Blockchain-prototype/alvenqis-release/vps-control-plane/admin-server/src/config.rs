@@ -75,9 +75,22 @@ impl AdminConfig {
             if !url.is_empty() && !url.starts_with("https://") {
                 return Err("controller_url must use HTTPS".to_owned());
             }
+            if url.contains('@') || url.chars().any(char::is_whitespace) {
+                return Err("controller_url must not contain credentials or whitespace".to_owned());
+            }
         }
-        if self.report_interval_seconds < 5 || self.invitation_ttl_seconds < 60 {
-            return Err("report interval or invitation lifetime is too short".to_owned());
+        if !self.release_bundle_url.starts_with("https://")
+            || self.release_bundle_url.contains('@')
+            || self.release_bundle_url.chars().any(char::is_whitespace)
+        {
+            return Err(
+                "release_bundle_url must use HTTPS without embedded credentials".to_owned(),
+            );
+        }
+        if !(5..=300).contains(&self.report_interval_seconds)
+            || !(60..=86_400).contains(&self.invitation_ttl_seconds)
+        {
+            return Err("report interval or invitation lifetime is outside safe limits".to_owned());
         }
         Ok(())
     }
