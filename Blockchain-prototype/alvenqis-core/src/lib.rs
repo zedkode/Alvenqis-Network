@@ -65,9 +65,9 @@ pub use standards::{
     WALLET_SEED_STANDARD_ID,
 };
 pub use state::{
-    apply_block, apply_transaction, validate_block_against_state,
-    validate_transaction_against_state, BlockLedgerSummary, LedgerState, FIRST_ACCOUNT_NONCE,
-    TX_HASH_RETENTION_BLOCKS,
+    apply_block, apply_transaction, block_fee_summary, validate_block_against_state,
+    validate_transaction_against_state, BlockLedgerSummary, LedgerState,
+    BLOCK_METRICS_RETENTION_BLOCKS, FIRST_ACCOUNT_NONCE, TX_HASH_RETENTION_BLOCKS,
 };
 pub use transaction::{Transaction, UnsignedTransaction};
 pub use upgrade::{

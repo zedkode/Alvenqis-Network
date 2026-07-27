@@ -310,7 +310,7 @@ impl Transaction {
             ));
         }
         Address::parse(&self.to)?;
-        if self.amount == Amount::ZERO {
+        if self.amount == Amount::ZERO && !self.is_coinbase() {
             return Err(AlvenqisError::ZeroAmountTransaction);
         }
         if self.max_fee.as_atomic() > MAX_SUPPLY_ATOMIC {

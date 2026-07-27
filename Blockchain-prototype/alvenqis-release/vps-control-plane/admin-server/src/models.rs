@@ -75,6 +75,7 @@ pub struct InvitationResponse {
     pub operation_id: String,
     pub replayed: bool,
     pub invitation_id: String,
+    pub enrollment_token: String,
     pub role: String,
     pub expires_at_unix_seconds: u64,
     pub install_command: String,

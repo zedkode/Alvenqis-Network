@@ -43,7 +43,6 @@ case "$component" in
   exec /usr/local/bin/alvenqis-indexer-loop ;;
  control)
   render /app/templates/admin.toml.template "$config_dir/admin.toml"
-  if [[ -n "${CONTROLLER_URL:-}" && -n "${ENROLLMENT_TOKEN:-}" && ! -s /data/control/agent-credentials.json ]]; then umask 077; printf '%s' "$ENROLLMENT_TOKEN" > /data/control/enrollment.token; fi
   exec alvenqis-vps-admin --config "$config_dir/admin.toml" ;;
  pool)
   required_env POOL_ADDRESS

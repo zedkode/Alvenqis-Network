@@ -12,6 +12,10 @@ impl Hash {
         Self([0; HASH_SIZE])
     }
 
+    pub const fn from_bytes(bytes: [u8; HASH_SIZE]) -> Self {
+        Self(bytes)
+    }
+
     pub const fn as_bytes(&self) -> &[u8; HASH_SIZE] {
         &self.0
     }

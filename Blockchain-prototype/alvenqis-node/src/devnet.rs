@@ -10,11 +10,11 @@ use crate::mempool::{
 use crate::p2p::{load_p2p_status, run_p2p_service};
 use crate::storage::{self, BlockStore, SqliteBlockStore};
 use alvenqis_core::{
-    apply_transaction, blake3_hash, block_reward, child_block_with_consensus_difficulty,
-    common_ancestor_height, genesis_with_difficulty_for_network,
-    genesis_with_timestamp_for_network, hash_to_hex, median_time_past,
-    mine_block as mine_core_block, next_base_fee, next_difficulty_for_network, select_fork,
-    Address, Amount, Block, Chain, ForkChoice, Network, PrivateKey, Transaction,
+    apply_transaction, blake3_hash, block_fee_summary, block_reward,
+    child_block_with_consensus_difficulty, common_ancestor_height,
+    genesis_with_difficulty_for_network, genesis_with_timestamp_for_network, hash_to_hex,
+    median_time_past, mine_block as mine_core_block, next_base_fee, next_difficulty_for_network,
+    select_fork, Address, Amount, Block, Chain, ForkChoice, Network, PrivateKey, Transaction,
     MAX_TRANSACTIONS_PER_BLOCK,
 };
 use serde::{Deserialize, Serialize};
@@ -714,20 +714,13 @@ pub fn print_chain(config_path: &Path, data_dir: &Path) -> NodeResult<String> {
             hash_to_hex(&block.header.previous_hash),
         );
 
-        if let Some(fees) = chain.state().block_fees().get(&block.header.height) {
-            let reward = chain
-                .state()
-                .coinbase_rewards()
-                .get(&block.header.height)
-                .copied()
-                .unwrap_or_default();
-            let _ = writeln!(
-                &mut output,
-                "  reward_atomic={} fees_atomic={}",
-                reward.as_atomic(),
-                fees.as_atomic()
-            );
-        }
+        let metrics = block_fee_summary(&block)?;
+        let _ = writeln!(
+            &mut output,
+            "  reward_atomic={} fees_atomic={}",
+            metrics.coinbase_reward.as_atomic(),
+            metrics.total_fees.as_atomic()
+        );
     }
 
     Ok(output)

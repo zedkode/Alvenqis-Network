@@ -15,6 +15,7 @@ const titles = {
 };
 
 let lastCommand = "";
+let lastEnrollmentToken = "";
 let lastInvite = null;
 let overviewCache = null;
 let summaryCache = null;
@@ -445,7 +446,10 @@ async function refreshSummary() {
 function renderInviteResult(payload) {
   lastInvite = payload;
   lastCommand = payload.install_command || "";
+  lastEnrollmentToken = payload.enrollment_token || "";
+  $("enrollmentToken").textContent = lastEnrollmentToken || "# Token unavailable";
   $("installCommand").textContent = lastCommand;
+  $("copyToken").disabled = !lastEnrollmentToken;
   $("copyCommand").disabled = !lastCommand;
   $("inviteMeta").innerHTML = `
     <span class="badge pending">PENDING</span>
@@ -567,6 +571,16 @@ $("copyCommand").addEventListener("click", async () => {
     setWizard(4);
   } catch {
     toast("Copy failed — select the script manually", false);
+  }
+});
+
+$("copyToken").addEventListener("click", async () => {
+  if (!lastEnrollmentToken) return;
+  try {
+    await navigator.clipboard.writeText(lastEnrollmentToken);
+    toast("One-time enrollment token copied");
+  } catch {
+    toast("Copy failed — select the token manually", false);
   }
 });
 

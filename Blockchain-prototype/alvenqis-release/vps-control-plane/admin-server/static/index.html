@@ -234,11 +234,13 @@
               <div class="panel-head">
                 <h3>Enrollment kit</h3>
                 <div class="head-actions">
+                  <button id="copyToken" class="btn" type="button" disabled>Copy token</button>
                   <button id="copyCommand" class="btn" type="button" disabled>Copy script</button>
                 </div>
               </div>
               <div id="inviteMeta" class="invite-meta muted">Fill the form to create a one-time token.</div>
               <ol id="enrollSteps" class="enroll-steps"></ol>
+              <pre id="enrollmentToken" class="code-block"># Waiting for one-time token…</pre>
               <pre id="installCommand" class="code-block"># Waiting for invitation…</pre>
               <small id="inviteExpiry" class="muted"></small>
             </article>

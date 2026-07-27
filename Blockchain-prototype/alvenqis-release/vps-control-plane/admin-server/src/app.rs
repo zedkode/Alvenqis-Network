@@ -288,7 +288,7 @@ async fn create_invitation(
         "/dns4/{}/tcp/{}",
         state.config.advertise_host, state.config.p2p_port
     );
-    let install_command = enrollment_command(&state, &request, &controller, &seed, &invite.token);
+    let install_command = enrollment_command(&state, &request, &controller, &seed);
     let steps = enrollment_steps(
         &request,
         &install_command,
@@ -299,6 +299,7 @@ async fn create_invitation(
         operation_id: operation.operation_id,
         replayed: false,
         invitation_id: invite.id,
+        enrollment_token: invite.token,
         role: request.role.as_str().to_owned(),
         expires_at_unix_seconds: invite.expires_at_unix_seconds,
         install_command,
@@ -1092,18 +1093,16 @@ fn enrollment_command(
     request: &InvitationRequest,
     controller: &str,
     seed: &str,
-    token: &str,
 ) -> String {
     let (profile, targets, stop_targets) = compose_plan(request.role);
     format!(
-        "set -Eeuo pipefail\n{docker_install}\ninstall -d -m 0755 /opt/alvenqis-agent\ntest -z \"$(ls -A /opt/alvenqis-agent)\" || {{ echo 'Refusing to overwrite /opt/alvenqis-agent' >&2; exit 73; }}\ncurl -fsSL {bundle} -o /tmp/alvenqis-docker-control-plane.tar.gz\ncurl -fsSL {bundle}.sha256 -o /tmp/alvenqis-docker-control-plane.tar.gz.sha256\ncd /tmp\nsha256sum -c alvenqis-docker-control-plane.tar.gz.sha256\ntar -xzf alvenqis-docker-control-plane.tar.gz -C /opt/alvenqis-agent\ncd /opt/alvenqis-agent/alvenqis-release/vps-control-plane\n./scripts/enroll-docker-node.sh --node-name {node} --p2p-host {domain} --email {email} --controller-url {controller} --enrollment-token {token} --seed {seed} --release-bundle-url {bundle}\nprintf '\\nALVENQIS_DEPLOYMENT_ROLE=%s\\nENABLE_POOL=%s\\n' {role} {enable_pool} >> .env\n{stop_command}\ndocker compose --env-file .env -f compose.yaml {profile} up -d --build {targets}\ndocker compose --env-file .env -f compose.yaml {profile} ps {targets}\ninstall -m 0600 /dev/null /root/alvenqis-access.txt\n{{ printf 'Node: %s\\nRole: %s\\nController: %s\\nControl URL: %s\\n' {node} {role} {controller} {control_url}; if test -s state/secrets/admin_password; then printf 'Admin password: '; cat state/secrets/admin_password; fi; }} > /root/alvenqis-access.txt\nchmod 0600 /root/alvenqis-access.txt\nprintf 'Credentials saved to /root/alvenqis-access.txt (mode 0600)\\n'\n",
+        "set -Eeuo pipefail\nread -r -s -p 'Enrollment token: ' ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\n'\n{docker_install}\ninstall -d -m 0755 /opt/alvenqis-agent\ntest -z \"$(ls -A /opt/alvenqis-agent)\" || {{ echo 'Refusing to overwrite /opt/alvenqis-agent' >&2; exit 73; }}\ncurl -fsSL {bundle} -o /tmp/alvenqis-docker-control-plane.tar.gz\ncurl -fsSL {bundle}.sha256 -o /tmp/alvenqis-docker-control-plane.tar.gz.sha256\ncd /tmp\nsha256sum -c alvenqis-docker-control-plane.tar.gz.sha256\ntar -xzf alvenqis-docker-control-plane.tar.gz -C /opt/alvenqis-agent\ncd /opt/alvenqis-agent/alvenqis-release/vps-control-plane\nprintf '%s\\n' \"$ALVENQIS_ENROLLMENT_TOKEN\" | ./scripts/enroll-docker-node.sh --node-name {node} --p2p-host {domain} --email {email} --controller-url {controller} --enrollment-token-stdin --seed {seed} --release-bundle-url {bundle}\nunset ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\nALVENQIS_DEPLOYMENT_ROLE=%s\\nENABLE_POOL=%s\\n' {role} {enable_pool} >> .env\n{stop_command}\ndocker compose --env-file .env -f compose.yaml {profile} up -d --build {targets}\ndocker compose --env-file .env -f compose.yaml {profile} ps {targets}\ninstall -m 0600 /dev/null /root/alvenqis-access.txt\n{{ printf 'Node: %s\\nRole: %s\\nController: %s\\nControl URL: %s\\n' {node} {role} {controller} {control_url}; if test -s state/secrets/admin_password; then printf 'Admin password: '; cat state/secrets/admin_password; fi; }} > /root/alvenqis-access.txt\nchmod 0600 /root/alvenqis-access.txt\nprintf 'Credentials saved to /root/alvenqis-access.txt (mode 0600)\\n'\n",
         docker_install = docker_install_commands(),
         bundle = shell_arg(&state.config.release_bundle_url),
         node = shell_arg(&request.node_name),
         domain = shell_arg(&request.advertise_host),
         email = shell_arg(&request.acme_email),
         controller = shell_arg(controller),
-        token = shell_arg(token),
         seed = shell_arg(seed),
         role = shell_arg(request.role.as_str()),
         enable_pool = shell_arg(if matches!(request.role, DeploymentRole::Stratum | DeploymentRole::FullStack) { "true" } else { "false" }),
@@ -1163,7 +1162,7 @@ fn manifest_command_template(
 ) -> String {
     let (profile, targets, stop_targets) = compose_plan(request.role);
     format!(
-        "set -Eeuo pipefail\n: \"${{ALVENQIS_ENROLLMENT_TOKEN:?provide out-of-band enrollment token}}\"\n{docker_install}\ninstall -d -m 0755 /opt/alvenqis-agent\ntest -z \"$(ls -A /opt/alvenqis-agent)\" || {{ echo 'Refusing to overwrite /opt/alvenqis-agent' >&2; exit 73; }}\ncurl -fsSL {bundle} -o /tmp/alvenqis-control-plane.tar.gz\ncurl -fsSL {bundle}.sha256 -o /tmp/alvenqis-control-plane.tar.gz.sha256\ncd /tmp && sha256sum -c alvenqis-control-plane.tar.gz.sha256\ntar -xzf /tmp/alvenqis-control-plane.tar.gz -C /opt/alvenqis-agent\ncd /opt/alvenqis-agent/alvenqis-release/vps-control-plane\n./scripts/enroll-docker-node.sh --node-name {node} --p2p-host {host} --email {email} --controller-url {controller} --enrollment-token \"$ALVENQIS_ENROLLMENT_TOKEN\" --seed {seed} --release-bundle-url {bundle}\nprintf '\\nALVENQIS_DEPLOYMENT_ROLE=%s\\nENABLE_POOL=%s\\n' {role} {enable_pool} >> .env\n{stop_command}\ndocker compose --env-file .env -f compose.yaml {profile} up -d --build {targets}\ndocker compose --env-file .env -f compose.yaml {profile} ps {targets}\ninstall -m 0600 /dev/null /root/alvenqis-access.txt\n{{ printf 'Node: %s\\nRole: %s\\nController: %s\\n' {node} {role} {controller}; if test -s state/secrets/admin_password; then printf 'Admin password: '; cat state/secrets/admin_password; fi; }} > /root/alvenqis-access.txt\nchmod 0600 /root/alvenqis-access.txt\n",
+        "set -Eeuo pipefail\nread -r -s -p 'Enrollment token: ' ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\n'\n{docker_install}\ninstall -d -m 0755 /opt/alvenqis-agent\ntest -z \"$(ls -A /opt/alvenqis-agent)\" || {{ echo 'Refusing to overwrite /opt/alvenqis-agent' >&2; exit 73; }}\ncurl -fsSL {bundle} -o /tmp/alvenqis-control-plane.tar.gz\ncurl -fsSL {bundle}.sha256 -o /tmp/alvenqis-control-plane.tar.gz.sha256\ncd /tmp && sha256sum -c alvenqis-control-plane.tar.gz.sha256\ntar -xzf /tmp/alvenqis-control-plane.tar.gz -C /opt/alvenqis-agent\ncd /opt/alvenqis-agent/alvenqis-release/vps-control-plane\nprintf '%s\\n' \"$ALVENQIS_ENROLLMENT_TOKEN\" | ./scripts/enroll-docker-node.sh --node-name {node} --p2p-host {host} --email {email} --controller-url {controller} --enrollment-token-stdin --seed {seed} --release-bundle-url {bundle}\nunset ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\nALVENQIS_DEPLOYMENT_ROLE=%s\\nENABLE_POOL=%s\\n' {role} {enable_pool} >> .env\n{stop_command}\ndocker compose --env-file .env -f compose.yaml {profile} up -d --build {targets}\ndocker compose --env-file .env -f compose.yaml {profile} ps {targets}\ninstall -m 0600 /dev/null /root/alvenqis-access.txt\n{{ printf 'Node: %s\\nRole: %s\\nController: %s\\n' {node} {role} {controller}; if test -s state/secrets/admin_password; then printf 'Admin password: '; cat state/secrets/admin_password; fi; }} > /root/alvenqis-access.txt\nchmod 0600 /root/alvenqis-access.txt\n",
         docker_install = docker_install_commands(),
         bundle = shell_arg(bundle),
         node = shell_arg(&request.node_name),
@@ -1581,7 +1580,6 @@ mod tests {
             &request,
             "https://control.example.org",
             "/dns4/controller.example.org/tcp/20787",
-            "single-use-token",
         );
         assert!(command.contains("apt-get update"));
         assert!(command.contains("docker-ce"));
@@ -1589,6 +1587,8 @@ mod tests {
         assert!(command.contains("stratum-certbot alvenqis-pool"));
         assert!(command.contains("/root/alvenqis-access.txt"));
         assert!(command.contains("chmod 0600"));
+        assert!(command.contains("--enrollment-token-stdin"));
+        assert!(!command.contains("--enrollment-token "));
         assert!(!command.contains("eval "));
     }
 }

@@ -11,13 +11,19 @@ const inventoryPath = path.join(publicDocsRoot, 'DOCUMENTATION_INVENTORY.md')
 const writeInventory = process.argv.includes('--write')
 
 const ignoredDirectories = new Set([
-  '.artifacts', '.git', '.review', '.alvenqis-local', '.alvenqis-local', '.tmp-firo',
+  '.agents', '.artifacts', '.codex', '.git', '.review', '.alvenqis-local', '.tmp-firo',
+  '.superdesign', '.vscode',
   'dist', 'node_modules', 'release-artifacts', 'target', 'alvenqis-docker',
 ])
 const ignoredFiles = new Set([
+  'AUDIT_ALVENQIS_NETWORK.md',
   'CODE_REVIEW_REPORT_2026-07-19.md',
+  'PLAN_IMBUNATATIRI_ALVENQIS_NETWORK.md',
   'RUST_CODE_ANALYSIS_REPORT.md',
 ])
+const ignoredPathPrefixes = [
+  'Blockchain-docs/ai/',
+]
 
 async function walk(directory) {
   const results = []
@@ -25,6 +31,8 @@ async function walk(directory) {
     if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue
     if (entry.isFile() && ignoredFiles.has(entry.name)) continue
     const absolute = path.join(directory, entry.name)
+    const relative = repoPath(absolute)
+    if (ignoredPathPrefixes.some((prefix) => relative.startsWith(prefix))) continue
     if (entry.isDirectory()) results.push(...await walk(absolute))
     else if (/\.mdx?$/i.test(entry.name)) results.push(absolute)
   }

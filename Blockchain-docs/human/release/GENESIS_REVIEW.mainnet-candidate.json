@@ -1,0 +1,16 @@
+{
+  "review_standard_id": "alvenqis-genesis-review-v1",
+  "network_id": "alvenqis-mainnet-candidate",
+  "human_name": "Alvenqis Mainnet Candidate",
+  "status_label": "Planned / Mainnet Candidate",
+  "address_prefix": "alve",
+  "block_time_seconds": 60,
+  "difficulty_leading_zero_bits": 16,
+  "chain_magic_hex": "414c4d43",
+  "genesis_timestamp": 1720000000,
+  "recipient_strategy": "default_miner_address",
+  "recipient_address": null,
+  "resolved_recipient_address": "alve1qr4y5mrru2w9yz4774g8kyewchue23mk46ltu7ujgg0w56g5gmfzcnfqv0q",
+  "deterministic_genesis_hash": "0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5",
+  "review_hash": "3b245dfb0004603200d804996e24375728b12cf209a88ce61ced23e38e5a602c"
+}

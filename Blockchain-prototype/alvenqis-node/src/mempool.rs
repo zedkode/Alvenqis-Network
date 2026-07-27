@@ -203,7 +203,7 @@ pub fn sanitize_pending_transactions_with_age(
     let mut ordered = candidates;
     sort_pending_for_admission(&mut ordered, anticipated_base_fee);
 
-    let mut state = chain.state().clone();
+    let mut state = chain.state().transaction_simulation_state();
     let mut valid_records = Vec::new();
     let mut invalid_hashes = early_dropped;
 

@@ -1,0 +1,12 @@
+{
+  "approval_standard_id": "alvenqis-genesis-approval-v1",
+  "review_standard_id": "alvenqis-genesis-review-v1",
+  "network_id": "alvenqis-mainnet-candidate",
+  "human_name": "Alvenqis Mainnet Candidate",
+  "status_label": "Planned / Mainnet Candidate",
+  "deterministic_genesis_hash": "0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5",
+  "approved_review_hash": "3b245dfb0004603200d804996e24375728b12cf209a88ce61ced23e38e5a602c",
+  "approved_by": "alvenqis-rebrand-genesis-v1",
+  "approval_notes": null,
+  "approved_at_unix_seconds": 1784979862
+}

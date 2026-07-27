@@ -1,6 +1,8 @@
 use crate::error::{IndexerError, IndexerResult};
 use crate::storage;
-use alvenqis_core::{hash_to_hex, Amount, Chain, Network, Transaction, MAX_SUPPLY_ATOMIC};
+use alvenqis_core::{
+    block_fee_summary, hash_to_hex, Amount, Chain, Network, Transaction, MAX_SUPPLY_ATOMIC,
+};
 use alvenqis_node::storage as node_storage;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -172,34 +174,11 @@ pub fn index_chain(chain_data_dir: &Path, index_dir: &Path) -> IndexerResult<Ind
     for block in &blocks {
         let height = block.header.height;
         let block_hash = hash_to_hex(&block.hash()?);
-        let fees_atomic = chain
-            .state()
-            .block_fees()
-            .get(&height)
-            .copied()
-            .unwrap_or(Amount::ZERO)
-            .as_atomic();
-        let burned_fees_atomic = chain
-            .state()
-            .block_burned_fees()
-            .get(&height)
-            .copied()
-            .unwrap_or(Amount::ZERO)
-            .as_atomic();
-        let priority_fees_atomic = chain
-            .state()
-            .block_priority_fees()
-            .get(&height)
-            .copied()
-            .unwrap_or(Amount::ZERO)
-            .as_atomic();
-        let miner_reward_atomic = chain
-            .state()
-            .coinbase_rewards()
-            .get(&height)
-            .copied()
-            .unwrap_or(Amount::ZERO)
-            .as_atomic();
+        let metrics = block_fee_summary(block)?;
+        let fees_atomic = metrics.total_fees.as_atomic();
+        let burned_fees_atomic = metrics.burned_fees.as_atomic();
+        let priority_fees_atomic = metrics.priority_fees.as_atomic();
+        let miner_reward_atomic = metrics.coinbase_reward.as_atomic();
         let coinbase = block.transactions.first().ok_or_else(|| {
             IndexerError::NotFound(format!("missing coinbase for block {height}"))
         })?;
@@ -409,7 +388,7 @@ fn try_append_index(
 
     let mut index = existing.clone();
     for block in new_slice {
-        append_block_to_index_maps(&mut index, block, &chain)?;
+        append_block_to_index_maps(&mut index, block)?;
     }
 
     // Refresh balances / supply from the full validated chain state.
@@ -454,38 +433,14 @@ fn try_append_index(
 fn append_block_to_index_maps(
     index: &mut IndexData,
     block: &alvenqis_core::Block,
-    chain: &Chain,
 ) -> IndexerResult<()> {
     let height = block.header.height;
     let block_hash = hash_to_hex(&block.hash()?);
-    let fees_atomic = chain
-        .state()
-        .block_fees()
-        .get(&height)
-        .copied()
-        .unwrap_or(Amount::ZERO)
-        .as_atomic();
-    let burned_fees_atomic = chain
-        .state()
-        .block_burned_fees()
-        .get(&height)
-        .copied()
-        .unwrap_or(Amount::ZERO)
-        .as_atomic();
-    let priority_fees_atomic = chain
-        .state()
-        .block_priority_fees()
-        .get(&height)
-        .copied()
-        .unwrap_or(Amount::ZERO)
-        .as_atomic();
-    let miner_reward_atomic = chain
-        .state()
-        .coinbase_rewards()
-        .get(&height)
-        .copied()
-        .unwrap_or(Amount::ZERO)
-        .as_atomic();
+    let metrics = block_fee_summary(block)?;
+    let fees_atomic = metrics.total_fees.as_atomic();
+    let burned_fees_atomic = metrics.burned_fees.as_atomic();
+    let priority_fees_atomic = metrics.priority_fees.as_atomic();
+    let miner_reward_atomic = metrics.coinbase_reward.as_atomic();
     let coinbase = block
         .transactions
         .first()

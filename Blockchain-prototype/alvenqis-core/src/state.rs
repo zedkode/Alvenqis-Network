@@ -38,6 +38,7 @@ pub const FIRST_ACCOUNT_NONCE: u64 = 1;
 /// window so long-running nodes do not retain every historical hash forever.
 /// Documented also in `Blockchain-docs/human/architecture/` (ledger state notes).
 pub const TX_HASH_RETENTION_BLOCKS: u64 = 1024;
+pub const BLOCK_METRICS_RETENTION_BLOCKS: u64 = 2048;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LedgerState {
@@ -125,6 +126,16 @@ impl LedgerState {
         self.tip_timestamp
     }
 
+    pub fn transaction_simulation_state(&self) -> Self {
+        Self {
+            block_fees: BTreeMap::new(),
+            block_burned_fees: BTreeMap::new(),
+            block_priority_fees: BTreeMap::new(),
+            coinbase_rewards: BTreeMap::new(),
+            ..self.clone()
+        }
+    }
+
     fn ensure_transaction_hash_is_new(&self, transaction: &Transaction) -> Result<()> {
         let tx_hash = hash_to_hex(&transaction.tx_hash());
         if self.applied_transaction_hashes.contains(&tx_hash) {
@@ -161,6 +172,20 @@ impl LedgerState {
                 }
             }
         }
+    }
+
+    fn prune_block_metrics_retention(&mut self) {
+        let Some(tip) = self.applied_block_height else {
+            return;
+        };
+        let min_keep = tip.saturating_sub(BLOCK_METRICS_RETENTION_BLOCKS.saturating_sub(1));
+        self.block_fees.retain(|height, _| *height >= min_keep);
+        self.block_burned_fees
+            .retain(|height, _| *height >= min_keep);
+        self.block_priority_fees
+            .retain(|height, _| *height >= min_keep);
+        self.coinbase_rewards
+            .retain(|height, _| *height >= min_keep);
     }
 
     /// Approximate number of retained heights (for tests / diagnostics).
@@ -207,6 +232,26 @@ pub fn validate_transaction_against_state(
     }
 
     Ok(())
+}
+
+pub fn block_fee_summary(block: &Block) -> Result<BlockLedgerSummary> {
+    validate_coinbase_structure(&block.transactions)?;
+    let base_fee = Amount::from_atomic(block.header.base_fee_atomic);
+    let mut total_fees = Amount::ZERO;
+    let mut burned_fees = Amount::ZERO;
+    let mut priority_fees = Amount::ZERO;
+    for transaction in block.transactions.iter().skip(1) {
+        total_fees = total_fees.checked_add(transaction.effective_fee(base_fee)?)?;
+        burned_fees = burned_fees.checked_add(base_fee)?;
+        priority_fees = priority_fees.checked_add(transaction.effective_priority_fee(base_fee)?)?;
+    }
+    Ok(BlockLedgerSummary {
+        total_fees,
+        burned_fees,
+        priority_fees,
+        coinbase_reward: block_reward(block.header.height),
+        base_fee,
+    })
 }
 
 pub fn apply_transaction(
@@ -331,7 +376,7 @@ pub fn validate_block_against_state(
         }
     }
 
-    let mut simulated = state.clone();
+    let mut simulated = state.transaction_simulation_state();
     let mut total_fees = Amount::ZERO;
     let mut burned_fees = Amount::ZERO;
     let mut priority_fees = Amount::ZERO;
@@ -397,6 +442,7 @@ pub fn apply_block(state: &mut LedgerState, block: &Block) -> Result<BlockLedger
     state.tip_hash = Some(block.hash()?);
     state.tip_timestamp = Some(block.header.timestamp);
     state.prune_tx_hash_retention();
+    state.prune_block_metrics_retention();
     Ok(summary)
 }
 
@@ -665,7 +711,7 @@ mod tests {
         apply_block(&mut state, &parent).expect("apply genesis");
 
         let extra = 32_u64;
-        let total_blocks = TX_HASH_RETENTION_BLOCKS + extra;
+        let total_blocks = BLOCK_METRICS_RETENTION_BLOCKS.max(TX_HASH_RETENTION_BLOCKS) + extra;
         for height in 1..=total_blocks {
             let child = devnet_child_block_with_difficulty(
                 &parent,
@@ -689,10 +735,18 @@ mod tests {
                 state.applied_transaction_hashes().len() as u64 <= TX_HASH_RETENTION_BLOCKS,
                 "hash set grew past retention bound"
             );
+            assert!(state.block_fees().len() as u64 <= BLOCK_METRICS_RETENTION_BLOCKS);
+            assert!(state.block_burned_fees().len() as u64 <= BLOCK_METRICS_RETENTION_BLOCKS);
+            assert!(state.block_priority_fees().len() as u64 <= BLOCK_METRICS_RETENTION_BLOCKS);
+            assert!(state.coinbase_rewards().len() as u64 <= BLOCK_METRICS_RETENTION_BLOCKS);
         }
         assert_eq!(
             state.retained_tx_hash_heights() as u64,
             TX_HASH_RETENTION_BLOCKS
+        );
+        assert_eq!(
+            state.block_fees().len() as u64,
+            BLOCK_METRICS_RETENTION_BLOCKS
         );
     }
 }

@@ -10,11 +10,11 @@ public Markdown reader; it does not change the historical content itself.
 
 | Class | Documents |
 |---|---:|
-| Component reference | 52 |
+| Component reference | 36 |
 | Historical | 2 |
-| Internal | 35 |
-| Public | 112 |
-| **Total** | **201** |
+| Internal | 11 |
+| Public | 111 |
+| **Total** | **160** |
 
 ## Complete inventory
 
@@ -22,40 +22,6 @@ public Markdown reader; it does not change the historical content itself.
 |---|---|---|---|
 | `.github/CUM-FACI-RELEASE.md` | Component reference | Not stated | Cum creezi un tag si un release Alvenqis |
 | `.github/DEPLOYMENTS.md` | Component reference | Not stated | Alvenqis Deployments |
-| `.github/README.md` | Component reference | Not stated | Alvenqis Network |
-| `.superdesign/design-system.md` | Component reference | Not stated | Alvenqis Public Network Portal — Signal Noir |
-| `.superdesign/init/components.md` | Component reference | Not stated | Alvenqis Website Shared Components |
-| `.superdesign/init/extractable-components.md` | Component reference | Not stated | Extractable Superdesign Components |
-| `.superdesign/init/layouts.md` | Component reference | Not stated | Layout inventory |
-| `.superdesign/init/pages.md` | Component reference | Not stated | Key page dependency trees |
-| `.superdesign/init/routes.md` | Component reference | Not stated | Alvenqis Website Routes |
-| `.superdesign/init/theme.md` | Component reference | Not stated | Existing theme |
-| `.superdesign/tmp/public-redesign-brief.md` | Component reference | Not stated | Public redesign brief |
-| `.vscode/README.md` | Component reference | Draft | VS Code |
-| `Blockchain-docs/ai/rebrand-pack/00_READ_FIRST.md` | Internal | Not stated | Alvenqis Network — READ FIRST |
-| `Blockchain-docs/ai/rebrand-pack/01_SOURCE_INFO_MASTER.md` | Internal | Not stated | Alvenqis Network — Source Info Master |
-| `Blockchain-docs/ai/rebrand-pack/02_PROTOCOL_AND_CONSENSUS.md` | Internal | Not stated | Alvenqis Network — Protocol și Consensus |
-| `Blockchain-docs/ai/rebrand-pack/03_ALVENQISPOW_AND_MINING.md` | Internal | ```text | AlvenqisPoW și Mining — Reguli stricte |
-| `Blockchain-docs/ai/rebrand-pack/04_ARCHITECTURE_AND_REPOSITORY.md` | Internal | `Founder-approved migration target`. Până la finalizarea branch-ului de rebrand, existența în cod trebuie verificată componentă cu componentă. | Alvenqis Network — Arhitectură și Repository |
-| `Blockchain-docs/ai/rebrand-pack/05_WALLET_SECURITY.md` | Internal | Not stated | Alvenqis Wallet Security — Model strict |
-| `Blockchain-docs/ai/rebrand-pack/06_NETWORK_SECURITY_AND_SELF_HEALING.md` | Internal | Planned subsystem; safety boundaries fixed, implementation code-gated | Alvenqis Network — Securitate, auto-diagnostic și self-healing |
-| `Blockchain-docs/ai/rebrand-pack/07_ENGINEERING_AND_AI_AGENT_RULES.md` | Internal | Not stated | Alvenqis Network — Reguli stricte pentru ingineri și agenți AI |
-| `Blockchain-docs/ai/rebrand-pack/08_RELEASE_GATES_AND_ROADMAP.md` | Internal | Not stated | Alvenqis Network — Roadmap și Release Gates |
-| `Blockchain-docs/ai/rebrand-pack/09_PUBLIC_COMMUNICATION_AND_LEGAL.md` | Internal | Not stated | Alvenqis Network — Comunicare publică și disciplină legală |
-| `Blockchain-docs/ai/rebrand-pack/10_CUSTOM_GPT_INSTRUCTIONS.md` | Internal | Not stated | Instrucțiuni personalizate pentru proiectul GPT Alvenqis |
-| `Blockchain-docs/ai/rebrand-pack/11_FIXED_DECISIONS_AND_RESEARCH_BOUNDARIES.md` | Internal | Research only | Alvenqis Network — Decizii Fixe și Research Boundaries |
-| `Blockchain-docs/ai/rebrand-pack/12_REBRAND_AND_MIGRATION_PLAN.md` | Internal | Not stated | Alvenqis Network — Plan Obligatoriu de Rebrand și Migrare |
-| `Blockchain-docs/ai/rebrand-pack/13_IDENTITY_NAMESPACE_AND_VERSIONING.md` | Internal | Not stated | Alvenqis Network — Identity, Namespace și Versioning |
-| `Blockchain-docs/ai/rebrand-pack/14_INFRASTRUCTURE_AND_DOMAIN_ARCHITECTURE.md` | Internal | Not stated | Alvenqis Network — Infrastructure și Domain Architecture |
-| `Blockchain-docs/ai/rebrand-pack/15_TESTING_VERIFICATION_AND_COMPATIBILITY.md` | Internal | Not stated | Alvenqis Network — Testing, Verification și Compatibility |
-| `Blockchain-docs/ai/rebrand-pack/16_OPERATIONAL_RUNBOOK_AND_INCIDENT_RESPONSE.md` | Internal | Detected at UTC: | Alvenqis Network — Operational Runbook și Incident Response |
-| `Blockchain-docs/ai/rebrand-pack/17_GLOSSARY_AND_STATUS_MATRIX.md` | Internal | Not stated | Alvenqis Network — Glossary și Status Matrix |
-| `Blockchain-docs/ai/rebrand-pack/18_APPROVED_REBRAND_DECISIONS_AND_CHANGELOG.md` | Internal | Approved and mandatory | Alvenqis Network — Approved Rebrand Decisions și Changelog |
-| `Blockchain-docs/ai/rebrand-pack/19_CODEX_REBRAND_EXECUTION_RULES.md` | Internal | Not stated | Codex — Alvenqis Rebrand Execution Rules |
-| `Blockchain-docs/ai/rebrand-pack/20_REBRAND_REPLACEMENT_MATRIX.md` | Internal | Not stated | Alvenqis Network — Rebrand Replacement Matrix |
-| `Blockchain-docs/ai/rebrand-pack/21_REBRAND_ACCEPTANCE_CHECKLIST.md` | Internal | Not stated | Alvenqis Network — Rebrand Acceptance Checklist |
-| `Blockchain-docs/ai/rebrand-pack/CODEX.md` | Internal | Not stated | CODEX.md — Alvenqis Network Rebrand Entry Point |
-| `Blockchain-docs/ai/rebrand-pack/PACKAGE_MANIFEST.md` | Internal | Not stated | Alvenqis Network — Source Info Package Manifest |
 | `Blockchain-docs/human/_404.md` | Public | Not stated | Documentation route not found |
 | `Blockchain-docs/human/_coverpage.md` | Public | Not stated | Alvenqis Network |
 | `Blockchain-docs/human/_navbar.md` | Public | Not stated | (missing title) |
@@ -156,16 +122,9 @@ public Markdown reader; it does not change the historical content itself.
 | `Blockchain-docs/README.md` | Component reference | Not stated | Blockchain-docs |
 | `Blockchain-prototype/alvenqis-android/README.md` | Public | **Mainnet Candidate / Prototype / not public mainnet** | Alvenqis Mobile for Android |
 | `Blockchain-prototype/alvenqis-browser/README.md` | Public | Prototype / Mainnet Candidate / not store-ready | alvenqis-browser |
-| `Blockchain-prototype/alvenqis-community/Discord Bot/CHANGELOG.md` | Component reference | Not stated | Changelog |
-| `Blockchain-prototype/alvenqis-community/Discord Bot/DEPLOYMENT.md` | Component reference | Not stated | VBOS Deployment |
-| `Blockchain-prototype/alvenqis-community/Discord Bot/README.md` | Component reference | Not stated | VBOS |
-| `Blockchain-prototype/alvenqis-community/Discord Bot/ROADMAP.md` | Component reference | Not stated | VBOS Roadmap |
-| `Blockchain-prototype/alvenqis-community/Discord Bot/VERSIONING.md` | Component reference | Not stated | VBOS Versioning |
 | `Blockchain-prototype/alvenqis-community/README.md` | Public | Draft | alvenqis-community |
 | `Blockchain-prototype/alvenqis-core/README.md` | Public | Implemented / Mainnet Candidate / not public Mainnet | alvenqis-core |
-| `Blockchain-prototype/alvenqis-desktop-tauri/MIGRATION.md` | Component reference | Not stated | Desktop Control Center — Tauri (product path) |
-| `Blockchain-prototype/alvenqis-desktop-tauri/README.md` | Public | Not stated | Alvenqis Control Center (desktop-tauri) |
-| `Blockchain-prototype/alvenqis-desktop-tauri/src-tauri/resources/README.md` | Component reference | Not stated | Packaged runtime resources |
+| `Blockchain-prototype/alvenqis-desktop-v2/CHANGELOG_MINING_FIX.md` | Component reference | Not stated | Mining / Stratum fix + UX pass — changelog |
 | `Blockchain-prototype/alvenqis-desktop-v2/MIGRATION.md` | Component reference | Not stated | Desktop Control Center — Tauri (product path) |
 | `Blockchain-prototype/alvenqis-desktop-v2/README.md` | Public | ** Mainnet Candidate / Prototype — UI/UX rebuild branch product | Alvenqis Control Center V2 |
 | `Blockchain-prototype/alvenqis-desktop-v2/src-tauri/resources/README.md` | Component reference | Not stated | Packaged runtime resources |
