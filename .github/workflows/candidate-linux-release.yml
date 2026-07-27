@@ -1,0 +1,170 @@
+name: Candidate Linux Release
+
+on:
+  push:
+    tags:
+      - "v*-candidate.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing candidate tag, for example v1.0.0-candidate.1
+        required: true
+        type: string
+      force_build:
+        description: Rebuild this platform even if the tag contains a local artifact marker
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: candidate-linux-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  release-mode:
+    name: Detect release source
+    runs-on: ubuntu-24.04
+    outputs:
+      local_artifacts: ${{ steps.mode.outputs.local_artifacts }}
+    steps:
+      - name: Checkout candidate tag metadata
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Detect locally published artifacts marker
+        id: mode
+        shell: bash
+        env:
+          FORCE_BUILD: ${{ inputs.force_build || false }}
+        run: |
+          set -euo pipefail
+          TAG_MESSAGE="$(git for-each-ref "refs/tags/${RELEASE_TAG}" --format='%(contents)' || true)"
+          if [[ "$FORCE_BUILD" == "true" ]]; then
+            echo "local_artifacts=false" >> "$GITHUB_OUTPUT"
+            echo "Forced rebuild requested."
+          elif grep -Fq '[local-linux]' <<<"$TAG_MESSAGE"; then
+            echo "local_artifacts=true" >> "$GITHUB_OUTPUT"
+            echo "Local linux artifacts marker found. Platform build will be skipped."
+          else
+            echo "local_artifacts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-publish-linux:
+    needs: release-mode
+    if: needs.release-mode.outputs.local_artifacts != 'true'
+    name: Build and publish Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout candidate tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@3d45d157f327c09c04b50ee6ccdea2d9d017ec76
+        with:
+          cuda: "13.2.0"
+          method: network
+          sub-packages: '["nvcc", "cudart-dev"]'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            Blockchain-prototype/alvenqis-desktop-tauri/package-lock.json
+            Blockchain-prototype/alvenqis-explorer/package-lock.json
+
+      - name: Install Linux packaging dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+          libsecret-1-dev libdbus-1-dev zenity fakeroot rpm libarchive-tools xdg-utils
+
+      - name: Verify tag matches desktop version
+        run: |
+          set -euo pipefail
+          DESKTOP_VERSION="$(node -e "const j=require('./Blockchain-prototype/alvenqis-desktop-tauri/package.json'); process.stdout.write(j.version)")"
+          case "$RELEASE_TAG" in
+            "v${DESKTOP_VERSION}-candidate."*) ;;
+            *)
+              echo "Release tag $RELEASE_TAG does not match desktop version $DESKTOP_VERSION" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Build Linux Tauri packages
+        run: bash Blockchain-scripts/release/build-linux-desktop.sh
+
+      - name: Stage and verify Linux assets
+        run: |
+          set -euo pipefail
+          mkdir -p release-publish/linux
+          find Blockchain-prototype/alvenqis-release/apps/linux -maxdepth 1 -type f -exec cp {} release-publish/linux/ \;
+
+          if find release-publish/linux -iname '*electron*' | grep -q .; then
+            echo "Electron artifacts must not ship" >&2
+            find release-publish/linux -iname '*electron*'
+            exit 1
+          fi
+          if find release-publish/linux \( -name 'latest.yml' -o -name 'latest-linux.yml' \) | grep -q .; then
+            echo "Legacy Electron updater metadata must not ship" >&2
+            exit 1
+          fi
+          test -n "$(find release-publish/linux -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name 'alvenqis-control-center' \) -print -quit)"
+
+          (
+            cd release-publish/linux
+            find . -maxdepth 1 -type f ! -name 'SHA256SUMS-LINUX.txt' -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS-LINUX.txt
+          )
+          ls -la release-publish/linux
+
+      - name: Keep Linux build as workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-linux-${{ env.RELEASE_TAG }}
+          if-no-files-found: error
+          path: release-publish/linux/*
+
+      - name: Create or reuse candidate prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'EOF'
+          ## Mainnet Candidate prerelease — not public Mainnet
+
+          Release assets are built and published independently for Windows, Linux and the VPS control plane. A failed platform does not block successful platforms from publishing their own assets.
+
+          The desktop product is Tauri-based. Electron, CPU mining and OpenCL mining are not shipped. Verify the platform-specific SHA-256 checksum file before testing any asset.
+          EOF
+
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --verify-tag \
+              --title "Alvenqis $RELEASE_TAG" \
+              --notes-file release-notes.md \
+              --prerelease \
+              || gh release view "$RELEASE_TAG" >/dev/null
+          fi
+
+      - name: Upload Linux assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" release-publish/linux/* --clobber

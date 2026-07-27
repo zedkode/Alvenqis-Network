@@ -1,0 +1,81 @@
+- **Start**
+  - [Documentation Home](README.md)
+  - [Network Maturity](release/NETWORK_MATURITY.md)
+  - [Documentation Policy](DOCUMENTATION_POLICY.md)
+  - [Documentation Inventory](DOCUMENTATION_INVENTORY.md)
+  - [Source Information](source-info/README.md)
+
+- **Architecture**
+  - [Overview](architecture/README.md)
+  - [System Overview](architecture/00_SYSTEM_OVERVIEW.md)
+  - [Base Layer](architecture/01_BASE_LAYER.md)
+  - [Execution Layer](architecture/02_EXECUTION_LAYER.md)
+  - [Product Layer](architecture/03_PRODUCT_LAYER.md)
+  - [Dependency Impact Map](architecture/04_CORE_WALLET_RPC_INDEXER_EXPLORER_IMPACT.md)
+  - [Desktop Direction](architecture/05_WINDOWS_DESKTOP_DIRECTION.md)
+  - [Client Platforms](architecture/06_CLIENT_PLATFORM_DIRECTION.md)
+  - [Browser Extension](architecture/07_BROWSER_EXTENSION_AND_NATIVE_HOST.md)
+
+- **Protocol**
+  - [Protocol Index](protocol/README.md)
+  - [Protocol Overview](protocol/00_PROTOCOL_OVERVIEW.md)
+  - [Chain Parameters](protocol/01_CHAIN_PARAMETERS.md)
+  - [ALVE Units & Supply](protocol/02_ALVE_UNITS_AND_SUPPLY.md)
+  - [Emission & Halving](protocol/03_EMISSION_AND_HALVING.md)
+  - [Block Structure](protocol/04_BLOCK_STRUCTURE.md)
+  - [Transaction Model](protocol/05_TRANSACTION_MODEL.md)
+  - [Proof of Work](protocol/06_CONSENSUS_POW.md)
+  - [Difficulty Adjustment](protocol/07_DIFFICULTY_ADJUSTMENT_DRAFT.md)
+  - [On-chain / Off-chain](protocol/08_ONCHAIN_OFFCHAIN_MODEL.md)
+  - [Addresses & Keys](protocol/09_ADDRESS_AND_KEYS_DRAFT.md)
+  - [P2P Networking](protocol/12_P2P_NETWORKING_DRAFT.md)
+  - [Upgrade Activation](protocol/12_UPGRADE_ACTIVATION_POLICY.md)
+  - [Checkpoint Policy](protocol/13_CHECKPOINT_POLICY.md)
+  - [Mining Pool Protocol](protocol/13_MINING_POOL_PROTOCOL_DRAFT.md)
+
+- **Mining**
+  - [Mining Index](mining/README.md)
+  - [GPU Mining](mining/GPU_MINING.md)
+  - [CUDA & ASIC Resistance](mining/CUDA_AND_ASIC_RESISTANCE.md)
+
+- **API**
+  - [API Index](api/README.md)
+  - [RPC Gateway](api/00_RPC_GATEWAY_OVERVIEW.md)
+  - [RPC Endpoints](api/01_RPC_ENDPOINTS_DRAFT.md)
+  - [Response Models](api/02_RPC_RESPONSE_MODELS.md)
+  - [Mining Pool API](api/03_MINING_POOL_API_DRAFT.md)
+  - [SDK Client v0](api/04_SDK_CLIENT_V0.md)
+
+- **Tokenomics**
+  - [Tokenomics Index](tokenomics/README.md)
+  - [Overview](tokenomics/00_TOKENOMICS_OVERVIEW.md)
+  - [Supply & Reward Math](tokenomics/01_SUPPLY_AND_REWARD_MATH.md)
+  - [Fees](tokenomics/02_FEES_DRAFT.md)
+  - [Public Claims Rules](tokenomics/03_PUBLIC_CLAIMS_RULES.md)
+
+- **Security**
+  - [Security Index](security/README.md)
+  - [Security Gate](security/SECURITY_GATE.md)
+  - [Secret Handling](security/SECRET_HANDLING.md)
+  - [Production Risks](security/PRODUCTION_RISKS.md)
+  - [Mining Pool Risks](security/MINING_POOL_RISKS.md)
+
+- **Operations**
+  - [Local Runbook](operator/LOCAL_RUNBOOK.md)
+  - [Commands](operator/COMMANDS.md)
+  - [Chain Health](operator/CHAIN_HEALTH.md)
+  - [Troubleshooting](operator/TROUBLESHOOTING.md)
+  - [Mining Troubleshooting](operator/MINING_TROUBLESHOOTING.md)
+  - [Linux Desktop](operator/LINUX_DESKTOP.md)
+
+- **Release**
+  - [Network Maturity](release/NETWORK_MATURITY.md)
+  - [Release Gate](release/RELEASE_GATE.md)
+  - [Candidate Checklist](release/MAINNET_CANDIDATE_CHECKLIST.md)
+  - [Genesis](release/GENESIS.md)
+
+- **Project**
+  - [Roadmap](roadmap/README.md)
+  - [Whitepaper](whitepaper/README.md)
+  - [Legal](legal/README.md)
+  - [Licensing](legal/LICENSING_POLICY.md)

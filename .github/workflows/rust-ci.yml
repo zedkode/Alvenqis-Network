@@ -1,0 +1,64 @@
+name: Rust CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "Blockchain-prototype/Cargo.toml"
+      - "Blockchain-prototype/Cargo.lock"
+      - "Blockchain-prototype/**/*.rs"
+      - "Blockchain-prototype/**/build.rs"
+      - ".cargo/**"
+      - ".github/workflows/rust-ci.yml"
+  pull_request:
+    paths:
+      - "Blockchain-prototype/Cargo.toml"
+      - "Blockchain-prototype/Cargo.lock"
+      - "Blockchain-prototype/**/*.rs"
+      - "Blockchain-prototype/**/build.rs"
+      - ".cargo/**"
+      - ".github/workflows/rust-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: Blockchain-prototype
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        with:
+          workspaces: Blockchain-prototype -> target
+
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+        working-directory: .
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings

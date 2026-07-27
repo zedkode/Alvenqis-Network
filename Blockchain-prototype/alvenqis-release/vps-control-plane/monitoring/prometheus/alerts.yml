@@ -1,0 +1,117 @@
+groups:
+  - name: alvenqis-core
+    rules:
+      - alert: AlvenqisEndpointDown
+        expr: probe_success{job="alvenqis-http"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: "{{ $labels.instance }}"
+        annotations:
+          summary: "Alvenqis endpoint is unreachable"
+          description: "{{ $labels.instance }} has failed blackbox probes for more than two minutes."
+
+      - alert: AlvenqisMetricsExporterDown
+        expr: up{job="alvenqis-metrics"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: alvenqis-metrics-exporter
+        annotations:
+          summary: "Alvenqis metrics exporter is down"
+          description: "Prometheus cannot scrape alvenqis-metrics-exporter:9101."
+
+      - alert: AlvenqisRpcUnreachable
+        expr: alvenqis_rpc_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: rpc
+        annotations:
+          summary: "Alvenqis RPC status is unreachable"
+          description: "The metrics exporter cannot reach alvenqis-rpc /status."
+
+      - alert: AlvenqisIndexerLagging
+        expr: alvenqis_indexer_lag_blocks_effective > 5
+        for: 10m
+        labels:
+          severity: warning
+          brand: alvenqis
+          service: indexer
+        annotations:
+          summary: "Alvenqis indexer is lagging"
+          description: "Indexer lag is {{ $value }} blocks for more than ten minutes."
+
+      - alert: AlvenqisIndexerOutOfSync
+        expr: alvenqis_indexer_in_sync_effective == 0 and alvenqis_chain_ready == 1
+        for: 15m
+        labels:
+          severity: warning
+          brand: alvenqis
+          service: indexer
+        annotations:
+          summary: "Alvenqis indexer out of sync"
+          description: "Indexer tip does not match chain tip for more than fifteen minutes."
+
+      - alert: AlvenqisNoPeers
+        expr: alvenqis_p2p_connected_peers == 0 and alvenqis_chain_ready == 1
+        for: 15m
+        labels:
+          severity: warning
+          brand: alvenqis
+          service: p2p
+        annotations:
+          summary: "Alvenqis node has no P2P peers"
+          description: "connected_peer_count has remained 0 for fifteen minutes."
+
+      - alert: AlvenqisPoolDown
+        expr: alvenqis_pool_enabled == 1 and alvenqis_pool_up == 0
+        for: 5m
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: pool
+        annotations:
+          summary: "Alvenqis pool is down"
+          description: "ENABLE_POOL is true but pool status is unreachable."
+
+      - alert: HostDiskAlmostFull
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+          ) < 0.10
+        for: 10m
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: host-storage
+        annotations:
+          summary: "Host disk has less than 10% free space"
+          description: "Filesystem {{ $labels.mountpoint }} is nearly full."
+
+      - alert: HostMemoryPressure
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+        for: 10m
+        labels:
+          severity: warning
+          brand: alvenqis
+          service: host-memory
+        annotations:
+          summary: "Host memory pressure"
+          description: "Available memory has remained below 10% for ten minutes."
+
+      - alert: AlvenqisBackupStale
+        expr: time() - alvenqis_backup_last_success_unixtime > 129600
+        for: 15m
+        labels:
+          severity: critical
+          brand: alvenqis
+          service: backup
+        annotations:
+          summary: "Alvenqis backup is stale"
+          description: "No successful backup has been recorded for more than 36 hours."

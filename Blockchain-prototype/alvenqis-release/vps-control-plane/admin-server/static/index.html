@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alvenqis Control Plane</title>
+    <link rel="icon" type="image/png" href="./logo.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <img src="./logo.png" alt="Alvenqis" class="brand-logo" width="48" height="48" />
+          <div>
+            <strong>ALVENQIS</strong>
+            <small>CONTROL PLANE</small>
+          </div>
+        </div>
+        <nav id="nav">
+          <button class="active" data-view="overview" type="button">
+            <span class="nav-ico">◈</span> Overview
+          </button>
+          <button data-view="chainView" type="button">
+            <span class="nav-ico">⛓</span> Chain
+          </button>
+          <button data-view="servicesView" type="button">
+            <span class="nav-ico">▣</span> Services
+          </button>
+          <button data-view="topology" type="button">
+            <span class="nav-ico">◎</span> Topology
+          </button>
+          <button data-view="nodes" type="button">
+            <span class="nav-ico">⬡</span> Nodes
+          </button>
+          <button data-view="enroll" type="button">
+            <span class="nav-ico">＋</span> Add node
+          </button>
+          <button data-view="invites" type="button">
+            <span class="nav-ico">◷</span> Invitations
+          </button>
+          <button data-view="poolView" type="button">
+            <span class="nav-ico">⛏</span> Pool
+          </button>
+        </nav>
+        <div class="truth">
+          <img src="./logo-mark.png" alt="" class="truth-mark" width="28" height="28" />
+          <b>MAINNET CANDIDATE</b>
+          <span id="truthMeta">Operator surface · observed telemetry only</span>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="pageKicker">PRIVATE OPERATOR SURFACE</p>
+            <h1 id="pageTitle">Network operations</h1>
+          </div>
+          <div class="head-actions">
+            <span class="live-pill" id="refreshState"><i></i> CONNECTING</span>
+            <button id="refresh" class="btn" type="button">Refresh</button>
+            <a class="btn ghost" id="publicRpcLink" href="https://rpcnode.dohotstudio.com" target="_blank" rel="noopener">Public RPC</a>
+          </div>
+        </header>
+
+        <section id="error" class="error hidden" role="alert"></section>
+        <section id="toast" class="toast hidden" role="status"></section>
+
+        <!-- OVERVIEW -->
+        <section id="overview" class="view active">
+          <div class="hero">
+            <div class="hero-copy">
+              <p class="eyebrow">OBSERVED FLEET</p>
+              <h2>Control plane for<br /><em>Mainnet Candidate</em></h2>
+              <p>
+                Live height, services, enrolled VPS telemetry and secure one-time enrollment.
+                Nothing here invents peers or rewards.
+              </p>
+              <div class="hero-cta">
+                <button class="btn primary" type="button" data-goto="enroll">Add VPS node</button>
+                <button class="btn" type="button" data-goto="nodes">View inventory</button>
+              </div>
+            </div>
+            <div class="hero-orb">
+              <img src="./logo.png" alt="" class="orb-logo" />
+              <strong id="onlineHero">0</strong>
+              <span>ONLINE VPS</span>
+            </div>
+          </div>
+          <div class="metrics">
+            <article><span>Registered</span><strong id="registered">0</strong><small>controller inventory</small></article>
+            <article><span>Online</span><strong id="onlineCount">0</strong><small>seen ≤45s</small></article>
+            <article><span>Validated links</span><strong id="links">0</strong><small>direct observations</small></article>
+            <article><span>Observed miners</span><strong id="miners">0</strong><small>presence signals</small></article>
+            <article><span>Observed hashrate</span><strong id="hashrate">0 H/s</strong><small>max across nodes</small></article>
+            <article><span>Pending invites</span><strong id="pendingInvites">0</strong><small>single-use tokens</small></article>
+          </div>
+          <div class="grid two">
+            <article class="panel">
+              <div class="panel-head"><h3>Service matrix</h3><span>LOCAL CONTROLLER</span></div>
+              <div id="services" class="service-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3>Chain position</h3><span>LIVE RPC</span></div>
+              <div id="chainBrief" class="chain-card"></div>
+            </article>
+          </div>
+          <div class="grid two" style="margin-top:14px">
+            <article class="panel">
+              <div class="panel-head"><h3>Public mining pool</h3><span>/pool/</span></div>
+              <div id="poolPanel" class="service-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3>Fleet pulse</h3><span>LAST CYCLE</span></div>
+              <div id="fleetPulse" class="service-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <!-- CHAIN -->
+        <section id="chainView" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">CANONICAL CHAIN</p><h2>Tip &amp; sync</h2></div>
+            <p>Values from loopback RPC on this controller.</p>
+          </div>
+          <div class="grid three" id="chainDetail"></div>
+          <article class="panel" style="margin-top:14px">
+            <div class="panel-head"><h3>Raw tip</h3><span>HASH</span></div>
+            <pre class="code-block" id="tipRaw">—</pre>
+          </article>
+        </section>
+
+        <!-- SERVICES -->
+        <section id="servicesView" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">RUNTIME SERVICES</p><h2>Service health</h2></div>
+            <p>Docker service readiness derived from local RPC and index telemetry.</p>
+          </div>
+          <div id="servicesFull" class="service-list large"></div>
+        </section>
+
+        <!-- TOPOLOGY -->
+        <section id="topology" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">CONNECTION MAP</p><h2>Observed topology</h2></div>
+            <p>Enrolled + local controller only — not a global census.</p>
+          </div>
+          <div id="topologyCanvas" class="topology"></div>
+        </section>
+
+        <!-- NODES -->
+        <section id="nodes" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">AUTHENTICATED INVENTORY</p><h2>VPS nodes</h2></div>
+            <button class="btn primary" type="button" data-goto="enroll">Add node</button>
+          </div>
+          <div class="panel table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Node</th>
+                  <th>State</th>
+                  <th>Height</th>
+                  <th>Peers</th>
+                  <th>Miners</th>
+                  <th>Hashrate</th>
+                  <th>Last report</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="nodeRows"></tbody>
+            </table>
+          </div>
+          <article class="panel hidden" id="nodeDetailPanel" style="margin-top:14px">
+            <div class="panel-head">
+              <h3 id="nodeDetailTitle">Node detail</h3>
+              <button class="btn" type="button" id="closeNodeDetail">Close</button>
+            </div>
+            <div id="nodeDetailBody" class="detail-grid"></div>
+          </article>
+        </section>
+
+        <!-- ADD NODE / ENROLL -->
+        <section id="enroll" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">SECURE ENROLLMENT</p><h2>Add another VPS</h2></div>
+            <p>Short-lived, single-use install. No consensus privilege is granted.</p>
+          </div>
+
+          <div class="wizard-steps" id="wizardSteps">
+            <div class="wz active" data-step="1"><b>1</b><span>Identity</span></div>
+            <div class="wz" data-step="2"><b>2</b><span>Generate</span></div>
+            <div class="wz" data-step="3"><b>3</b><span>Install</span></div>
+            <div class="wz" data-step="4"><b>4</b><span>Verify</span></div>
+          </div>
+
+          <div class="grid two enroll-grid">
+            <form id="inviteForm" class="panel form">
+              <h3 class="form-title">Node identity</h3>
+              <label>Node name
+                <input id="nodeName" required pattern="[A-Za-z0-9._-]+" maxlength="64" placeholder="bootstrap-eu-2" autocomplete="off" />
+                <small>Alphanumeric, dots, dashes. Label only — not a privilege.</small>
+              </label>
+              <label>Public host / DNS
+                <input id="advertiseHost" required pattern="[A-Za-z0-9._-]+" maxlength="64" placeholder="node2.example.org" autocomplete="off" />
+                <small>Must resolve to the new VPS before install (A/AAAA + 80/443/20787).</small>
+              </label>
+              <label>Controller domain
+                <input id="adminDomain" pattern="[A-Za-z0-9._-]+" placeholder="rpcnode.dohotstudio.com" autocomplete="off" />
+                <small>Defaults to this controller’s advertise host if empty.</small>
+              </label>
+              <label>ACME certificate email
+                <input id="acmeEmail" required type="email" placeholder="operator@example.org" autocomplete="off" />
+              </label>
+              <div class="form-actions">
+                <button type="submit" class="btn primary" id="genInviteBtn">Generate invitation</button>
+              </div>
+            </form>
+
+            <article class="panel command-panel">
+              <div class="panel-head">
+                <h3>Enrollment kit</h3>
+                <div class="head-actions">
+                  <button id="copyCommand" class="btn" type="button" disabled>Copy script</button>
+                </div>
+              </div>
+              <div id="inviteMeta" class="invite-meta muted">Fill the form to create a one-time token.</div>
+              <ol id="enrollSteps" class="enroll-steps"></ol>
+              <pre id="installCommand" class="code-block"># Waiting for invitation…</pre>
+              <small id="inviteExpiry" class="muted"></small>
+            </article>
+          </div>
+        </section>
+
+        <!-- INVITATIONS -->
+        <section id="invites" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">TOKEN LEDGER</p><h2>Invitations</h2></div>
+            <button class="btn primary" type="button" data-goto="enroll">New invitation</button>
+          </div>
+          <div class="panel table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Node</th>
+                  <th>Host</th>
+                  <th>Status</th>
+                  <th>Expires</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="inviteRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- POOL -->
+        <section id="poolView" class="view">
+          <div class="section-title">
+            <div><p class="eyebrow">REFERENCE POOL</p><h2>Mining pool</h2></div>
+            <p>Prototype coordinator — not production multi-instance.</p>
+          </div>
+          <div class="metrics" id="poolMetrics"></div>
+          <article class="panel" style="margin-top:14px">
+            <div class="panel-head"><h3>Status detail</h3><span>/pool/api/v1/pool/status</span></div>
+            <div id="poolDetail" class="service-list large"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>

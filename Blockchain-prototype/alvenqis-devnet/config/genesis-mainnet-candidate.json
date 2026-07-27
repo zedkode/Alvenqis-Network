@@ -1,0 +1,6 @@
+{
+  "network_id": "alvenqis-mainnet-candidate",
+  "status": "Planned / Mainnet Candidate",
+  "type": "placeholder",
+  "note": "Mainnet candidate genesis is not live. Explicit allow_mainnet_candidate is still required."
+}

@@ -1,0 +1,204 @@
+name: Candidate Windows Release
+
+on:
+  push:
+    tags:
+      - "v*-candidate.*"
+      - "desktop-v*-candidate.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing candidate tag, for example desktop-v2.1.0-candidate.1
+        required: true
+        type: string
+      force_build:
+        description: Rebuild this platform even if the tag contains a local artifact marker
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: candidate-windows-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  release-mode:
+    name: Detect release source
+    runs-on: ubuntu-24.04
+    outputs:
+      local_artifacts: ${{ steps.mode.outputs.local_artifacts }}
+    steps:
+      - name: Checkout candidate tag metadata
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Detect locally published artifacts marker
+        id: mode
+        shell: bash
+        env:
+          FORCE_BUILD: ${{ inputs.force_build || false }}
+        run: |
+          set -euo pipefail
+          TAG_MESSAGE="$(git for-each-ref "refs/tags/${RELEASE_TAG}" --format='%(contents)' || true)"
+          if [[ "$FORCE_BUILD" == "true" ]]; then
+            echo "local_artifacts=false" >> "$GITHUB_OUTPUT"
+            echo "Forced rebuild requested."
+          elif grep -Fq '[local-windows]' <<<"$TAG_MESSAGE"; then
+            echo "local_artifacts=true" >> "$GITHUB_OUTPUT"
+            echo "Local windows artifacts marker found. Platform build will be skipped."
+          else
+            echo "local_artifacts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-publish-windows:
+    needs: release-mode
+    if: needs.release-mode.outputs.local_artifacts != 'true'
+    name: Build and publish Windows
+    runs-on: windows-2025
+    timeout-minutes: 120
+    steps:
+      - name: Checkout candidate tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@3d45d157f327c09c04b50ee6ccdea2d9d017ec76
+        with:
+          cuda: "13.2.0"
+          method: local
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            Blockchain-prototype/alvenqis-desktop-tauri/package-lock.json
+            Blockchain-prototype/alvenqis-desktop-v2/package-lock.json
+            Blockchain-prototype/alvenqis-explorer/package-lock.json
+
+      - name: Select and verify desktop release channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RELEASE_TAG" in
+            desktop-v2.*)
+              DESKTOP_CHANNEL=v2
+              PACKAGE=./Blockchain-prototype/alvenqis-desktop-v2/package.json
+              EXPECTED_PREFIX=desktop-v
+              ;;
+            desktop-v1.*)
+              DESKTOP_CHANNEL=v1
+              PACKAGE=./Blockchain-prototype/alvenqis-desktop-tauri/package.json
+              EXPECTED_PREFIX=desktop-v
+              ;;
+            v*)
+              DESKTOP_CHANNEL=v1
+              PACKAGE=./Blockchain-prototype/alvenqis-desktop-tauri/package.json
+              EXPECTED_PREFIX=v
+              ;;
+            *)
+              echo "Unsupported desktop release tag: $RELEASE_TAG" >&2
+              exit 1
+              ;;
+          esac
+          DESKTOP_VERSION="$(node -e "const j=require('$PACKAGE'); process.stdout.write(j.version)")"
+          EXPECTED_TAG_PREFIX="${EXPECTED_PREFIX}${DESKTOP_VERSION}-candidate."
+          if [[ "$RELEASE_TAG" != "$EXPECTED_TAG_PREFIX"* ]]; then
+            echo "Release tag $RELEASE_TAG does not match $DESKTOP_CHANNEL version $DESKTOP_VERSION (expected ${EXPECTED_TAG_PREFIX}N)" >&2
+            exit 1
+          fi
+          echo "DESKTOP_CHANNEL=$DESKTOP_CHANNEL" >> "$GITHUB_ENV"
+          echo "DESKTOP_VERSION=$DESKTOP_VERSION" >> "$GITHUB_ENV"
+
+      - name: Build Windows Tauri packages
+        shell: pwsh
+        run: ./Blockchain-scripts/release/build-windows-installer.ps1 -SkipChecks -DesktopChannel $env:DESKTOP_CHANNEL
+
+      - name: Stage and verify Windows assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-publish/windows
+          if [[ "$DESKTOP_CHANNEL" == "v2" ]]; then
+            product="Alvenqis Control Center V2"
+            slug="Alvenqis-Control-Center-V2"
+          else
+            product="Alvenqis Control Center"
+            slug="Alvenqis-Control-Center"
+          fi
+          cp "release-artifacts/${product}_${DESKTOP_VERSION}_x64-setup.exe" \
+            "release-publish/windows/${slug}-${DESKTOP_VERSION}-Windows-x64-Setup.exe"
+          cp "release-artifacts/${product}_${DESKTOP_VERSION}_x64_en-US.msi" \
+            "release-publish/windows/${slug}-${DESKTOP_VERSION}-Windows-x64.msi"
+          cp "release-artifacts/${slug}-${DESKTOP_VERSION}-Windows-x64-Portable.zip" \
+            release-publish/windows/
+          cp "release-artifacts/README-UPDATES-${DESKTOP_CHANNEL}.txt" \
+            release-publish/windows/
+
+          if find release-publish/windows -iname '*electron*' | grep -q .; then
+            echo "Electron artifacts must not ship" >&2
+            find release-publish/windows -iname '*electron*'
+            exit 1
+          fi
+          if find release-publish/windows \( -name 'latest.yml' -o -name 'latest-linux.yml' \) | grep -q .; then
+            echo "Legacy Electron updater metadata must not ship" >&2
+            exit 1
+          fi
+          test -n "$(find release-publish/windows -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.zip' \) -print -quit)"
+
+          (
+            cd release-publish/windows
+            find . -maxdepth 1 -type f ! -name 'SHA256SUMS' -printf '%f\0' \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS
+          )
+          ls -la release-publish/windows
+
+      - name: Keep Windows build as workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-windows-${{ env.RELEASE_TAG }}
+          if-no-files-found: error
+          path: release-publish/windows/*
+
+      - name: Create or reuse candidate prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'EOF'
+          ## Mainnet Candidate prerelease — not public Mainnet
+
+          This release contains the verified Windows build for one explicit desktop channel. V1 and V2 are published separately so their updaters cannot cross-install the other application.
+
+          The desktop product is Tauri-based. Electron, CPU mining and OpenCL mining are not shipped. Pool mining uses TLS-secured Stratum and CUDA GPUs only. Verify `SHA256SUMS` before testing any asset.
+          EOF
+
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --verify-tag \
+              --title "Alvenqis $RELEASE_TAG" \
+              --notes-file release-notes.md \
+              --prerelease \
+              || gh release view "$RELEASE_TAG" >/dev/null
+          fi
+
+      - name: Upload Windows assets to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" release-publish/windows/* --clobber

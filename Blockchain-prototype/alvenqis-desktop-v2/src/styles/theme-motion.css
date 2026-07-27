@@ -1,0 +1,315 @@
+/* ═══ Tauri v2: dual-theme surfaces, charts, motion ═══ */
+
+html, body {
+  transition: background-color var(--duration-base) var(--ease-standard),
+    color var(--duration-base) var(--ease-standard);
+}
+
+.app-shell {
+  position: relative;
+  transition: background var(--duration-base) var(--ease-standard);
+}
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--hex-grid-opacity);
+  background-image:
+    linear-gradient(30deg, rgba(var(--accent-primary-rgb), 0.5) 1px, transparent 1px),
+    linear-gradient(150deg, rgba(var(--accent-primary-rgb), 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--accent-primary-rgb), 0.25) 1px, transparent 1px);
+  background-size: 28px 48px, 28px 48px, 14px 14px;
+}
+[data-theme="light"] .app-shell::before { opacity: 0.01; }
+.app-shell > * { position: relative; z-index: 1; }
+
+.titlebar {
+  background: var(--surface-titlebar) !important;
+  backdrop-filter: blur(12px);
+  transition: background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.sidebar {
+  background: var(--surface-sidebar) !important;
+  backdrop-filter: blur(12px);
+}
+.footer {
+  background: var(--surface-footer) !important;
+}
+
+.page {
+  animation: reveal var(--duration-base) var(--ease-standard) both;
+}
+@keyframes reveal {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+.stat-card, .panel, .button, .nav-button, .status-pill {
+  transition: transform var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+.stat-card:hover, .panel:hover {
+  transform: translateY(-1px);
+}
+.motion-card {
+  animation: card-in var(--duration-base) var(--ease-standard) both;
+}
+.telemetry-strip .stat-card:nth-child(1) { animation-delay: 0ms; }
+.telemetry-strip .stat-card:nth-child(2) { animation-delay: 35ms; }
+.telemetry-strip .stat-card:nth-child(3) { animation-delay: 70ms; }
+.telemetry-strip .stat-card:nth-child(4) { animation-delay: 105ms; }
+.telemetry-strip .stat-card:nth-child(5) { animation-delay: 140ms; }
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.brand-mark.is-online::after {
+  animation: brand-ring-pulse 5s var(--ease-standard) infinite;
+  border-color: rgba(var(--positive-rgb), 0.55) !important;
+}
+.brand-mark.is-offline {
+  opacity: 0.72;
+  filter: saturate(0.7);
+}
+@keyframes brand-ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--positive-rgb), 0); }
+  50% { box-shadow: 0 0 0 6px rgba(var(--positive-rgb), 0.12); }
+}
+
+.theme-toggle {
+  width: 36px;
+  min-width: 36px;
+  padding: 0 !important;
+  border-radius: 50% !important;
+}
+.theme-toggle:hover {
+  color: var(--accent-primary);
+  border-color: rgba(var(--accent-primary-rgb), 0.45);
+  box-shadow: var(--glow);
+}
+
+/* Charts v2 */
+.telemetry-chart.chart-v2 { position: relative; color: var(--accent-primary); }
+.telemetry-chart.chart-positive { color: var(--positive); }
+.telemetry-chart.chart-gold { color: var(--accent-gold); }
+.chart-svg-wrap { position: relative; min-height: 110px; }
+.chart-svg-wrap svg { display: block; width: 100%; min-height: 110px; overflow: visible; }
+.chart-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.25;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px currentColor);
+}
+.chart-area { opacity: 0.95; }
+.chart-grid line {
+  stroke: var(--border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: var(--chart-grid-opacity);
+  stroke-dasharray: 3 5;
+}
+.chart-point {
+  fill: var(--bg-deep);
+  stroke: currentColor;
+  stroke-width: 2.5;
+  animation: point-pulse 1.5s ease-in-out infinite;
+}
+.chart-point-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.35;
+  animation: point-pulse 1.5s ease-in-out infinite;
+}
+.chart-crosshair {
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.35;
+  pointer-events: none;
+}
+.chart-hover-dot {
+  fill: var(--bg-deep);
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.chart-tooltip {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%, calc(-100% - 10px));
+  pointer-events: none;
+  padding: 6px 9px;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.4);
+  border-radius: var(--radius-sm);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 2px;
+  white-space: nowrap;
+}
+.chart-tooltip strong {
+  color: currentColor;
+  font: 600 12px var(--font-mono);
+}
+.chart-tooltip span {
+  color: var(--text-muted);
+  font: 9px var(--font-mono);
+}
+.chart-axis-time {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font: 9px var(--font-mono);
+}
+.chart-range {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font: 9px var(--font-mono);
+}
+.chart-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.chart-readout strong {
+  color: currentColor;
+  font: 600 14px var(--font-mono);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sparkline-v2 .sparkline-path {
+  fill: none;
+  stroke: var(--accent-primary);
+  stroke-width: 1.75;
+  vector-effect: non-scaling-stroke;
+}
+.sparkline-v2 .sparkline-tip {
+  fill: var(--accent-primary);
+  stroke: var(--bg-deep);
+  stroke-width: 1;
+}
+.sparkline-v2.is-live .sparkline-tip {
+  animation: point-pulse 1.2s ease-in-out infinite;
+}
+
+/* Gauge */
+.gauge-animated {
+  transition: --progress var(--duration-slow) var(--ease-standard);
+}
+.gauge-target-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    transparent calc(var(--target, 0deg) - 2deg),
+    rgba(var(--accent-gold-rgb), 0.85) var(--target, 0deg),
+    transparent calc(var(--target, 0deg) + 2deg)
+  );
+  pointer-events: none;
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+}
+
+/* Mining reactor — hashrate-linked */
+.mining-reactor {
+  --orbit-duration: 8s;
+}
+.is-mining .reactor-orbit,
+.is-mining .mining-reactor-v2 .reactor-orbit {
+  animation: reactor-orbit-spin var(--orbit-duration, 5s) linear infinite !important;
+}
+.is-mining .orbit-inner {
+  animation-duration: calc(var(--orbit-duration, 5s) * 0.64) !important;
+  animation-direction: reverse !important;
+}
+.is-activate .reactor-core {
+  animation: activate-pulse 0.65s var(--ease-emphasized) 1;
+}
+@keyframes activate-pulse {
+  0% { transform: rotate(45deg) scale(0.92); }
+  45% { transform: rotate(45deg) scale(1.08); box-shadow: 0 0 70px rgba(var(--accent-primary-rgb), 0.45); }
+  100% { transform: rotate(45deg) scale(1); }
+}
+.hash-stream.is-placeholder {
+  opacity: 0.28;
+  font-style: italic;
+}
+
+.stat-card.height-pulse,
+.height-pulse .chain-orb .orb-core,
+.chain-orb.height-pulse .orb-core {
+  animation: height-pulse 0.6s var(--ease-emphasized) 1;
+}
+@keyframes height-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(var(--positive-rgb), 0); }
+  40% {
+    box-shadow: 0 0 0 0 rgba(var(--positive-rgb), 0.35), inset 0 0 24px rgba(var(--positive-rgb), 0.12);
+    border-color: rgba(var(--positive-rgb), 0.55);
+  }
+  100% { box-shadow: var(--shadow); }
+}
+
+.field input, .field select, .field textarea {
+  background: var(--surface-input);
+}
+
+/* Light theme contrast */
+[data-theme="light"] .button.primary,
+[data-theme="light"] .btn.primary {
+  color: #ffffff;
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow);
+}
+[data-theme="light"] .backend-pills button.active {
+  color: #ffffff;
+  background: var(--accent-primary);
+}
+[data-theme="light"] .miner-console,
+[data-theme="light"] .network-log-console {
+  background: rgba(var(--bg-deep-rgb), 0.65);
+  color: var(--positive);
+}
+[data-theme="light"] .titlebar strong {
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  color: var(--accent-primary);
+}
+[data-theme="light"] .brand-name {
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  color: var(--accent-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page, .motion-card, .sparkline-v2.is-live .sparkline-tip, .chart-point, .chart-point-ring,
+  .brand-mark.is-online::after, .is-mining .reactor-orbit, .is-activate .reactor-core,
+  .stat-card.height-pulse, .chain-orb.height-pulse .orb-core {
+    animation: none !important;
+  }
+  .gauge-animated { transition: none !important; }
+  .stat-card:hover, .panel:hover { transform: none; }
+}

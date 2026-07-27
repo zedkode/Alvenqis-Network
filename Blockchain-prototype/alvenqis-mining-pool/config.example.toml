@@ -1,0 +1,34 @@
+bind_host = "127.0.0.1"
+bind_port = 30787
+network_id = "alvenqis-mainnet-candidate"
+status_label = "Mainnet Candidate / Mining Pool Prototype"
+pool_name = "Alvenqis Reference Pool"
+pool_address = "alve1qr4y5mrru2w9yz4774g8kyewchue23mk46ltu7ujgg0w56g5gmfzcnfqv0q"
+upstream_rpc_url = "http://127.0.0.1:10787"
+public_url = "https://pool.example.org"
+data_dir = ".alvenqis-local/mining-pool"
+admin_token_file = ".alvenqis-local/mining-pool/admin.token"
+share_difficulty_leading_zero_bits = 18
+vardiff_enabled = true
+min_share_difficulty_leading_zero_bits = 12
+max_share_difficulty_leading_zero_bits = 28
+# Keep share target easier than network (bits) so both GPUs submit many shares per block.
+# If this is 0 / missing, default is 4. Without a gap the fastest miner takes full block rewards.
+share_network_gap_bits = 4
+target_share_seconds = 15
+vardiff_window_shares = 16
+pool_fee_basis_points = 100
+pplns_window_shares = 10000
+block_maturity_confirmations = 12
+minimum_payout_atomic = 100000000
+job_cache_seconds = 15
+hashrate_window_seconds = 60
+worker_timeout_seconds = 120
+max_stored_shares = 100000
+max_workers_per_address = 64
+max_work_requests_per_minute = 240
+max_share_requests_per_minute = 600
+invalid_share_ban_threshold = 20
+ban_seconds = 600
+# Leave empty for restrictive CORS (no Allow-Origin: *). Add explicit dashboard origins if needed.
+cors_allowed_origins = []

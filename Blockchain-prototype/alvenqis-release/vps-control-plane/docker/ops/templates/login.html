@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Alvenqis Docker Setup</title>
+  <style>
+    body{margin:0;background:#071015;color:#eafcff;font-family:Inter,system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}
+    main{width:min(560px,90vw);padding:40px;border:1px solid #1f4a55;border-radius:24px;background:#0b1820;box-shadow:0 24px 80px #0008}
+    h1{margin:0 0 12px;font-size:34px}.muted{color:#88aab2;line-height:1.6}code{color:#66e6ff}.box{margin-top:24px;padding:18px;background:#071015;border-radius:14px;border:1px solid #173844}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Alvenqis Docker Setup</h1>
+  <p class="muted">The setup interface is locked with the unique token generated on first startup.</p>
+  <div class="box">
+    <p>Run:</p>
+    <code>docker compose -f installer.compose.yaml logs alvenqis-ops</code>
+    <p class="muted">Then open the displayed URL with <code>?token=...</code>.</p>
+  </div>
+</main>
+</body>
+</html>

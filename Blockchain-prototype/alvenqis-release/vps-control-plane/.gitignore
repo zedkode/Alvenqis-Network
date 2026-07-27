@@ -1,0 +1,19 @@
+.env
+__pycache__/
+*.py[cod]
+*.log
+.installer.env
+
+# Runtime state stays local. Only empty-dir keepers are tracked.
+# Note: cannot re-include files under an ignored *directory* (`state/`); use `state/*`.
+state/*
+!state/secrets/
+!state/config/
+state/secrets/*
+!state/secrets/.gitkeep
+state/config/*
+!state/config/generated/
+state/config/generated/*
+!state/config/generated/.gitkeep
+state/ops/
+state/backups/

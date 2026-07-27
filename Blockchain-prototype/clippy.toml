@@ -1,0 +1,10 @@
+# Workspace Clippy defaults for Alvenqis.
+# Members inherit only when they set: [lints] workspace = true
+# Full policy: docs/engineering/WORKSPACE_AND_LINTS.md
+#
+# Note: release-gate still runs `clippy --workspace --all-targets -- -D warnings`.
+# Do not enable unwrap_used/expect_used as deny here until production call sites
+# are clean AND test modules are excluded or allowed — tests intentionally use expect.
+
+cognitive-complexity-threshold = 40
+too-many-arguments-threshold = 8

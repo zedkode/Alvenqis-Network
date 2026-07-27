@@ -1,0 +1,26 @@
+[package]
+name = "alvenqis-miner"
+version = "1.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Alvenqis FiroPoW 0.9.4 CUDA-only GPU miner for NVIDIA"
+build = "build.rs"
+
+[features]
+default = ["gpu-cuda"]
+gpu-mining = ["gpu-cuda"]
+gpu-cuda = []
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+native-tls = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+toml = "0.8"
+atomic-write-file = "0.3"
+alvenqis-core = { path = "../alvenqis-core" }
+
+[dev-dependencies]
+tempfile = "3"

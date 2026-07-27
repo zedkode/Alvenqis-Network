@@ -1,0 +1,20 @@
+schema_version = 4
+miner_address = "alve1replace-with-your-address"
+nonce_batch_size = 131072
+template_refresh_seconds = 5
+status_interval_seconds = 3
+backend_mode = "cuda"
+gpu_intensity = 90
+gpu_batch_size = 131072
+gpu_devices = []
+kernel_validation = true
+metrics_path = ".alvenqis-local/miner/metrics.json"
+
+# Solo work source. Public RPC profile keeps mining disabled by default.
+# Prefer local loopback for Path A, or enable VPS ENABLE_MINING_RPC for Path B
+# (Caddy routes /mining/* to private mining-rpc). See PRIVATE_MINING_OPS.md.
+[source]
+kind = "rpc"
+url = "http://127.0.0.1:10787"
+# url = "http://rpcnode.dohotstudio.com"
+timeout_seconds = 20

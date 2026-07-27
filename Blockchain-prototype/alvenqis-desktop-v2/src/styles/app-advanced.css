@@ -1,0 +1,172 @@
+/* ═══ Advanced shell: density, privacy, accents, palette, variants ═══ */
+
+/* Density */
+[data-density="compact"] .main {
+  padding: 10px 12px 18px;
+}
+[data-density="compact"] .stat-card {
+  min-height: 88px;
+  padding: 10px 12px;
+}
+[data-density="compact"] .panel {
+  padding: 11px;
+}
+[data-density="compact"] .page-hero {
+  min-height: 132px;
+  padding: 16px 18px;
+}
+[data-density="compact"] .nav-button {
+  padding: 7px 10px;
+}
+[data-density="compact"] .grid {
+  gap: 10px;
+}
+
+/* Privacy */
+[data-hide-balances="true"] .balance-value,
+[data-hide-balances="true"] .topbar-balance strong,
+[data-hide-balances="true"] .stat-value.gold,
+[data-hide-balances="true"] .is-private {
+  filter: blur(7px);
+  user-select: none;
+}
+[data-mask-addresses="true"] .address-chip {
+  letter-spacing: 0.04em;
+}
+
+/* Accent variants */
+[data-accent="gold"] {
+  --accent-primary: var(--accent-gold);
+  --accent-primary-rgb: var(--accent-gold-rgb);
+  --accent-primary-soft: #c9943a;
+  --grad-brand: var(--grad-gold);
+}
+[data-accent="emerald"] {
+  --accent-primary: var(--positive);
+  --accent-primary-rgb: var(--positive-rgb);
+  --accent-primary-soft: #3bbf6a;
+  --grad-brand: linear-gradient(135deg, #52d37e, #1f9d52);
+}
+[data-theme="light"][data-accent="emerald"] {
+  --grad-brand: linear-gradient(135deg, #1f9d52, #157a3e);
+}
+
+/* Midnight variant (dark only) */
+[data-theme="dark"][data-theme-variant="midnight"] {
+  --bg-void: #00050a;
+  --bg-base: #02060c;
+  --bg-deep: #000308;
+  --panel: #061018;
+  --panel-raised: #08141e;
+  --panel-hover: #0a1a26;
+  --border: #122836;
+  --grad-panel: linear-gradient(155deg, rgba(6, 16, 24, 0.98) 0%, rgba(2, 6, 12, 0.96) 100%);
+  --grad-hero: radial-gradient(ellipse 80% 60% at 70% 20%, rgba(32, 213, 255, 0.08), transparent 50%),
+    linear-gradient(160deg, #041018 0%, #00050a 60%, #02060c 100%);
+}
+
+/* High contrast */
+[data-theme-variant="high-contrast"] {
+  --border: #2a6a86;
+  --text-muted: #a8c0d0;
+  --text-primary: #f4fbff;
+  --focus-ring: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.55);
+}
+[data-theme-variant="high-contrast"] .panel,
+[data-theme-variant="high-contrast"] .stat-card,
+[data-theme-variant="high-contrast"] .nav-button.active {
+  border-width: 2px;
+}
+[data-theme="light"][data-theme-variant="high-contrast"] {
+  --border: #5a7a8c;
+  --text-primary: #041820;
+  --text-muted: #3a5160;
+}
+
+/* Reduce motion from settings */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after,
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* Command palette */
+.command-palette-dialog .v-dialog-body {
+  padding-top: 12px;
+}
+.command-palette-input {
+  width: 100%;
+  min-height: 46px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-input);
+  color: var(--text-primary);
+  font-size: 15px;
+  outline: none;
+}
+.command-palette-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: var(--glow);
+}
+.command-palette-list {
+  display: grid;
+  gap: 4px;
+  max-height: 360px;
+  overflow: auto;
+}
+.command-palette-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.command-palette-item span {
+  display: grid;
+  gap: 2px;
+}
+.command-palette-item b {
+  font-size: 13px;
+  font-weight: 600;
+}
+.command-palette-item small {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.command-palette-item:hover,
+.command-palette-item.is-active {
+  border-color: rgba(var(--accent-primary-rgb), 0.35);
+  background: rgba(var(--accent-primary-rgb), 0.08);
+  color: var(--accent-primary);
+}
+.command-palette-empty {
+  padding: 28px 12px;
+  text-align: center;
+}
+
+/* Technical labels toggle */
+[data-show-technical="false"] .kv.mono,
+[data-show-technical="false"] .technical-only {
+  display: none;
+}
+
+/* Hide balances utility for portfolio hero */
+.balance-value.is-private {
+  filter: blur(8px);
+}

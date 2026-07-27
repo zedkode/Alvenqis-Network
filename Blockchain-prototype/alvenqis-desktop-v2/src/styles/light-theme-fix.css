@@ -1,0 +1,364 @@
+/*
+  Light theme hard fix
+  -------------------
+  Many components still hardcode dark navy gradients / black insets.
+  This file forces a coherent light surface system when data-theme="light".
+  Load LAST after global/crypto/pages/settings.
+*/
+
+/* ── Shell chrome ── */
+[data-theme="light"] body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+[data-theme="light"] .app-shell {
+  background: var(--bg-base) !important;
+}
+[data-theme="light"] .app-shell::before {
+  opacity: 0.025;
+}
+[data-theme="light"] .titlebar,
+[data-theme="light"] .sidebar,
+[data-theme="light"] .footer {
+  background: var(--surface-titlebar) !important;
+  color: var(--text-primary);
+  border-color: var(--border) !important;
+}
+[data-theme="light"] .sidebar {
+  background: var(--surface-sidebar) !important;
+}
+[data-theme="light"] .footer {
+  background: var(--surface-footer) !important;
+  color: var(--text-muted);
+}
+[data-theme="light"] .main {
+  background: transparent;
+}
+
+/* ── Core cards / panels (the main “still dark” bug) ── */
+[data-theme="light"] .panel,
+[data-theme="light"] .panel-glass,
+[data-theme="light"] .stat-card,
+[data-theme="light"] .page-section,
+[data-theme="light"] .wallet-side-card,
+[data-theme="light"] .wallet-hero-card,
+[data-theme="light"] .settings-nav,
+[data-theme="light"] .detail-dialog,
+[data-theme="light"] .v-dialog,
+[data-theme="light"] .toast,
+[data-theme="light"] .notification-center,
+[data-theme="light"] .update-toast,
+[data-theme="light"] .update-modal,
+[data-theme="light"] .secret-modal,
+[data-theme="light"] .startup-gate {
+  background: var(--grad-panel) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-card) !important;
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .stat-card {
+  background: var(--grad-card) !important;
+}
+[data-theme="light"] .stat-card::after {
+  border-color: rgba(var(--accent-primary-rgb), 0.14) !important;
+  background: radial-gradient(circle, rgba(var(--accent-primary-rgb), 0.06), transparent 70%) !important;
+}
+[data-theme="light"] .telemetry-strip .stat-card {
+  background: var(--grad-card) !important;
+}
+[data-theme="light"] .telemetry-strip .stat-card::before {
+  background: var(--grad-brand) !important;
+  opacity: 0.45;
+}
+
+/* ── Inset surfaces (lists, chips, rows) ── */
+[data-theme="light"] .address-chip,
+[data-theme="light"] .network-switch,
+[data-theme="light"] .status-pill,
+[data-theme="light"] .badge,
+[data-theme="light"] .empty-state,
+[data-theme="light"] .wallet-list-item,
+[data-theme="light"] .service-node,
+[data-theme="light"] .identity-grid span,
+[data-theme="light"] .mini-metrics span,
+[data-theme="light"] .miner-kpi-row span,
+[data-theme="light"] .flow-stage,
+[data-theme="light"] .fee-disposition span,
+[data-theme="light"] .endpoint-chip,
+[data-theme="light"] .asset-roadmap-card,
+[data-theme="light"] .chain-timeline-body,
+[data-theme="light"] .node-peer-card,
+[data-theme="light"] .notification-item,
+[data-theme="light"] .settings-segmented button,
+[data-theme="light"] .activity-tabs button,
+[data-theme="light"] .explorer-rail button,
+[data-theme="light"] .backend-pills button,
+[data-theme="light"] .quick-command-grid button {
+  background: var(--surface-inset) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .field input,
+[data-theme="light"] .field select,
+[data-theme="light"] .field textarea,
+[data-theme="light"] .command-palette-input,
+[data-theme="light"] .seed-control input,
+[data-theme="light"] .explorer-search-row input {
+  background: var(--surface-input) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ── Toolbars / tables ── */
+[data-theme="light"] .widget-toolbar,
+[data-theme="light"] .console-toolbar,
+[data-theme="light"] .page-section-head,
+[data-theme="light"] .v-dialog-footer,
+[data-theme="light"] .detail-dialog-header {
+  background: var(--surface-toolbar) !important;
+  border-color: var(--border) !important;
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .data-table tbody tr:hover {
+  background: rgba(var(--accent-primary-rgb), 0.06) !important;
+}
+[data-theme="light"] .data-table th {
+  color: var(--text-dim);
+  border-bottom-color: var(--border);
+}
+[data-theme="light"] .data-table td {
+  border-bottom-color: rgba(var(--border-rgb), 0.55);
+}
+
+/* ── Heroes / reactors (were pure dark gradients) ── */
+[data-theme="light"] .command-hero,
+[data-theme="light"] .page-hero,
+[data-theme="light"] .assets-hero,
+[data-theme="light"] .wallet-hero-card {
+  background: var(--grad-hero) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow) !important;
+  color: var(--text-primary);
+}
+[data-theme="light"] .command-hero::before,
+[data-theme="light"] .page-hero::before,
+[data-theme="light"] .assets-hero::before {
+  opacity: 0.12;
+}
+
+[data-theme="light"] .mining-reactor,
+[data-theme="light"] .mining-reactor-v2 {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(var(--accent-primary-rgb), 0.1), transparent 45%),
+    linear-gradient(180deg, #f4f9fc 0%, #e8f0f5 100%) !important;
+  border-color: rgba(var(--accent-primary-rgb), 0.28) !important;
+}
+[data-theme="light"] .reactor-core,
+[data-theme="light"] .orb-core {
+  background:
+    radial-gradient(circle, rgba(var(--accent-primary-rgb), 0.12), #ffffff 70%) !important;
+  color: var(--accent-primary);
+  border-color: rgba(var(--accent-primary-rgb), 0.45) !important;
+  box-shadow: 0 0 28px rgba(var(--accent-primary-rgb), 0.12) !important;
+}
+
+/* ── Consoles ── */
+[data-theme="light"] .miner-console,
+[data-theme="light"] .network-log-console,
+[data-theme="light"] .log-view {
+  background: var(--surface-console) !important;
+  border-color: var(--border) !important;
+  color: #1a6b3c !important;
+  text-shadow: none !important;
+}
+
+/* ── Buttons ── */
+[data-theme="light"] .button:not(.primary):not(.danger),
+[data-theme="light"] .btn:not(.primary):not(.danger) {
+  background: #ffffff !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+  box-shadow: var(--shadow-sm);
+}
+[data-theme="light"] .button:not(.primary):not(.danger):hover,
+[data-theme="light"] .btn:not(.primary):not(.danger):hover {
+  border-color: var(--accent-primary) !important;
+  color: var(--accent-primary) !important;
+  background: rgba(var(--accent-primary-rgb), 0.06) !important;
+}
+[data-theme="light"] .button.primary,
+[data-theme="light"] .btn.primary,
+[data-theme="light"] .backend-pills button.active,
+[data-theme="light"] .nav-button.active {
+  color: var(--ink-on-accent) !important;
+}
+[data-theme="light"] .button.primary,
+[data-theme="light"] .btn.primary {
+  background: var(--grad-brand) !important;
+  border-color: transparent !important;
+  box-shadow: var(--glow-strong) !important;
+}
+[data-theme="light"] .nav-button.active {
+  background: linear-gradient(90deg, rgba(var(--accent-primary-rgb), 0.12), rgba(var(--accent-primary-rgb), 0.03)) !important;
+  color: var(--accent-primary) !important;
+  border-color: rgba(var(--accent-primary-rgb), 0.3) !important;
+}
+[data-theme="light"] .backend-pills button.active {
+  background: var(--grad-brand) !important;
+  color: #ffffff !important;
+}
+
+/* ── Nav / brand text ── */
+[data-theme="light"] .brand-name,
+[data-theme="light"] .titlebar strong {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  color: var(--accent-primary) !important;
+}
+[data-theme="light"] .brand-mark {
+  /* Keep glass ring; do not reintroduce a solid black/opaque plate under transparent logo */
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(240, 248, 252, 0.9)) padding-box,
+    var(--grad-brand) border-box !important;
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--border) !important;
+}
+[data-theme="light"] .brand-mark .alvenqis-logo-img,
+[data-theme="light"] .titlebar-brand .alvenqis-logo-img,
+[data-theme="light"] .alvenqis-logo-img {
+  background: transparent !important;
+}
+[data-theme="light"] .nav-button {
+  color: var(--text-muted);
+}
+[data-theme="light"] .nav-button:hover {
+  color: var(--text-primary);
+  background: rgba(var(--accent-primary-rgb), 0.06);
+}
+
+/* ── Charts / wait states ── */
+[data-theme="light"] .chart-wait,
+[data-theme="light"] .empty-state {
+  background: var(--surface-muted) !important;
+  border-color: var(--border) !important;
+  color: var(--text-muted);
+}
+[data-theme="light"] .chart-point {
+  fill: #ffffff !important;
+}
+[data-theme="light"] .sparkline-v2 .sparkline-tip {
+  stroke: #ffffff;
+}
+
+/* ── Dialogs / startup ── */
+[data-theme="light"] .v-dialog-backdrop,
+[data-theme="light"] .startup-overlay,
+[data-theme="light"] .secret-modal-backdrop,
+[data-theme="light"] .detail-dialog-backdrop,
+[data-theme="light"] .update-lock {
+  background: rgba(18, 48, 66, 0.38) !important;
+}
+[data-theme="light"] .startup-rail {
+  background: #f0f5f9 !important;
+  border-color: var(--border) !important;
+}
+[data-theme="light"] .startup-gate,
+[data-theme="light"] .secret-modal,
+[data-theme="light"] .update-modal,
+[data-theme="light"] .update-toast {
+  background: var(--grad-dialog) !important;
+}
+
+/* ── Fixed dashboard chrome ── */
+[data-theme="light"] .fixed-dashboard .dashboard-widget .grid,
+[data-theme="light"] .fixed-dashboard .dashboard-widget .dashboard-analytics {
+  background: rgba(255, 255, 255, 0.55) !important;
+  border-color: var(--border) !important;
+}
+
+/* ── Hero telemetry / metrics ── */
+[data-theme="light"] .hero-telemetry span,
+[data-theme="light"] .page-hero-metric,
+[data-theme="light"] .rewards-hero-metrics span {
+  background: rgba(255, 255, 255, 0.72) !important;
+  border-left-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+/* ── Status pills ── */
+[data-theme="light"] .status-pill.online {
+  background: rgba(var(--positive-rgb), 0.1) !important;
+  border-color: rgba(var(--positive-rgb), 0.35) !important;
+}
+[data-theme="light"] .live-cadence {
+  background: rgba(var(--positive-rgb), 0.08) !important;
+  border-color: rgba(var(--positive-rgb), 0.28) !important;
+}
+
+/* ── Notices ── */
+[data-theme="light"] .notice {
+  background: rgba(var(--accent-primary-rgb), 0.08) !important;
+  border-color: rgba(var(--accent-primary-rgb), 0.28) !important;
+  color: var(--text-primary);
+}
+[data-theme="light"] .notice.error {
+  background: rgba(var(--negative-rgb), 0.08) !important;
+  border-color: rgba(var(--negative-rgb), 0.35) !important;
+  color: var(--negative) !important;
+}
+
+/* ── Settings danger ── */
+[data-theme="light"] .danger-panel {
+  background: linear-gradient(145deg, rgba(198, 40, 40, 0.06), #ffffff) !important;
+}
+
+/* ── QR stays high contrast ── */
+[data-theme="light"] .qr-wrap {
+  background: #ffffff !important;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Scrollbars (light) ── */
+[data-theme="light"] * {
+  scrollbar-color: rgba(var(--accent-primary-rgb), 0.35) transparent;
+}
+[data-theme="light"] *::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(var(--accent-primary-rgb), 0.35), rgba(var(--accent-primary-rgb), 0.2));
+}
+
+/* ── Text readability ── */
+[data-theme="light"] .muted { color: var(--text-muted) !important; }
+[data-theme="light"] .eyebrow { color: var(--text-dim) !important; }
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] .section-header h2 {
+  color: var(--text-primary);
+}
+[data-theme="light"] .stat-value {
+  color: var(--accent-primary);
+}
+[data-theme="light"] .stat-value.gold { color: var(--accent-gold); }
+[data-theme="light"] .stat-value.positive { color: var(--positive); }
+
+/* ── Active list rows ── */
+[data-theme="light"] .wallet-list-item.active,
+[data-theme="light"] .wallet-list-item:hover,
+[data-theme="light"] .command-palette-item.is-active,
+[data-theme="light"] .command-palette-item:hover {
+  background: rgba(var(--accent-primary-rgb), 0.08) !important;
+  border-color: rgba(var(--accent-primary-rgb), 0.35) !important;
+}
+
+/* ── Ensure no leftover navy panels from crypto-ui hardcodes ── */
+[data-theme="light"] .sidebar-status,
+[data-theme="light"] .page-section-body,
+[data-theme="light"] .settings-content-head,
+[data-theme="light"] .console-panel {
+  color: var(--text-primary);
+}
+[data-theme="light"] .console-panel {
+  background: transparent;
+}

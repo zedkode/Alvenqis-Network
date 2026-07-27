@@ -1,0 +1,97 @@
+# Probe the public Mainnet Candidate RPC for liveness.
+# Not a mainnet-live claim — health of the candidate gateway only.
+name: Candidate Chain Health
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      rpc_url:
+        description: "RPC base URL (empty = SDK default public candidate)"
+        required: false
+        default: ""
+      strict:
+        description: "Require indexer in sync (zero lag unless max lag set)"
+        type: boolean
+        default: true
+      max_indexer_lag:
+        description: "Allowed indexer lag blocks (empty = 0 when strict)"
+        required: false
+        default: "0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candidate-chain-health
+  cancel-in-progress: true
+
+jobs:
+  health:
+    name: Check candidate health
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HEALTH_WEBHOOK_URL: ${{ secrets.ALVENQIS_HEALTH_WEBHOOK_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        with:
+          workspaces: "."
+          cache-on-failure: true
+
+      - name: Build alvenqis-browser-host
+        run: cargo build -p alvenqis-browser-host --release
+
+      - name: Run health check
+        env:
+          RPC_URL: ${{ inputs.rpc_url || '' }}
+          STRICT_INPUT: ${{ inputs.strict }}
+          MAX_LAG: ${{ inputs.max_indexer_lag || '0' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          ARGS=(--check-health --json)
+          if [ -n "${RPC_URL:-}" ]; then
+            ARGS+=(--rpc "$RPC_URL")
+          fi
+          if [ "$EVENT_NAME" = "schedule" ] || [ "${STRICT_INPUT}" = "true" ]; then
+            ARGS+=(--require-indexer-sync)
+            ARGS+=(--max-indexer-lag "${MAX_LAG:-0}")
+          fi
+          set +e
+          ./target/release/alvenqis-browser-host "${ARGS[@]}" | tee health.json
+          CODE=${PIPESTATUS[0]}
+          set -e
+          if [ "$CODE" -ne 0 ]; then
+            echo "Health check failed with code $CODE"
+            exit "$CODE"
+          fi
+
+      - name: Upload health report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-health-report
+          path: health.json
+          if-no-files-found: ignore
+
+      - name: Notify webhook on failure
+        if: failure() && env.HEALTH_WEBHOOK_URL != ''
+        run: |
+          set -euo pipefail
+          BODY=$(cat health.json 2>/dev/null || echo '{"ok":false,"error":"no health.json"}')
+          PAYLOAD=$(jq -nc \
+            --argjson health "$BODY" \
+            --arg repo "${{ github.repository }}" \
+            --arg run "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --arg status "failed" \
+            '{text:"Alvenqis Mainnet Candidate health FAILED",repo:$repo,run_url:$run,status:$status,health:$health}')
+          curl -fsS -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$HEALTH_WEBHOOK_URL"

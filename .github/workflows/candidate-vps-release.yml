@@ -1,0 +1,139 @@
+name: Candidate VPS Release
+
+on:
+  push:
+    tags:
+      - "v*-candidate.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing candidate tag, for example v1.0.0-candidate.1
+        required: true
+        type: string
+      force_build:
+        description: Rebuild this platform even if the tag contains a local artifact marker
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: candidate-vps-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  release-mode:
+    name: Detect release source
+    runs-on: ubuntu-24.04
+    outputs:
+      local_artifacts: ${{ steps.mode.outputs.local_artifacts }}
+    steps:
+      - name: Checkout candidate tag metadata
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Detect locally published artifacts marker
+        id: mode
+        shell: bash
+        env:
+          FORCE_BUILD: ${{ inputs.force_build || false }}
+        run: |
+          set -euo pipefail
+          TAG_MESSAGE="$(git for-each-ref "refs/tags/${RELEASE_TAG}" --format='%(contents)' || true)"
+          if [[ "$FORCE_BUILD" == "true" ]]; then
+            echo "local_artifacts=false" >> "$GITHUB_OUTPUT"
+            echo "Forced rebuild requested."
+          elif grep -Fq '[local-vps]' <<<"$TAG_MESSAGE"; then
+            echo "local_artifacts=true" >> "$GITHUB_OUTPUT"
+            echo "Local vps artifacts marker found. Platform build will be skipped."
+          else
+            echo "local_artifacts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-publish-vps:
+    needs: release-mode
+    if: needs.release-mode.outputs.local_artifacts != 'true'
+    name: Build and publish VPS control plane
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout candidate tag
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+
+      - name: Install control-plane validation parser
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.2
+
+      - name: Validate Docker control plane
+        working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
+        run: ./scripts/validate-stack.sh --require-docker
+
+      - name: Build VPS control-plane bundle
+        run: bash Blockchain-scripts/release/build-vps-control-plane-bundle.sh
+
+      - name: Stage and verify VPS assets
+        run: |
+          set -euo pipefail
+          mkdir -p release-publish/vps
+
+          find alvenqis-release -maxdepth 1 -type f \
+            \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sha256' \) \
+            -exec cp {} release-publish/vps/ \; 2>/dev/null || true
+          find release-artifacts -maxdepth 1 -type f \
+            \( -iname '*vps*' -o -iname '*control*' \) \
+            -exec cp {} release-publish/vps/ \; 2>/dev/null || true
+
+          test -n "$(find release-publish/vps -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print -quit)"
+
+          (
+            cd release-publish/vps
+            find . -maxdepth 1 -type f ! -name 'SHA256SUMS-VPS.txt' -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS-VPS.txt
+          )
+          ls -la release-publish/vps
+
+      - name: Keep VPS build as workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: candidate-vps-${{ env.RELEASE_TAG }}
+          if-no-files-found: error
+          path: release-publish/vps/*
+
+      - name: Create or reuse candidate prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'EOF'
+          ## Mainnet Candidate prerelease — not public Mainnet
+
+          Release assets are built and published independently for Windows, Linux and the VPS control plane. A failed platform does not block successful platforms from publishing their own assets.
+
+          The desktop product is Tauri-based. Electron, CPU mining and OpenCL mining are not shipped. Verify the platform-specific SHA-256 checksum file before testing any asset.
+          EOF
+
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --verify-tag \
+              --title "Alvenqis $RELEASE_TAG" \
+              --notes-file release-notes.md \
+              --prerelease \
+              || gh release view "$RELEASE_TAG" >/dev/null
+          fi
+
+      - name: Upload VPS assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" release-publish/vps/* --clobber

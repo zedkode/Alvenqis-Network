@@ -1,0 +1,274 @@
+/* ═══ Dialogs + notifications (Tauri Control Center) ═══ */
+
+.v-dialog-backdrop {
+  position: fixed;
+  inset: var(--titlebar-h, 40px) 0 0;
+  z-index: 1600;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--surface-overlay);
+  backdrop-filter: blur(14px);
+  animation: dialog-backdrop-in var(--duration-base) var(--ease-standard) both;
+}
+.v-dialog {
+  width: min(520px, 94vw);
+  max-height: min(780px, calc(100vh - 100px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.35);
+  border-radius: var(--radius-lg);
+  background: var(--grad-panel);
+  box-shadow: var(--shadow), var(--glow);
+  animation: dialog-panel-in var(--duration-base) var(--ease-emphasized) both;
+}
+.v-dialog.is-wide { width: min(680px, 96vw); }
+.v-dialog.is-critical {
+  border-color: rgba(var(--accent-gold-rgb), 0.45);
+}
+.v-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.v-dialog-header h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.v-dialog-subtitle {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.v-dialog-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px;
+}
+.v-dialog-footer {
+  display: flex;
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--border);
+  background: rgba(var(--bg-deep-rgb), 0.35);
+}
+
+.confirm-dialog-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.confirm-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: var(--accent-gold);
+  border: 1px solid rgba(var(--accent-gold-rgb), 0.4);
+  background: rgba(var(--accent-gold-rgb), 0.1);
+}
+.confirm-dialog-icon[data-danger="true"] {
+  color: var(--negative);
+  border-color: rgba(var(--negative-rgb), 0.4);
+  background: rgba(var(--negative-rgb), 0.1);
+}
+.confirm-dialog-copy p {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+.confirm-consequences {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+@keyframes dialog-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialog-panel-in {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Toasts */
+.toast-stack {
+  position: fixed;
+  z-index: 1800;
+  right: 18px;
+  bottom: 48px;
+  display: grid;
+  gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow);
+  animation: toast-in var(--duration-base) var(--ease-emphasized) both;
+}
+.toast-icon { margin-top: 2px; color: var(--accent-primary); }
+.toast-success .toast-icon { color: var(--positive); }
+.toast-error .toast-icon { color: var(--negative); }
+.toast-warning .toast-icon,
+.toast-mining .toast-icon { color: var(--accent-gold); }
+.toast-copy strong {
+  display: block;
+  font-size: 13px;
+}
+.toast-copy p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.toast-close { width: 30px; height: 30px; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Notification center */
+.notification-bell {
+  position: relative;
+}
+.notification-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 99px;
+  background: var(--accent-primary);
+  color: var(--bg-deep);
+  font: 700 9px var(--font-mono);
+  line-height: 14px;
+  text-align: center;
+}
+[data-theme="light"] .notification-badge {
+  color: #fff;
+}
+.notification-scrim {
+  position: fixed;
+  inset: var(--titlebar-h, 40px) 0 0;
+  z-index: 1500;
+  background: transparent;
+}
+.notification-center {
+  position: fixed;
+  z-index: 1550;
+  top: calc(var(--titlebar-h, 40px) + 8px);
+  right: 12px;
+  width: min(400px, calc(100vw - 24px));
+  max-height: min(560px, calc(100vh - 90px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--grad-panel);
+  box-shadow: var(--shadow);
+  animation: dialog-panel-in var(--duration-base) var(--ease-emphasized) both;
+  overflow: hidden;
+}
+.notification-center-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.notification-center-head strong {
+  display: block;
+  font-size: 14px;
+}
+.notification-center-head .muted {
+  font-size: 11px;
+}
+.notification-center-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px 14px;
+}
+.notification-empty {
+  padding: 24px 12px;
+  text-align: center;
+}
+.notification-day h4 {
+  margin: 12px 6px 8px;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.notification-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--bg-deep-rgb), 0.25);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.notification-item:hover {
+  border-color: rgba(var(--accent-primary-rgb), 0.35);
+}
+.notification-item.is-read {
+  opacity: 0.72;
+}
+.notification-item-icon {
+  color: var(--accent-primary);
+  margin-top: 2px;
+}
+.notification-item.kind-mining .notification-item-icon,
+.notification-item.kind-warning .notification-item-icon { color: var(--accent-gold); }
+.notification-item.kind-success .notification-item-icon { color: var(--positive); }
+.notification-item.kind-error .notification-item-icon { color: var(--negative); }
+.notification-item b {
+  display: block;
+  font-size: 12px;
+}
+.notification-item p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.notification-item time {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-dim);
+  font: 9px var(--font-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-dialog-backdrop,
+  .v-dialog,
+  .toast,
+  .notification-center {
+    animation: none !important;
+  }
+}

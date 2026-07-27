@@ -1,0 +1,145 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b1020;
+  --panel: #141b2f;
+  --text: #e8eefc;
+  --muted: #9aa8c7;
+  --accent: #6ea8fe;
+  --warn: #f0c674;
+  --border: #243049;
+  --input: #0a0f1c;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  width: 380px;
+  max-height: 600px;
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--text);
+}
+
+main {
+  padding: 14px;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.badge {
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.live-strip {
+  margin: 0 0 12px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #0a1224;
+  color: #9fd0ff;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.live-strip.error {
+  color: #ffb4b4;
+  border-color: #5a2a2a;
+}
+
+section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+pre {
+  margin: 0 0 8px;
+  padding: 8px;
+  background: var(--input);
+  border-radius: 6px;
+  font-size: 0.7rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-height: 2.2rem;
+  color: #cfe0ff;
+  max-height: 120px;
+  overflow: auto;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+input {
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 7px 9px;
+  font-size: 0.82rem;
+}
+
+input:focus {
+  outline: 1px solid var(--accent);
+  border-color: var(--accent);
+}
+
+button {
+  border: 1px solid var(--border);
+  background: #1b2742;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button.primary {
+  background: #1f3b73;
+  border-color: var(--accent);
+}
+
+button.danger {
+  background: #4a1d1d;
+  border-color: #c06060;
+}
+
+code {
+  font-size: 0.68rem;
+  color: #cfe0ff;
+}
+
+.warn {
+  margin: 8px 0 0;
+  color: var(--warn);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}

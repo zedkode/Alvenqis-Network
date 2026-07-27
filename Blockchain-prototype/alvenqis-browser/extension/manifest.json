@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Alvenqis Network (Candidate)",
+  "version": "0.1.0",
+  "description": "Alvenqis Mainnet Candidate browser shell. Keys stay in the native host — not in the extension.",
+  "action": {
+    "default_title": "Alvenqis Candidate",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["nativeMessaging", "storage"],
+  "host_permissions": [
+    "https://rpcnode.dohotstudio.com/*",
+    "http://127.0.0.1:10787/*"
+  ]
+}

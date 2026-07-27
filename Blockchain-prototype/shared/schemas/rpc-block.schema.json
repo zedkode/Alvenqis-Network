@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alvenqis.local/schemas/rpc-block.schema.json",
+  "title": "Alvenqis RPC Block Response",
+  "type": "object",
+  "required": [
+    "height",
+    "hash",
+    "previous_hash",
+    "merkle_root",
+    "timestamp",
+    "nonce",
+    "difficulty_leading_zero_bits",
+    "transaction_count",
+    "transactions"
+  ],
+  "properties": {
+    "height": { "type": "integer", "minimum": 0 },
+    "hash": { "type": "string" },
+    "previous_hash": { "type": "string" },
+    "merkle_root": { "type": "string" },
+    "timestamp": { "type": "integer", "minimum": 0 },
+    "nonce": { "type": "integer", "minimum": 0 },
+    "difficulty_leading_zero_bits": { "type": "integer", "minimum": 0 },
+    "transaction_count": { "type": "integer", "minimum": 0 },
+    "transactions": {
+      "type": "array",
+      "items": { "$ref": "rpc-transaction.schema.json" }
+    }
+  },
+  "additionalProperties": false
+}

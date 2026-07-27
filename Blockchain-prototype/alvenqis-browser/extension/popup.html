@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alvenqis Candidate</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Alvenqis</h1>
+        <p class="badge">Mainnet Candidate · Prototype</p>
+        <div id="liveStrip" class="live-strip">Connecting…</div>
+      </header>
+
+      <section>
+        <h2>Host / chain</h2>
+        <pre id="hostOut">Not connected</pre>
+        <div class="row">
+          <button id="btnPing" type="button">Ping</button>
+          <button id="btnNetwork" type="button">Network</button>
+          <button id="btnRpcStatus" type="button">RPC status</button>
+          <button id="btnSync" type="button">Sync</button>
+          <button id="btnMempool" type="button">Mempool</button>
+          <button id="btnSupply" type="button">Supply</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Explore</h2>
+        <div class="row">
+          <button id="btnLatest" type="button">Latest block</button>
+          <button id="btnRecent" type="button">Recent 5</button>
+          <button id="btnIndexer" type="button">Indexer</button>
+          <button id="btnIndexerBlock" type="button">Indexed tip</button>
+        </div>
+        <label class="field">
+          Block height
+          <input id="blockHeight" type="number" min="0" step="1" placeholder="0" />
+        </label>
+        <label class="field">
+          Tx or block hash
+          <input id="lookupHash" type="text" spellcheck="false" placeholder="hex hash" />
+        </label>
+        <div class="row">
+          <button id="btnBlockHeight" type="button">Load height</button>
+          <button id="btnTxHash" type="button">Load tx</button>
+          <button id="btnBlockHash" type="button">Load block hash</button>
+        </div>
+        <pre id="exploreOut">—</pre>
+      </section>
+
+      <section>
+        <h2>Wallet (host keystore)</h2>
+        <pre id="sessionOut">…</pre>
+        <label class="field">
+          Passphrase
+          <input id="passphrase" type="password" autocomplete="off" minlength="8" placeholder="min 8 chars" />
+        </label>
+        <div class="row">
+          <button id="btnKeystore" type="button">Status</button>
+          <button id="btnExportPublic" type="button">Export public</button>
+          <button id="btnCreateWallet" type="button">Create wallet</button>
+          <button id="btnUnlock" type="button">Unlock</button>
+          <button id="btnLock" type="button">Lock</button>
+          <button id="btnAccount" type="button">Account</button>
+        </div>
+        <p class="warn">
+          Keys stay in the native host. Prefer creating the wallet with host CLI
+          <code>--init-wallet</code> so the recovery phrase is printed once offline.
+          The extension never receives a mnemonic.
+        </p>
+      </section>
+
+      <section>
+        <h2>Passphrase / danger</h2>
+        <label class="field">
+          Current passphrase
+          <input id="oldPass" type="password" autocomplete="off" />
+        </label>
+        <label class="field">
+          New passphrase
+          <input id="newPass" type="password" autocomplete="off" minlength="8" />
+        </label>
+        <div class="row">
+          <button id="btnChangePass" type="button">Change passphrase</button>
+          <button id="btnDeleteWallet" type="button" class="danger">Delete wallet</button>
+        </div>
+        <pre id="dangerOut">—</pre>
+      </section>
+
+      <section>
+        <h2>Send</h2>
+        <label class="field">
+          To address
+          <input id="sendTo" type="text" placeholder="alve1…" spellcheck="false" />
+        </label>
+        <label class="field">
+          Amount (ALVE)
+          <input id="sendAmount" type="text" placeholder="0.01" />
+        </label>
+        <label class="field">
+          Priority fee (ALVE, optional)
+          <input id="sendFee" type="text" placeholder="0.00000001" />
+        </label>
+        <div class="row">
+          <button id="btnSend" type="button" class="primary">Sign &amp; submit</button>
+        </div>
+        <pre id="sendOut">Unlock a wallet first.</pre>
+      </section>
+    </main>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

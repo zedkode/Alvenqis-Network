@@ -1,0 +1,9 @@
+{
+  "name": "com.alvenqis.browser_host",
+  "description": "Alvenqis Network browser native messaging host (Mainnet Candidate scaffold)",
+  "path": "C:\\\\REPLACE\\\\WITH\\\\ABSOLUTE\\\\PATH\\\\alvenqis-browser-host.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://REPLACE_EXTENSION_ID/"
+  ]
+}

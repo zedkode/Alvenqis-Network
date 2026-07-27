@@ -1,0 +1,37 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor
+.vscode/
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Rust / Tauri
+src-tauri/target
+native/keystore-helper/target
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
+src-tauri/resources/bin
+src-tauri/resources/scripts
+src-tauri/resources/configs
+src-tauri/resources/docs
+src-tauri/resources/explorer
+src-tauri/resources/alvenqis.ps1
+src-tauri/resources/alvenqis.cmd
+src-tauri/resources/alvenqis.sh

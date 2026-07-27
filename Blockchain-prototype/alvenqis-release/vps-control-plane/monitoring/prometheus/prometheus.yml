@@ -1,0 +1,96 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    project: alvenqis-network
+    brand: alvenqis
+    environment: mainnet-candidate
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alertmanager:9093]
+
+scrape_configs:
+  # Prometheus self-scrape
+  - job_name: prometheus
+    static_configs:
+      - targets: [prometheus:9090]
+        labels:
+          service: prometheus
+
+  # Host CPU / RAM / disk / network (node-exporter) + textfile metrics (backups)
+  - job_name: node-exporter
+    static_configs:
+      - targets: [node-exporter:9100]
+        labels:
+          service: host
+
+  # Alvenqis chain / RPC / indexer / P2P / mempool / pool metrics (JSON → Prometheus)
+  - job_name: alvenqis-metrics
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: [alvenqis-metrics-exporter:9101]
+        labels:
+          service: alvenqis-metrics
+          brand: alvenqis
+
+  # Blackbox HTTP health probes against real service endpoints
+  - job_name: alvenqis-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://alvenqis-rpc:10787/health
+          - http://alvenqis-rpc:10787/status
+          - http://alvenqis-rpc:10787/indexer/status
+          - http://alvenqis-rpc:10787/sync/status
+          - http://alvenqis-rpc:10787/p2p/status
+          - http://alvenqis-rpc:10787/mempool/status
+          - http://alvenqis-control:10788/health
+          - http://alvenqis-ops:8080/health
+          - http://alvenqis-metrics-exporter:9101/health
+          - http://grafana:3000/api/health
+          - http://loki:3100/ready
+        labels:
+          brand: alvenqis
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Optional pool HTTP probe (target is always listed; probe fails when pool profile is off)
+  # Operators should silence AlvenqisPoolEndpointDown when ENABLE_POOL=false.
+  - job_name: alvenqis-pool-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://alvenqis-pool:30787/health
+          - http://alvenqis-pool:30787/api/v1/pool/status
+        labels:
+          brand: alvenqis
+          service: pool
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Blackbox exporter self-metrics
+  - job_name: blackbox-exporter
+    static_configs:
+      - targets: [blackbox-exporter:9115]
+        labels:
+          service: blackbox-exporter

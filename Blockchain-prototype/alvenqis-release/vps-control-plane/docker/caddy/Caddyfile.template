@@ -1,0 +1,114 @@
+{
+  email {$ADMIN_EMAIL}
+  admin 127.0.0.1:2019
+  metrics
+  servers {
+    trusted_proxies static private_ranges
+    client_ip_headers X-Forwarded-For CF-Connecting-IP
+  }
+}
+
+(common_security) {
+  encode zstd gzip
+  header {
+    X-Content-Type-Options nosniff
+    X-Frame-Options SAMEORIGIN
+    Referrer-Policy strict-origin-when-cross-origin
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    -Server
+  }
+}
+
+{$CADDY_SCHEME}://{$CONTROL_HOST} {
+  import common_security
+
+  handle_path /setup/* {
+    basic_auth {
+      {$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+    }
+    reverse_proxy alvenqis-ops:8080
+  }
+
+  handle_path /ops/* {
+    basic_auth {
+      {$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+    }
+    reverse_proxy alvenqis-ops:8080
+  }
+
+
+  handle {
+    basic_auth {
+      {$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+    }
+    reverse_proxy alvenqis-control:10788 {
+      header_up X-Alvenqis-Admin-Authenticated "1"
+    }
+  }
+}
+
+{$CADDY_SCHEME}://{$FLEET_HOST} {
+  import common_security
+
+  handle /fleet/status {
+    rewrite * /public/topology
+    reverse_proxy alvenqis-control:10788
+  }
+
+  handle /fleet/* {
+    reverse_proxy alvenqis-control:10788
+  }
+
+  handle {
+    respond "Alvenqis fleet endpoint" 200
+  }
+}
+
+{$CADDY_SCHEME}://{$RPC_HOST} {
+  import common_security
+  request_body {
+    max_size 1MB
+  }
+
+  handle /pool {
+    rewrite * /health
+    reverse_proxy alvenqis-pool:30787
+  }
+
+  handle_path /pool/* {
+    reverse_proxy alvenqis-pool:30787
+  }
+
+  # Public HTTP mining is retired. Remote GPU miners must use TLS Stratum.
+  handle /mining/* {
+    respond "Public mining RPC retired; use stratum+tls://{$STRATUM_HOST}:{$STRATUM_PORT}" 410
+  }
+
+  handle {
+    reverse_proxy alvenqis-rpc:10787 {
+      transport http {
+        keepalive 60s
+        read_timeout 120s
+        write_timeout 120s
+      }
+    }
+  }
+}
+
+{$CADDY_SCHEME}://{$GRAFANA_HOST} {
+  import common_security
+  reverse_proxy grafana:3000
+}
+
+{$CADDY_SCHEME}://{$PROMETHEUS_HOST} {
+  import common_security
+  basic_auth {
+    {$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+  }
+  reverse_proxy prometheus:9090
+}
+
+{$CADDY_SCHEME}://{$POOL_HOST} {
+  import common_security
+  reverse_proxy alvenqis-pool:30787
+}

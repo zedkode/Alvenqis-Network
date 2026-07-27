@@ -1,0 +1,28 @@
+[package]
+name = "alvenqis-keystore-helper"
+version = "1.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "alvenqis-keystore-helper"
+path = "src/main.rs"
+
+[dependencies]
+dirs = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+alvenqis-core = { path = "../../../alvenqis-core" }
+alvenqis-sdk-rust = { path = "../../../alvenqis-sdk-rust", features = ["native", "blocking"] }
+alvenqis-wallet = { path = "../../../alvenqis-wallet" }
+zeroize = "1"
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_Controls", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["linux-native-sync-persistent", "crypto-rust"] }

@@ -1,0 +1,41 @@
+[package]
+name = "alvenqis-sdk-rust"
+version = "1.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Standalone Alvenqis Network Rust client SDK for Mainnet Candidate (RPC, wallet, transfers, public pool)"
+readme = "README.md"
+repository = "https://github.com/zedkode/Alvenqis-Network"
+homepage = "https://github.com/zedkode/Alvenqis-Network/tree/main/alvenqis-sdk-rust"
+documentation = "https://docs.rs/alvenqis-sdk-rust"
+keywords = ["blockchain", "alvenqis", "rpc", "sdk", "client"]
+categories = ["api-bindings", "cryptography", "network-programming"]
+exclude = ["target/"]
+
+[features]
+default = ["native"]
+# Async HTTP RPC client (desktop, server, CLI with tokio).
+native = ["dep:reqwest", "reqwest/json", "reqwest/rustls-tls", "dep:tokio"]
+# Blocking HTTP helpers for simple CLIs (requires native).
+blocking = ["native", "reqwest/blocking"]
+# Marks pure-logic builds (no native TLS RPC).
+wasm = []
+
+[dependencies]
+# Protocol stack (addresses, txs, keys) -- vendored; no alvenqis-core dependency.
+bech32 = "0.9"
+bip39 = { version = "2", features = ["rand"] }
+blake3 = "1"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+hmac = "0.12"
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "1"
+reqwest = { version = "0.12", default-features = false, optional = true }
+tokio = { version = "1", default-features = false, features = ["time"], optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+wiremock = "0.6"

@@ -1,0 +1,54 @@
+# Alvenqis shared network constants
+# Status: Draft
+# Rust implementation starts only after spec review confirms all blocking protocol decisions.
+
+project_name = "Alvenqis Network"
+ticker = "ALVE"
+address_prefix = "alve"
+state_model = "account-based"
+state_model_status = "Accepted launch architecture"
+pow_hash_algorithm = "FiroPoW-0.9.4"
+pow_hash_status = "Accepted launch architecture (AlvenqisPoW v1); PoLW v2 reserved"
+upgrade_activation_policy_id = "alvenqis-flag-day-upgrade-v1"
+upgrade_activation_mode = "fixed-height-flag-day"
+launch_protocol_version = 1
+launch_block_version = 1
+scheduled_protocol_upgrades = []
+checkpoint_policy_id = "alvenqis-hardcoded-checkpoints-v1"
+checkpoint_policy_mode = "social-hardcoded-early-network"
+wallet_seed_standard_id = "alvenqis-wallet-bip39-slip10-v1"
+wallet_mnemonic_language = "English"
+wallet_mnemonic_word_counts = "12 or 24 words"
+wallet_derivation_scheme = "BIP39 mnemonic -> BIP39 seed -> SLIP-0010 ed25519"
+wallet_derivation_path_template = "m/44'/7330'/account'/change'/address_index'"
+wallet_derivation_coin_type = 7330
+wallet_derivation_coin_type_status = "Provisional launch constant until official SLIP-44 assignment"
+
+[[mainnet_candidate_checkpoints]]
+height = 0
+hash = "0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5"
+
+# Fixed for the current local core prototype and aligned with the accepted project facts.
+decimals = 8
+atomic_units_per_alve = 100000000
+unit_precision_status = "Accepted project fact"
+
+max_supply_alve = "60000000"
+block_time_seconds = 60
+halving_interval_blocks = 1576800
+initial_block_reward_alve = "19.02587519"
+
+consensus_status = "PoW first"
+future_research_status = "PoLW / energy-aware mining"
+
+public_status_labels = [
+  "Draft",
+  "Planned",
+  "Research",
+  "Private Devnet",
+  "Public Testnet",
+  "Mainnet Candidate",
+  "Coming Soon",
+  "Prototype",
+  "Experimental",
+]

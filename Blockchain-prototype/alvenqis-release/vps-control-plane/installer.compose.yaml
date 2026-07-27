@@ -1,0 +1,65 @@
+name: alvenqis-installer
+services:
+  docker-broker:
+    image: ${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:?Set ALVENQIS_HOST_WORKSPACE}
+      dockerfile: docker/ops/Dockerfile
+    container_name: alvenqis-installer-broker
+    restart: unless-stopped
+    working_dir: ${ALVENQIS_HOST_WORKSPACE}
+    environment:
+      ALVENQIS_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
+      ALVENQIS_COMPOSE_FILE: ${ALVENQIS_HOST_WORKSPACE}/compose.yaml
+      ALVENQIS_HOST_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
+      ALVENQIS_HOST_REPO: ${ALVENQIS_HOST_REPO}
+      BROKER_TOKEN_FILE: /run/secrets/broker_token
+      ALVENQIS_INSTALLER_MODE: "true"
+    command: ["gunicorn", "--bind", "0.0.0.0:8090", "--workers", "1", "--threads", "2", "--timeout", "7200", "broker:app"]
+    volumes:
+      - ${ALVENQIS_HOST_WORKSPACE}:${ALVENQIS_HOST_WORKSPACE}
+      - ${ALVENQIS_HOST_REPO}:${ALVENQIS_HOST_REPO}:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets: [broker_token, cloudflare_api_token, backup_passphrase, r2_secret_access_key]
+    networks: [installer-internal]
+    read_only: true
+    tmpfs: [/tmp:size=256m]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  alvenqis-installer:
+    image: ${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:?Set ALVENQIS_HOST_WORKSPACE}
+      dockerfile: docker/ops/Dockerfile
+    container_name: alvenqis-installer
+    restart: unless-stopped
+    environment:
+      ALVENQIS_WORKSPACE: /workspace
+      SETUP_TOKEN_FILE: /run/secrets/setup_token
+      BROKER_URL: http://docker-broker:8090
+      BROKER_TOKEN_FILE: /run/secrets/broker_token
+      ALVENQIS_HOST_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
+      ALVENQIS_HOST_REPO: ${ALVENQIS_HOST_REPO}
+    ports: ["127.0.0.1:${OPS_BOOTSTRAP_PORT:-8080}:8080"]
+    volumes: ["${ALVENQIS_HOST_WORKSPACE}:/workspace"]
+    secrets: [setup_token, broker_token]
+    depends_on:
+      docker-broker: {condition: service_healthy}
+    networks: [installer-internal]
+    read_only: true
+    tmpfs: [/tmp:size=128m]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+networks:
+  installer-internal: {name: alvenqis-installer-internal, driver: bridge}
+secrets:
+  setup_token: {file: ./state/secrets/setup_token}
+  broker_token: {file: ./state/secrets/broker_token}
+  cloudflare_api_token: {file: ./state/secrets/cloudflare_api_token}
+  backup_passphrase: {file: ./state/secrets/backup_passphrase}
+  r2_secret_access_key: {file: ./state/secrets/r2_secret_access_key}

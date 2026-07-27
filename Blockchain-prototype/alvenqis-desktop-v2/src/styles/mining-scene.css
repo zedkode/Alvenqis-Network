@@ -1,0 +1,174 @@
+/* ═══════════════════════════════════════════════════════════
+   Alvenqis Matrix mining visual — hashrate-linked rain + boom
+   ═══════════════════════════════════════════════════════════ */
+
+.mine-scene {
+  --energy: 0;
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  width: 100%;
+  min-height: 320px;
+  height: clamp(300px, 38vh, 440px);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 32%, var(--border));
+  border-radius: var(--radius-lg);
+  background: #01080d;
+  box-shadow: var(--shadow-card);
+  isolation: isolate;
+}
+
+.matrix-canvas {
+  position: absolute;
+  inset: 0 0 72px 0;
+  width: 100%;
+  height: calc(100% - 72px);
+  display: block;
+  z-index: 0;
+}
+
+.matrix-scene.is-mining {
+  border-color: color-mix(in srgb, var(--accent-primary) 55%, var(--border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-primary) 18%, transparent),
+    0 0 40px color-mix(in srgb, var(--accent-primary) calc(var(--energy) * 22%), transparent);
+}
+
+.matrix-scene.is-share {
+  animation: matrix-share-flash 0.7s ease-out;
+}
+
+.matrix-scene.is-boom {
+  animation: matrix-boom-flash 0.9s ease-out;
+}
+
+@keyframes matrix-share-flash {
+  0% {
+    box-shadow: 0 0 0 1px rgba(225, 176, 91, 0.9), 0 0 28px rgba(225, 176, 91, 0.35);
+  }
+  100% {
+    box-shadow: var(--shadow-card);
+  }
+}
+
+@keyframes matrix-boom-flash {
+  0% {
+    filter: brightness(1.8);
+  }
+  40% {
+    filter: brightness(1.25);
+  }
+  100% {
+    filter: none;
+  }
+}
+
+.matrix-boom {
+  position: absolute;
+  inset: 0 0 72px 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.matrix-boom-ring {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-gold);
+  animation: matrix-ring-expand 1.4s ease-out forwards;
+  opacity: 0.95;
+}
+
+.matrix-boom-ring.r2 {
+  border-color: var(--accent-primary);
+  animation-delay: 0.12s;
+}
+
+@keyframes matrix-ring-expand {
+  0% {
+    transform: scale(0.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(8);
+    opacity: 0;
+  }
+}
+
+.matrix-boom-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(2, 12, 18, 0.88);
+  border: 1px solid color-mix(in srgb, var(--accent-gold) 70%, transparent);
+  text-align: center;
+  animation: matrix-boom-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.matrix-boom-copy strong {
+  color: var(--accent-gold);
+  letter-spacing: 0.14em;
+  font-size: 12px;
+}
+
+.matrix-boom-copy span {
+  color: var(--accent-primary);
+  font-size: 13px;
+}
+
+@keyframes matrix-boom-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.mine-hud.matrix-hud {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px 12px;
+  background: linear-gradient(180deg, transparent, rgba(1, 8, 13, 0.92) 30%);
+  border-top: 1px solid color-mix(in srgb, var(--accent-primary) 18%, transparent);
+}
+
+.mine-hud-rate {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  letter-spacing: 0.02em;
+}
+
+.mine-hud-meta,
+.mine-hud-eta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.mine-hud-eta span {
+  color: color-mix(in srgb, var(--accent-primary) 70%, var(--text-muted));
+}
+
+.mine-scene .mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Legacy class hooks kept so older CSS imports don't break layout */
+.reactor-scene,
+.mine-scene.reactor-scene {
+  /* no-op alias */
+}

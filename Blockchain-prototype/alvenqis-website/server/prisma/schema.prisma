@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  superadmin
+  content_editor
+  network_operator
+}
+
+enum RoadmapStatus {
+  active
+  next
+  planned
+  research
+  future
+  completed
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String         @map("password_hash")
+  role         Role           @default(content_editor)
+  isActive     Boolean        @default(true) @map("is_active")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  lastLogin    DateTime?      @map("last_login")
+
+  auditLogs    AuditLog[]
+  refreshTokens RefreshToken[]
+  networkParams NetworkParam[] @relation("NetworkParamUpdatedBy")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  diffJson  Json?    @map("diff_json")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@map("audit_log")
+}
+
+model NetworkParam {
+  key       String   @id
+  value     Json
+  updatedBy String?  @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  updater User? @relation("NetworkParamUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@map("network_params")
+}
+
+model ContentBlock {
+  id          String   @id @default(cuid())
+  pageSlug    String   @map("page_slug")
+  sectionKey  String   @map("section_key")
+  contentJson Json     @map("content_json")
+  lang        String   @default("en")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([pageSlug, sectionKey, lang])
+  @@index([pageSlug, lang])
+  @@map("content_blocks")
+}
+
+model RoadmapItem {
+  id          String         @id @default(cuid())
+  phase       String
+  title       String
+  description String
+  status      RoadmapStatus  @default(planned)
+  order       Int            @default(0)
+  targetDate  DateTime?      @map("target_date")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@index([order])
+  @@map("roadmap_items")
+}
+
+model SimulatedBlock {
+  id                String   @id @default(cuid())
+  height            Int      @unique
+  hash              String   @unique
+  prevHash          String?  @map("prev_hash")
+  timestamp         DateTime @default(now())
+  reward            Decimal  @db.Decimal(24, 8)
+  minerPlaceholder  String?  @map("miner_placeholder")
+  txCount           Int      @default(0) @map("tx_count")
+
+  @@index([height])
+  @@map("simulated_blocks")
+}
+
+model FaqItem {
+  id          String   @id @default(cuid())
+  question    String
+  contentJson Json     @map("content_json")
+  order       Int      @default(0)
+  lang        String   @default("en")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([lang, order])
+  @@map("faq_items")
+}

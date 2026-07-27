@@ -1,0 +1,103 @@
+name: VPS Control Plane Release
+
+on:
+  push:
+    tags:
+      - "vps-control-v*-rc.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing VPS control-plane tag to release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vps-control-plane-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  verify-build-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          components: clippy,rustfmt
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+
+      - name: Verify requested tag
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < Blockchain-prototype/alvenqis-release/vps-control-plane/VERSION)"
+          case "$RELEASE_TAG" in
+            "vps-control-v${VERSION}-rc."*) ;;
+            *) echo "Tag $RELEASE_TAG does not match VERSION $VERSION" >&2; exit 1 ;;
+          esac
+
+      - name: Repository security checks
+        run: |
+          bash Blockchain-scripts/git/check-forbidden-files.sh
+          bash Blockchain-scripts/security/check-secrets.sh
+          bash Blockchain-scripts/security/check-repo-hygiene.sh
+          bash Blockchain-scripts/security/check-config-safety.sh
+
+      - name: Rust release checks
+        run: |
+          cargo fmt --all --check
+          cargo test --manifest-path Blockchain-prototype/Cargo.toml --workspace --locked
+          cargo clippy --manifest-path Blockchain-prototype/Cargo.toml --workspace --all-targets --locked -- -D warnings
+
+      - name: Validate Docker control plane
+        working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
+        run: ./scripts/validate-stack.sh --require-docker
+
+      - name: Build VPS control-plane bundle
+        run: bash Blockchain-scripts/release/build-vps-control-plane-bundle.sh
+
+      - name: Verify bundle contents and checksum
+        run: |
+          set -euo pipefail
+          cd release-artifacts
+          sha256sum --check alvenqis-docker-control-plane.tar.gz.sha256
+          tar -tzf alvenqis-docker-control-plane.tar.gz > vps-control-contents.txt
+          for required in \
+            Cargo.toml \
+            Cargo.lock \
+            Blockchain-prototype/alvenqis-release/vps-control-plane/compose.yaml \
+            Blockchain-prototype/alvenqis-release/vps-control-plane/installer.compose.yaml \
+            Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile \
+            Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/install-docker-stack.sh; do
+            grep -Fxq "$required" vps-control-contents.txt || {
+              echo "Missing required bundle entry: $required" >&2
+              exit 1
+            }
+          done
+
+      - name: Publish VPS control-plane prerelease
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Alvenqis VPS Control Plane ${{ env.RELEASE_TAG }}
+          prerelease: true
+          draft: false
+          generate_release_notes: true
+          body: |
+            Mainnet Candidate VPS control-plane prerelease for operator testing.
+
+            This is not a Mainnet Live declaration. Verify the SHA-256 file before installation. The optional mining-pool coordinator remains a prototype and does not store payout signing keys.
+          files: |
+            release-artifacts/alvenqis-docker-control-plane.tar.gz
+            release-artifacts/alvenqis-docker-control-plane.tar.gz.sha256
+            release-artifacts/vps-control-contents.txt
+          fail_on_unmatched_files: true

@@ -1,0 +1,72 @@
+name: Release Gate
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Blockchain-scripts/security/**"
+      - "Blockchain-scripts/release/**"
+      - "Blockchain-scripts/git/**"
+      - "Blockchain-prototype/alvenqis-release/**"
+      - ".github/workflows/release-gate.yml"
+  pull_request:
+    paths:
+      - "Blockchain-scripts/security/**"
+      - "Blockchain-scripts/release/**"
+      - "Blockchain-scripts/git/**"
+      - "Blockchain-prototype/alvenqis-release/**"
+      - ".github/workflows/release-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: Blockchain-prototype/alvenqis-explorer/package-lock.json
+
+      - name: Script help smoke tests
+        run: |
+          bash Blockchain-scripts/security/check-secrets.sh --help
+          bash Blockchain-scripts/security/check-repo-hygiene.sh --help
+          bash Blockchain-scripts/security/check-config-safety.sh --help
+          bash Blockchain-scripts/release/release-gate.sh --help
+
+      - name: Secret scan
+        run: bash Blockchain-scripts/security/check-secrets.sh
+
+      - name: Repository hygiene scan
+        run: bash Blockchain-scripts/security/check-repo-hygiene.sh
+
+      - name: Config safety scan
+        run: bash Blockchain-scripts/security/check-config-safety.sh
+
+      - name: Release gate
+        run: bash Blockchain-scripts/release/release-gate.sh

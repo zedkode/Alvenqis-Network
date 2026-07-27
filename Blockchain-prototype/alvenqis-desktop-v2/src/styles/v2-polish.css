@@ -1,0 +1,765 @@
+/* ==========================================================================
+   Alvenqis Control Center V2 — full-app polish layer
+   Applied last: titlebar, forms, tables, dialogs, empty states, scrollbars,
+   focus, density, and page consistency. Stratum left unchanged.
+   ========================================================================== */
+
+/* Focus & accessibility */
+:focus-visible {
+  outline: 2px solid rgba(var(--accent-primary-rgb), 0.75);
+  outline-offset: 2px;
+}
+button:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-primary-rgb), 0.35) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent-primary-rgb), 0.28);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--accent-primary-rgb), 0.45);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Titlebar V2 */
+.app-shell .titlebar {
+  height: var(--titlebar-h, 38px);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--panel-rgb), 0.98),
+    rgba(var(--bg-deep-rgb), 0.94)
+  );
+  border-bottom: 1px solid rgba(var(--border-rgb), 0.85);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+.app-shell .titlebar-brand strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.app-shell .titlebar-brand small {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--accent-gold-rgb), 0.35);
+  color: rgba(var(--accent-gold-rgb), 0.95);
+  background: rgba(var(--accent-gold-rgb), 0.1);
+}
+.app-shell .titlebar-brand .v2-pill {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: rgb(var(--accent-primary-rgb));
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.35);
+  background: rgba(var(--accent-primary-rgb), 0.12);
+}
+.app-shell .window-actions button {
+  transition: background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+.app-shell .window-actions button:last-child:hover {
+  background: rgba(var(--negative-rgb), 0.25);
+  color: #fff;
+}
+
+/* Page frame */
+.app-shell .page,
+.app-shell .main > .grid.page,
+.app-shell .overview-page {
+  gap: 16px;
+}
+.app-shell .page > .page-hero,
+.app-shell .page > .command-hero {
+  margin-bottom: 2px;
+}
+
+/* Page heroes (all pages using PageHero) */
+.app-shell .page-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.8fr);
+  gap: 18px;
+  align-items: stretch;
+  padding: 20px 22px;
+  border-radius: calc(var(--radius-xl) + 2px);
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.18);
+  background:
+    radial-gradient(
+      720px 280px at 8% -20%,
+      rgba(var(--accent-primary-rgb), 0.14),
+      transparent 58%
+    ),
+    radial-gradient(
+      480px 220px at 100% 0%,
+      rgba(var(--accent-gold-rgb), 0.08),
+      transparent 50%
+    ),
+    var(--v2-glass);
+  box-shadow: var(--v2-glow);
+}
+.app-shell .page-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.02) 50%,
+    transparent 60%
+  );
+  opacity: 0.7;
+}
+.app-shell .page-hero h2 {
+  margin: 8px 0 8px;
+  font-size: clamp(26px, 2.4vw, 36px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  text-transform: none;
+  font-weight: 650;
+}
+.app-shell .page-hero h2 b {
+  background: linear-gradient(
+    100deg,
+    rgb(var(--accent-primary-rgb)),
+    rgb(var(--accent-gold-rgb))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.app-shell .page-hero p {
+  max-width: 62ch;
+  color: rgba(var(--text-primary-rgb), 0.72);
+  line-height: 1.55;
+  margin-bottom: 0;
+}
+.app-shell .page-hero-actions {
+  margin-top: 14px;
+}
+.app-shell .page-hero-side {
+  display: grid;
+  gap: 10px;
+  align-content: center;
+}
+.app-shell .page-hero-metric {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--border-rgb), 0.7);
+  background: rgba(var(--overlay-ink), 0.22);
+}
+.app-shell .page-hero-metric small {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-bottom: 4px;
+}
+.app-shell .page-hero-metric strong {
+  font-family: var(--font-mono);
+  font-size: 16px;
+}
+
+/* Page sections */
+.app-shell .page-section {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(var(--border-rgb), 0.7);
+  background: var(--v2-glass);
+  overflow: hidden;
+}
+.app-shell .page-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(var(--border-rgb), 0.55);
+  background: rgba(var(--overlay-ink), 0.16);
+}
+.app-shell .page-section-head h3 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+.app-shell .page-section-body {
+  padding: 14px 16px 16px;
+}
+
+/* Panels / cards */
+.app-shell .panel {
+  padding: 14px 16px 16px;
+}
+.app-shell .panel > .section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(var(--border-rgb), 0.45);
+}
+.app-shell .panel > .section-header h2 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 650;
+}
+.app-shell .panel > .section-header span {
+  font-size: 11px;
+  opacity: 0.55;
+}
+.app-shell .stat-card {
+  padding: 14px;
+  min-height: 96px;
+}
+.app-shell .stat-value {
+  font-family: var(--font-mono);
+  font-size: clamp(18px, 1.6vw, 24px);
+  letter-spacing: -0.02em;
+  margin: 6px 0 4px;
+}
+.app-shell .stat-detail {
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.65;
+}
+
+/* Forms */
+.app-shell .field,
+.app-shell label.field,
+.app-shell .settings-panel label {
+  display: grid;
+  gap: 6px;
+}
+.app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.app-shell select,
+.app-shell textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--border-rgb), 0.85);
+  background: rgba(var(--overlay-ink), 0.28);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+.app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover,
+.app-shell select:hover,
+.app-shell textarea:hover {
+  border-color: rgba(var(--accent-primary-rgb), 0.35);
+}
+.app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+.app-shell select:focus,
+.app-shell textarea:focus {
+  border-color: rgba(var(--accent-primary-rgb), 0.55);
+  box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.12);
+  background: rgba(var(--overlay-ink), 0.38);
+}
+.app-shell textarea {
+  min-height: 96px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.app-shell .field label,
+.app-shell .field > span,
+.app-shell label > span b {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* Buttons */
+.app-shell .button,
+.app-shell .btn {
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.app-shell .button.ghost {
+  background: transparent;
+  border: 1px solid rgba(var(--border-rgb), 0.75);
+}
+.app-shell .button.ghost:hover {
+  border-color: rgba(var(--accent-primary-rgb), 0.4);
+  background: rgba(var(--accent-primary-rgb), 0.06);
+}
+.app-shell .button:disabled,
+.app-shell .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+.app-shell .button.danger {
+  border-color: rgba(var(--negative-rgb), 0.45);
+  background: rgba(var(--negative-rgb), 0.12);
+  color: #ffc9cb;
+}
+.app-shell .button.danger:hover {
+  background: rgba(var(--negative-rgb), 0.22);
+}
+
+/* Tables / lists */
+.app-shell table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+.app-shell thead th {
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.55;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(var(--border-rgb), 0.65);
+  position: sticky;
+  top: 0;
+  background: rgba(var(--bg-deep-rgb), 0.92);
+  backdrop-filter: blur(8px);
+  z-index: 1;
+}
+.app-shell tbody td {
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(var(--border-rgb), 0.35);
+  vertical-align: middle;
+}
+.app-shell tbody tr {
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+.app-shell tbody tr:hover {
+  background: rgba(var(--accent-primary-rgb), 0.05);
+}
+.app-shell .mono,
+.app-shell .address-chip,
+.app-shell code {
+  font-family: var(--font-mono);
+}
+
+/* KV rows */
+.app-shell .kv {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.4fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(var(--border-rgb), 0.28);
+  font-size: 13px;
+}
+.app-shell .kv > span:first-child {
+  opacity: 0.55;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Empty states */
+.app-shell .empty-state {
+  border-radius: var(--radius-lg);
+  border: 1px dashed rgba(var(--border-rgb), 0.85);
+  background:
+    radial-gradient(
+      420px 180px at 20% 0%,
+      rgba(var(--accent-primary-rgb), 0.08),
+      transparent 70%
+    ),
+    rgba(var(--overlay-ink), 0.18);
+  padding: 28px 24px;
+  text-align: center;
+}
+.app-shell .empty-state strong {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.3);
+  color: rgb(var(--accent-primary-rgb));
+  background: rgba(var(--accent-primary-rgb), 0.08);
+  margin-bottom: 12px;
+}
+.app-shell .empty-state-body {
+  max-width: 48ch;
+  margin: 0 auto;
+  opacity: 0.72;
+  line-height: 1.55;
+}
+
+/* Notices */
+.app-shell .notice {
+  border-radius: 12px;
+  border-left-width: 3px;
+  animation: v2-notice-in 0.28s var(--ease-emphasized) both;
+}
+@keyframes v2-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Dialogs */
+.app-shell .dialog-backdrop,
+.dialog-backdrop {
+  backdrop-filter: blur(10px);
+  background: rgba(0, 4, 8, 0.62);
+}
+.app-shell .dialog,
+.dialog {
+  border-radius: 18px;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.2);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+  background: var(--grad-dialog);
+}
+.app-shell .dialog header,
+.dialog header {
+  border-bottom: 1px solid rgba(var(--border-rgb), 0.55);
+  padding: 14px 18px;
+}
+.app-shell .dialog footer,
+.dialog footer {
+  border-top: 1px solid rgba(var(--border-rgb), 0.45);
+  padding: 12px 18px;
+  gap: 10px;
+}
+
+/* Toasts / notifications */
+.toast-stack .toast,
+.toast {
+  border-radius: 14px;
+  border: 1px solid rgba(var(--border-rgb), 0.7);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px);
+  animation: v2-toast-in 0.32s var(--ease-emphasized) both;
+}
+@keyframes v2-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Settings polish */
+.app-shell .settings-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.app-shell .settings-nav {
+  position: sticky;
+  top: 8px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(var(--border-rgb), 0.7);
+  background: var(--v2-glass);
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+}
+.app-shell .settings-nav button {
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  transition: background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.app-shell .settings-nav button:hover {
+  background: rgba(var(--accent-primary-rgb), 0.07);
+}
+.app-shell .settings-nav button.active {
+  background: linear-gradient(
+    105deg,
+    rgba(var(--accent-primary-rgb), 0.18),
+    rgba(var(--accent-primary-rgb), 0.06)
+  );
+  border-color: rgba(var(--accent-primary-rgb), 0.28);
+}
+.app-shell .settings-nav button small {
+  display: block;
+  opacity: 0.55;
+  font-size: 11px;
+  margin-top: 2px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.app-shell .settings-panel {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(var(--border-rgb), 0.7);
+  background: var(--v2-glass);
+  padding: 18px 20px 22px;
+  min-height: 420px;
+}
+.app-shell .settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(var(--border-rgb), 0.3);
+}
+.app-shell .switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--border-rgb), 0.8);
+  background: rgba(var(--overlay-ink), 0.35);
+  position: relative;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.app-shell .switch i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #dbeaf5;
+  transition: transform var(--duration-fast) var(--ease-emphasized);
+}
+.app-shell .switch.on {
+  background: rgba(var(--accent-primary-rgb), 0.35);
+  border-color: rgba(var(--accent-primary-rgb), 0.55);
+}
+.app-shell .switch.on i {
+  transform: translateX(20px);
+  background: #fff;
+}
+
+/* Pills / segmented */
+.app-shell .backend-pills,
+.app-shell .mode-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.app-shell .backend-pills button,
+.app-shell .mode-pills button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--border-rgb), 0.75);
+  background: rgba(var(--overlay-ink), 0.22);
+  color: inherit;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all var(--duration-fast) var(--ease-standard);
+}
+.app-shell .backend-pills button:hover,
+.app-shell .mode-pills button:hover {
+  border-color: rgba(var(--accent-primary-rgb), 0.4);
+}
+.app-shell .backend-pills button.active,
+.app-shell .mode-pills button.active {
+  border-color: rgba(var(--accent-primary-rgb), 0.5);
+  background: rgba(var(--accent-primary-rgb), 0.16);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(var(--accent-primary-rgb), 0.12);
+}
+
+/* Messages / analytics already styled — refine cards */
+.app-shell .message-card {
+  cursor: pointer;
+}
+.app-shell .message-card header strong {
+  font-size: 14px;
+}
+.app-shell .analytics-card {
+  transition: border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+.app-shell .analytics-card:hover {
+  border-color: rgba(var(--accent-primary-rgb), 0.3);
+  transform: translateY(-1px);
+}
+
+/* Startup gate */
+.app-shell .startup-gate,
+.startup-gate {
+  min-height: calc(100vh - 38px);
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background: var(--v2-mesh), var(--bg-void);
+}
+.startup-card {
+  width: min(560px, 100%);
+  border-radius: 20px;
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.22);
+  background: var(--v2-glass);
+  box-shadow: var(--v2-glow);
+  padding: 28px 26px;
+}
+
+/* Command palette */
+.command-palette-list button,
+.palette-item {
+  border-radius: 12px;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+/* Density compact */
+[data-density="compact"] .app-shell .stat-card {
+  min-height: 80px;
+  padding: 10px 12px;
+}
+[data-density="compact"] .app-shell .page-hero {
+  padding: 14px 16px;
+}
+[data-density="compact"] .app-shell .button {
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+/* Legacy pre consoles (Node / Activity) — align with modern console look */
+.app-shell .miner-console,
+.app-shell .network-log-console,
+.app-shell pre.miner-console {
+  border-radius: 14px;
+  border: 1px solid rgba(var(--border-rgb), 0.65);
+  background: rgba(0, 0, 0, 0.38);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 12px 14px;
+  max-height: 380px;
+  overflow: auto;
+}
+.app-shell .console-panel .console-toolbar,
+.app-shell .console-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+/* Topbar title — not all-caps for V2 readability */
+.app-shell .topbar h1 {
+  text-transform: none;
+  letter-spacing: -0.02em;
+  font-weight: 650;
+  font-size: clamp(20px, 1.8vw, 28px);
+}
+
+/* Address chips */
+.app-shell .address-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(var(--border-rgb), 0.75);
+  background: rgba(var(--overlay-ink), 0.28);
+  padding: 6px 10px;
+  font-size: 11px;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+.app-shell .address-chip:hover {
+  border-color: rgba(var(--accent-primary-rgb), 0.4);
+  background: rgba(var(--accent-primary-rgb), 0.08);
+}
+
+/* Data density for explorer tables */
+.app-shell .table-scroll,
+.app-shell .scroll-table {
+  border-radius: 14px;
+  border: 1px solid rgba(var(--border-rgb), 0.55);
+  overflow: auto;
+  max-height: min(520px, 55vh);
+}
+
+/* Responsive */
+@media (max-width: 1180px) {
+  .app-shell .page-hero {
+    grid-template-columns: 1fr;
+  }
+  .app-shell .settings-layout {
+    grid-template-columns: 1fr;
+  }
+  .app-shell .settings-nav {
+    position: static;
+    max-height: none;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .app-shell .grid.cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .app-shell .grid.cols-3,
+  .app-shell .grid.cols-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .notice,
+  .toast,
+  .toast-stack .toast,
+  .app-shell .page,
+  .app-shell .main > .page {
+    animation: none !important;
+  }
+  .app-shell .stat-card:hover,
+  .app-shell .analytics-card:hover,
+  .app-shell .button:hover {
+    transform: none !important;
+  }
+}

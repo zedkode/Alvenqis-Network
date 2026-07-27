@@ -1,0 +1,13 @@
+bind_host = "0.0.0.0"
+bind_port = 10788
+network_id = "alvenqis-mainnet-candidate"
+status_label = "Mainnet Candidate / Docker Fleet Prototype"
+node_name = "${NODE_NAME}"
+advertise_host = "${P2P_HOST}"
+p2p_port = ${P2P_PORT}
+local_rpc_url = "http://alvenqis-rpc:10787"
+state_dir = "/data/control"
+release_bundle_url = "${RELEASE_BUNDLE_URL}"
+controller_url = ${CONTROLLER_URL_TOML}
+report_interval_seconds = 15
+invitation_ttl_seconds = 900

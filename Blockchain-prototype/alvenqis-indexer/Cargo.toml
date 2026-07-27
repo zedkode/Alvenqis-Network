@@ -1,0 +1,20 @@
+[package]
+name = "alvenqis-indexer"
+version = "1.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Draft local indexer for the Alvenqis private devnet"
+
+[dependencies]
+atomic-write-file = "0.3"
+clap = { version = "4.5", features = ["derive"] }
+dirs = "5"
+rusqlite = { version = "=0.39.0", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+alvenqis-core = { path = "../alvenqis-core" }
+alvenqis-node = { path = "../alvenqis-node" }
+
+[dev-dependencies]
+tempfile = "3"

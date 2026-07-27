@@ -1,0 +1,69 @@
+name: Docker Control Plane Images (Manual Only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Explicit image tag (latest is forbidden)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-control-plane-manual-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Install validation parser
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.2
+      - name: Reject mutable tag
+        run: |
+          test "${{ inputs.version }}" != "latest"
+          printf '%s' "${{ inputs.version }}" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'
+      - name: Validate secure stack
+        working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
+        run: ./scripts/validate-stack.sh --require-docker
+
+  build:
+    needs: validate
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: alvenqis-runtime
+            context: .
+            dockerfile: Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile
+          - image: alvenqis-ops
+            context: Blockchain-prototype/alvenqis-release/vps-control-plane
+            dockerfile: Blockchain-prototype/alvenqis-release/vps-control-plane/docker/ops/Dockerfile
+          - image: alvenqis-backup-scheduler
+            context: Blockchain-prototype/alvenqis-release/vps-control-plane
+            dockerfile: Blockchain-prototype/alvenqis-release/vps-control-plane/docker/backup-scheduler/Dockerfile
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ inputs.version }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          provenance: mode=max
+          sbom: true

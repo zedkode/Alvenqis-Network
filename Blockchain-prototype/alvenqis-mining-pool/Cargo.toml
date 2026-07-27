@@ -1,0 +1,31 @@
+[package]
+name = "alvenqis-mining-pool"
+version = "1.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Alvenqis Mainnet Candidate pooled mining coordinator and payout accounting prototype"
+
+[dependencies]
+atomic-write-file = "0.3"
+axum = "0.7"
+clap = { version = "4.5", features = ["derive"] }
+fs2 = "0.4"
+hex = "0.4"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+subtle = "2"
+thiserror = "1"
+rustls-pemfile = "2"
+tokio = { version = "1", features = ["io-util", "macros", "rt-multi-thread", "net", "sync", "time"] }
+tokio-rustls = "0.26"
+toml = "0.8"
+tower-http = { version = "0.6", features = ["cors", "limit"] }
+alvenqis-core = { path = "../alvenqis-core" }
+alvenqis-miner = { path = "../alvenqis-miner" }
+
+[dev-dependencies]
+rcgen = "0.13"
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }

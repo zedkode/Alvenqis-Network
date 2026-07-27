@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Alvenqis Network technical documentation." />
+  <meta name="theme-color" content="#01080d" />
+  <title>Alvenqis Network Documentation</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/zedkode/Alvenqis-Network/main/Blockchain-prototype/alvenqis-desktop-v2/public/logo-mark.png" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css" />
+  <link rel="stylesheet" href="./assets/docs.css" />
+</head>
+<body>
+  <div id="app">
+    <div class="boot-screen">
+      <div class="boot-logo"><img src="https://raw.githubusercontent.com/zedkode/Alvenqis-Network/main/Blockchain-prototype/alvenqis-desktop-v2/public/logo-mark.png" alt="Alvenqis" /></div>
+      <strong>ALVENQIS NETWORK</strong>
+      <span>Loading documentation interface…</span>
+    </div>
+  </div>
+
+  <script>
+    window.$docsify = {
+      name: `
+        <span class="docs-brand">
+          <span class="docs-brand-frame">
+            <img src="https://raw.githubusercontent.com/zedkode/Alvenqis-Network/main/Blockchain-prototype/alvenqis-desktop-v2/public/logo-mark.png" alt="Alvenqis" />
+          </span>
+          <span class="docs-brand-copy">
+            <strong>ALVENQIS</strong>
+            <small>NETWORK DOCS</small>
+          </span>
+        </span>`,
+      nameLink: '#/',
+      repo: 'zedkode/Alvenqis-Network',
+      homepage: 'README.md',
+      loadSidebar: true,
+      loadNavbar: true,
+      coverpage: true,
+      onlyCover: false,
+      auto2top: true,
+      maxLevel: 4,
+      subMaxLevel: 3,
+      relativePath: false,
+      mergeNavbar: true,
+      executeScript: false,
+      notFoundPage: '_404.md',
+      search: {
+        placeholder: 'Search Alvenqis docs',
+        noData: 'No matching document found.',
+        depth: 5
+      },
+      copyCode: {
+        buttonText: 'COPY',
+        errorText: 'ERROR',
+        successText: 'COPIED'
+      },
+      pagination: {
+        previousText: 'Previous',
+        nextText: 'Next',
+        crossChapter: true
+      },
+      plugins: [
+        function alvenqisChrome(hook) {
+          hook.afterEach(function(html) {
+            return `
+              <section class="candidate-banner">
+                <span class="candidate-dot"></span>
+                <div>
+                  <strong>Mainnet Candidate / Experimental Prototype</strong>
+                  <p>Not a public live Mainnet. ALVE is not authorized for real-funds use.</p>
+                </div>
+              </section>
+            ` + html;
+          });
+        }
+      ]
+    };
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code@2/dist/docsify-copy-code.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-pagination@2/dist/docsify-pagination.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-rust.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-powershell.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-toml.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-yaml.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "network_id": "alvenqis-testnet",
+  "status": "Planned / Public Testnet Candidate",
+  "type": "placeholder",
+  "note": "Testnet genesis is not live. This file exists only to keep testnet configuration separate."
+}

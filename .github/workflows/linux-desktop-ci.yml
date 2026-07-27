@@ -1,0 +1,75 @@
+name: Linux Desktop CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Blockchain-prototype/alvenqis-desktop-tauri/**"
+      - "Blockchain-prototype/alvenqis-core/**"
+      - "Blockchain-prototype/alvenqis-node/**"
+      - "Blockchain-prototype/alvenqis-rpc-gateway/**"
+      - "Blockchain-prototype/alvenqis-indexer/**"
+      - "Blockchain-prototype/alvenqis-miner/**"
+      - "Blockchain-prototype/alvenqis-wallet/**"
+      - "Blockchain-scripts/release/build-linux-desktop.sh"
+      - "Blockchain-scripts/local/**"
+      - "alvenqis.sh"
+      - ".github/workflows/linux-desktop-ci.yml"
+  pull_request:
+    paths:
+      - "Blockchain-prototype/alvenqis-desktop-tauri/**"
+      - "Blockchain-prototype/alvenqis-core/**"
+      - "Blockchain-prototype/alvenqis-node/**"
+      - "Blockchain-prototype/alvenqis-rpc-gateway/**"
+      - "Blockchain-prototype/alvenqis-indexer/**"
+      - "Blockchain-prototype/alvenqis-miner/**"
+      - "Blockchain-prototype/alvenqis-wallet/**"
+      - "Blockchain-scripts/release/build-linux-desktop.sh"
+      - "Blockchain-scripts/local/**"
+      - "alvenqis.sh"
+      - ".github/workflows/linux-desktop-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-desktop-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          components: clippy,rustfmt
+      - uses: Jimver/cuda-toolkit@3d45d157f327c09c04b50ee6ccdea2d9d017ec76
+        with:
+          cuda: "13.2.0"
+          method: network
+          sub-packages: '["nvcc", "cudart-dev"]'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Blockchain-prototype/alvenqis-desktop-tauri/package-lock.json
+
+      - name: Install Linux packaging dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+          libsecret-1-dev libdbus-1-dev zenity fakeroot rpm libarchive-tools
+
+      - name: Build Linux Tauri packages
+        run: bash Blockchain-scripts/release/build-linux-desktop.sh
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alvenqis-linux-desktop
+          if-no-files-found: error
+          path: Blockchain-prototype/alvenqis-release/apps/linux/*

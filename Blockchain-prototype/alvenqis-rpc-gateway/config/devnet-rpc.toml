@@ -1,0 +1,13 @@
+bind_host = "127.0.0.1"
+bind_port = 8787
+network = "devnet"
+network_id = "alvenqis-devnet"
+human_name = "Alvenqis Devnet"
+status_label = "Draft / Private Devnet"
+address_prefix = "dalve"
+chain_data_path = ".alvenqis-dev/chain"
+indexer_data_path = ".alvenqis-dev/indexer"
+mempool_data_path = ".alvenqis-dev/mempool"
+public_rpc_allowed = false
+access_mode = "local"
+allow_mainnet_candidate = false

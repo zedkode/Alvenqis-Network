@@ -1,0 +1,142 @@
+# Maintainer: Alvenqis Network <admin@alvenqis.network>
+# Arch Linux / pacman-based derivatives (Arch, CachyOS, EndeavourOS, …)
+# package for Alvenqis Control Center (Tauri).
+#
+# Build (from this directory, monorepo checkout):
+#   makepkg -si
+#
+# Or build packages on any Linux host without makepkg:
+#   bash Blockchain-scripts/release/build-linux-desktop.sh --bundles deb,appimage
+#   chmod +x Blockchain-prototype/alvenqis-release/apps/linux/*.AppImage
+#
+# Status: Mainnet Candidate / Prototype -- not public Mainnet.
+#
+# Mining note (Arch/CachyOS users often have AMD GPUs):
+#   The bundled miner is NVIDIA CUDA only. AMD/Intel OpenCL and CPU mining are
+#   NOT supported. Install still provides wallet + chain view without NVIDIA.
+
+pkgname=alvenqis-control-center
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Alvenqis Control Center — wallet & chain UI (NVIDIA CUDA mining only; no AMD/OpenCL)"
+arch=('x86_64')
+url="https://alvenqis.network"
+license=('LicenseRef-Proprietary')
+depends=(
+  'webkit2gtk-4.1'
+  'gtk3'
+  'libappindicator-gtk3'
+  'openssl'
+  'librsvg'
+  'libsecret'
+  'zenity'
+)
+optdepends=(
+  'gnome-keyring: Secret Service backend for wallet secrets (GNOME/most desktops)'
+  'kwallet: Secret Service backend for wallet secrets (KDE Plasma)'
+  'nvidia-utils: NVIDIA driver runtime for CUDA FiroPoW mining (AMD GPUs cannot mine)'
+  'cuda: NVIDIA CUDA toolkit if rebuilding the miner from source'
+)
+makedepends=(
+  'rust'
+  'cargo'
+  'nodejs'
+  'npm'
+  'webkit2gtk-4.1'
+  'base-devel'
+  'curl'
+  'wget'
+  'file'
+  'openssl'
+  'appmenu-gtk-module'
+  'libappindicator-gtk3'
+  'librsvg'
+  'libsecret'
+  'zenity'
+  'patchelf'
+)
+options=('!lto') # Tauri/AppImage tooling can conflict with full LTO strip on Arch
+source=()
+sha256sums=()
+
+# packaging/arch → desktop-tauri → Blockchain-prototype → monorepo root
+_repo_root="$(cd "${startdir}/../../../.." && pwd)"
+_prototype="${_repo_root}/Blockchain-prototype"
+_desktop="${_prototype}/alvenqis-desktop-tauri"
+
+prepare() {
+  cd "$_repo_root"
+  if [[ ! -f "$_repo_root/Blockchain-scripts/release/build-linux-desktop.sh" ]]; then
+    echo "ERROR: monorepo root not found (expected Blockchain-scripts/release/build-linux-desktop.sh under ${_repo_root})" >&2
+    echo "startdir=${startdir}" >&2
+    return 1
+  fi
+  if [[ ! -d "$_desktop" ]]; then
+    echo "ERROR: desktop tree missing at ${_desktop}" >&2
+    return 1
+  fi
+  true
+}
+
+build() {
+  cd "$_repo_root"
+  export NO_STRIP=true
+  # AppImage is the preferred Arch payload; deb is optional sidecars for QA.
+  bash Blockchain-scripts/release/build-linux-desktop.sh --bundles appimage,deb
+}
+
+package() {
+  local out="${_prototype}/alvenqis-release/apps/linux"
+  install -d "$pkgdir/usr/bin"
+  install -d "$pkgdir/usr/share/applications"
+  install -d "$pkgdir/usr/share/icons/hicolor/256x256/apps"
+  install -d "$pkgdir/opt/alvenqis-control-center"
+
+  # Prefer AppImage as portable payload under /opt, with a wrapper in PATH.
+  local appimage
+  appimage="$(find "$out" -maxdepth 1 -type f -name '*.AppImage' 2>/dev/null | head -1 || true)"
+  if [[ -n "$appimage" ]]; then
+    install -Dm755 "$appimage" "$pkgdir/opt/alvenqis-control-center/alvenqis-control-center.AppImage"
+    cat > "$pkgdir/usr/bin/alvenqis-control-center" <<'WRAP'
+#!/bin/sh
+exec /opt/alvenqis-control-center/alvenqis-control-center.AppImage "$@"
+WRAP
+    chmod 755 "$pkgdir/usr/bin/alvenqis-control-center"
+  else
+    local bin="${_desktop}/src-tauri/target/release/alvenqis-desktop-tauri"
+    if [[ -f "$bin" ]]; then
+      install -Dm755 "$bin" "$pkgdir/usr/bin/alvenqis-control-center"
+    else
+      echo "No AppImage or release binary found under $out" >&2
+      return 1
+    fi
+  fi
+
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/alvenqis-control-center.desktop" <<EOF
+[Desktop Entry]
+Name=Alvenqis Control Center
+Comment=Alvenqis Mainnet Candidate wallet and chain view (CUDA mining optional, NVIDIA only)
+Exec=alvenqis-control-center
+Icon=alvenqis-control-center
+Terminal=false
+Type=Application
+Categories=Network;Finance;Utility;
+Keywords=blockchain;Alvenqis;mining;wallet;
+EOF
+
+  local icon=""
+  for candidate in \
+    "${_desktop}/src-tauri/icons/128x128.png" \
+    "${_desktop}/src-tauri/icons/icon.png" \
+    "${_desktop}/public/icon.png" \
+    "${_desktop}/logo.png"
+  do
+    if [[ -f "$candidate" ]]; then
+      icon="$candidate"
+      break
+    fi
+  done
+  if [[ -n "$icon" ]]; then
+    install -Dm644 "$icon" "$pkgdir/usr/share/icons/hicolor/256x256/apps/alvenqis-control-center.png"
+  fi
+}

@@ -1,0 +1,43 @@
+import { MINING_RPC_URL, POOL_URL, RPC_URL } from "./constants";
+import type { AppSettings } from "./types";
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  rpc_url: RPC_URL,
+  mining_rpc_url: MINING_RPC_URL,
+  language: "en",
+  theme: "dark",
+  density: "comfortable",
+  accent: "cyan",
+  refresh_interval_ms: 6_000,
+  live_log_interval_ms: 2_000,
+  reduce_motion: false,
+  confirm_before_operator: true,
+  auto_start_services: false,
+  start_minimized: false,
+  notify_block_mined: true,
+  notify_sound: true,
+  notify_updates: true,
+  auto_update: true,
+  auto_update_interval_secs: 900,
+  hide_balances: false,
+  mask_addresses: false,
+  show_advanced_metrics: true,
+  show_technical_labels: true,
+  default_miner_mode: "solo",
+  default_miner_backend: "cuda",
+  default_gpu_intensity: 75,
+  default_gpu_devices: [],
+  default_pool_url: POOL_URL,
+  pool_urls: [POOL_URL],
+  default_worker_name: "desktop-01",
+  /** Stratum (alvenqis-stratum-v1) defaults — first-class alongside solo/pool. */
+  stratum_host: "",
+  stratum_port: 3333,
+  stratum_use_tls: true,
+  stratum_skip_tls_verify: false,
+  stratum_password: "",
+  miner_custom_commands: ["status", "devices", "config validate", "benchmark --seconds 3"],
+  default_page: "overview",
+  open_external_explorer: true,
+  keep_logs_days: 14
+};

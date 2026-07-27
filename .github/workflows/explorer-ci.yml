@@ -1,0 +1,46 @@
+name: Explorer CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "Blockchain-prototype/alvenqis-explorer/**"
+      - ".github/workflows/explorer-ci.yml"
+  pull_request:
+    paths:
+      - "Blockchain-prototype/alvenqis-explorer/**"
+      - ".github/workflows/explorer-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: explorer-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  explorer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Blockchain-prototype/alvenqis-explorer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: Blockchain-prototype/alvenqis-explorer/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build explorer
+        run: npm run build

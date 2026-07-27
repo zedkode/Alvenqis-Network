@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alvenqis.local/schemas/rpc-status.schema.json",
+  "title": "Alvenqis RPC Status Response",
+  "type": "object",
+  "required": [
+    "network",
+    "status",
+    "initialized",
+    "block_count",
+    "height",
+    "tip_hash",
+    "emitted_supply_atomic"
+  ],
+  "properties": {
+    "network": { "type": "string" },
+    "status": { "type": "string" },
+    "initialized": { "type": "boolean" },
+    "block_count": { "type": "integer", "minimum": 0 },
+    "height": { "type": ["integer", "null"], "minimum": 0 },
+    "tip_hash": { "type": ["string", "null"] },
+    "emitted_supply_atomic": { "type": ["integer", "null"], "minimum": 0 }
+  },
+  "additionalProperties": false
+}

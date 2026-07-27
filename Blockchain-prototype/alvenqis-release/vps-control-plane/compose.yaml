@@ -1,0 +1,465 @@
+name: ${COMPOSE_PROJECT_NAME:-alvenqis-control-plane}
+
+x-runtime-image: &runtime-image
+  image: ${ALVENQIS_RUNTIME_IMAGE:-ghcr.io/zedkode/alvenqis-runtime}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+  build:
+    context: ${ALVENQIS_HOST_REPO:-../..}
+    dockerfile: alvenqis-release/vps-control-plane/docker/Dockerfile
+  restart: unless-stopped
+  networks: [alvenqis-internal]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+
+x-runtime-common: &runtime-common
+  <<: *runtime-image
+  env_file: [.env]
+  volumes:
+    - ./state/config/generated:/config
+    - ./state/data:/data/.alvenqis-mainnet
+  read_only: true
+  tmpfs: [/tmp:size=128m]
+
+services:
+  alvenqis-node:
+    # hardening-review: inherits read_only, no-new-privileges and cap_drop ALL.
+    <<: *runtime-common
+    container_name: alvenqis-node
+    environment: {ALVENQIS_COMPONENT: node}
+    ports: ["${P2P_PORT:-20787}:20787/tcp"]
+    healthcheck:
+      test: ["CMD-SHELL", "ps -C alvenqis-node -o stat= | grep -Eq '^[^Z]' && test -s /data/.alvenqis-mainnet/chain/chain.sqlite3 && test -s /data/.alvenqis-mainnet/node/runtime.json"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    mem_limit: ${NODE_MEMORY_LIMIT:-3G}
+    cpus: 2.0
+
+  alvenqis-rpc:
+    <<: *runtime-common
+    container_name: alvenqis-rpc
+    environment:
+      ALVENQIS_COMPONENT: rpc
+      # Public gateway: submit/status/health only. Mining is on alvenqis-mining-rpc.
+      # Caddy retires every public /mining route with HTTP 410.
+      RPC_ACCESS_MODE: public-submit
+      RPC_EXPOSE_MINING: "false"
+    depends_on:
+      alvenqis-node: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:10787/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: ${RPC_MEMORY_LIMIT:-3G}
+    cpus: 1.0
+
+  # Private mining template/submit for the pool (Docker network only).
+  alvenqis-mining-rpc:
+    <<: *runtime-common
+    container_name: alvenqis-mining-rpc
+    profiles: [pool]
+    environment:
+      ALVENQIS_COMPONENT: mining-rpc
+      RPC_ACCESS_MODE: private-mining
+      RPC_EXPOSE_MINING: "true"
+    depends_on:
+      alvenqis-node: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:10787/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: ${MINING_RPC_MEMORY_LIMIT:-2G}
+    cpus: 0.75
+
+  alvenqis-indexer:
+    <<: *runtime-common
+    container_name: alvenqis-indexer
+    environment:
+      ALVENQIS_COMPONENT: indexer
+      INDEXER_INTERVAL_SECONDS: ${INDEXER_INTERVAL_SECONDS:-15}
+    depends_on:
+      alvenqis-rpc: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /data/.alvenqis-mainnet/indexer/.last-success && find /data/.alvenqis-mainnet/indexer/.last-success -mmin -5 | grep -q ."]
+      interval: 30s
+      timeout: 5s
+      retries: 8
+      start_period: 90s
+    mem_limit: ${INDEXER_MEMORY_LIMIT:-1G}
+    cpus: 0.5
+
+  alvenqis-control:
+    <<: *runtime-image
+    container_name: alvenqis-control
+    env_file: [.env]
+    environment:
+      ALVENQIS_COMPONENT: control
+      ALVENQIS_DEPLOYMENT_MODE: docker
+    volumes:
+      - ./state/config/generated:/config
+      - ./state/control:/data/control
+    depends_on:
+      alvenqis-rpc: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp:size=64m]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:10788/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: ${CONTROL_MEMORY_LIMIT:-1G}
+    cpus: 0.5
+
+  stratum-certbot:
+    image: certbot/dns-cloudflare:v5.7.0
+    container_name: alvenqis-stratum-certbot
+    restart: unless-stopped
+    profiles: [pool]
+    env_file: [.env]
+    entrypoint: ["/bin/sh", "/scripts/certbot-loop.sh"]
+    volumes:
+      - ./docker/stratum/certbot-loop.sh:/scripts/certbot-loop.sh:ro
+      - ./state/stratum/letsencrypt:/etc/letsencrypt
+      - ./state/stratum/lib:/var/lib/letsencrypt
+    secrets: [cloudflare_api_token]
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /etc/letsencrypt/live/${STRATUM_HOST}/fullchain.pem && test -s /etc/letsencrypt/live/${STRATUM_HOST}/privkey.pem"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 15s
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  alvenqis-pool:
+    <<: *runtime-image
+    container_name: alvenqis-pool
+    profiles: [pool]
+    env_file: [.env]
+    environment: {ALVENQIS_COMPONENT: pool}
+    ports: ["${STRATUM_PORT:-3333}:${STRATUM_INTERNAL_PORT:-3333}/tcp"]
+    volumes:
+      - ./state/config/generated:/config
+      - ./state/pool:/data/pool
+      - ./state/stratum/letsencrypt:/certs:ro
+    secrets: [pool_admin_token]
+    depends_on:
+      alvenqis-mining-rpc: {condition: service_healthy}
+      stratum-certbot: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp:size=64m]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:30787/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  docker-broker:
+    image: ${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}
+      dockerfile: docker/ops/Dockerfile
+    container_name: alvenqis-docker-broker
+    restart: unless-stopped
+    working_dir: /app
+    networks: [alvenqis-internal]
+    env_file: [.env]
+    environment:
+      ALVENQIS_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
+      ALVENQIS_COMPOSE_FILE: ${ALVENQIS_HOST_WORKSPACE}/compose.yaml
+      ALVENQIS_HOST_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
+      ALVENQIS_HOST_REPO: ${ALVENQIS_HOST_REPO}
+      BROKER_TOKEN_FILE: /run/secrets/broker_token
+    command: ["gunicorn", "--bind", "0.0.0.0:8090", "--workers", "1", "--threads", "2", "--timeout", "7200", "broker:app"]
+    volumes:
+      - ${ALVENQIS_HOST_WORKSPACE}:${ALVENQIS_HOST_WORKSPACE}
+      - ${ALVENQIS_HOST_REPO}:${ALVENQIS_HOST_REPO}:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets: [broker_token, cloudflare_api_token, backup_passphrase, r2_secret_access_key]
+    read_only: true
+    tmpfs: [/tmp:size=256m]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+
+  alvenqis-ops:
+    image: ${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}
+      dockerfile: docker/ops/Dockerfile
+    container_name: alvenqis-ops
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    env_file: [.env]
+    environment:
+      ALVENQIS_WORKSPACE: /workspace
+      SETUP_TOKEN_FILE: /run/secrets/setup_token
+      BROKER_URL: http://docker-broker:8090
+      BROKER_TOKEN_FILE: /run/secrets/broker_token
+      DISCORD_WEBHOOK_FILE: /run/secrets/discord_webhook
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+    volumes:
+      - ./.env:/workspace/.env
+      - ./state:/workspace/state
+    secrets: [setup_token, broker_token, discord_webhook, telegram_bot_token]
+    depends_on:
+      docker-broker: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp:size=128m]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: alvenqis-caddy
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    env_file: [.env]
+    entrypoint: ["/usr/local/bin/alvenqis-caddy-entrypoint.sh"]
+    volumes:
+      - ./docker/caddy/caddy-entrypoint.sh:/usr/local/bin/alvenqis-caddy-entrypoint.sh:ro
+      - ./docker/caddy/Caddyfile.template:/etc/caddy/Caddyfile.template:ro
+      - ./state/caddy/data:/data
+      - ./state/caddy/config:/config
+    secrets: [admin_password]
+    depends_on:
+      alvenqis-control: {condition: service_healthy}
+      alvenqis-rpc: {condition: service_healthy}
+      alvenqis-ops: {condition: service_healthy}
+      grafana: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:2019/config/"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.7.2
+    container_name: alvenqis-cloudflared
+    restart: unless-stopped
+    profiles: [cloudflare]
+    networks: [alvenqis-internal, onepanel-runtime]
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:20241", "run", "--token-file", "/run/secrets/cloudflare_tunnel_token"]
+    secrets: [cloudflare_tunnel_token]
+    depends_on:
+      caddy: {condition: service_healthy}
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: alvenqis-prometheus
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}", "--web.enable-lifecycle"]
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./state/prometheus:/prometheus
+    depends_on:
+      alertmanager: {condition: service_started}
+      blackbox-exporter: {condition: service_started}
+      alvenqis-metrics-exporter: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: alvenqis-alertmanager
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes:
+      - ./state/config/generated/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./state/alertmanager:/alertmanager
+    secrets: [smtp_password]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:9093/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.27.0
+    container_name: alvenqis-blackbox-exporter
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    command: ["--config.file=/etc/blackbox_exporter/config.yml"]
+    volumes: ["./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro"]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: alvenqis-node-exporter
+    restart: unless-stopped
+    pid: host
+    networks: [alvenqis-internal]
+    command: ["--path.rootfs=/host", "--collector.textfile.directory=/textfile"]
+    volumes:
+      - /:/host:ro,rslave
+      - ./state/metrics:/textfile:ro
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  alvenqis-metrics-exporter:
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}/docker/metrics-exporter
+      dockerfile: Dockerfile
+    image: ${ALVENQIS_METRICS_IMAGE:-ghcr.io/zedkode/alvenqis-metrics-exporter}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    container_name: alvenqis-metrics-exporter
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    environment:
+      ALVENQIS_RPC_URL: http://alvenqis-rpc:10787
+      ALVENQIS_POOL_URL: http://alvenqis-pool:30787
+      ALVENQIS_CONTROL_URL: http://alvenqis-control:10788/health
+      ALVENQIS_OPS_URL: http://alvenqis-ops:8080/health
+      ENABLE_POOL: ${ENABLE_POOL:-false}
+      LISTEN_HOST: 0.0.0.0
+      LISTEN_PORT: "9101"
+      SCRAPE_TIMEOUT_SECONDS: "5"
+    depends_on:
+      alvenqis-rpc: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9101/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    read_only: true
+    tmpfs: [/tmp:size=16m]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  loki:
+    image: grafana/loki:3.5.1
+    container_name: alvenqis-loki
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - ./state/loki:/loki
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  alloy:
+    image: grafana/alloy:v1.9.2
+    container_name: alvenqis-alloy
+    restart: unless-stopped
+    user: "473:0"
+    networks: [alvenqis-internal]
+    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./state/alloy:/var/lib/alloy/data
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      loki: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp:size=64m]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    container_name: alvenqis-grafana
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://${GRAFANA_HOST}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    secrets: [grafana_password]
+    volumes:
+      - ./state/grafana:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus: {condition: service_healthy}
+      loki: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/health | grep -q 'ok'"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  backup-scheduler:
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}
+      dockerfile: docker/backup-scheduler/Dockerfile
+    image: ${ALVENQIS_BACKUP_IMAGE:-ghcr.io/zedkode/alvenqis-backup-scheduler}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    container_name: alvenqis-backup-scheduler
+    restart: unless-stopped
+    profiles: [backup]
+    networks: [alvenqis-internal]
+    environment:
+      BROKER_URL: http://docker-broker:8090
+      BROKER_TOKEN_FILE: /run/secrets/broker_token
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_INITIAL_DELAY_SECONDS: ${BACKUP_INITIAL_DELAY_SECONDS:-3600}
+    secrets: [broker_token]
+    depends_on:
+      docker-broker: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp:size=16m]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+networks:
+  alvenqis-internal:
+    name: alvenqis-internal
+    driver: bridge
+  onepanel-runtime:
+    name: 1panel-network
+    external: true
+
+secrets:
+  admin_password: {file: ./state/secrets/admin_password}
+  grafana_password: {file: ./state/secrets/grafana_password}
+  setup_token: {file: ./state/secrets/setup_token}
+  broker_token: {file: ./state/secrets/broker_token}
+  cloudflare_api_token: {file: ./state/secrets/cloudflare_api_token}
+  cloudflare_tunnel_token: {file: ./state/secrets/cloudflare_tunnel_token}
+  pool_admin_token: {file: ./state/secrets/pool_admin_token}
+  backup_passphrase: {file: ./state/secrets/backup_passphrase}
+  r2_secret_access_key: {file: ./state/secrets/r2_secret_access_key}
+  discord_webhook: {file: ./state/secrets/discord_webhook}
+  telegram_bot_token: {file: ./state/secrets/telegram_bot_token}
+  smtp_password: {file: ./state/secrets/smtp_password}

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "public_sources": [
+    "README.md",
+    "Blockchain-docs/human/**/*.md",
+    "Blockchain-prototype/shared/**/*.md",
+    "Blockchain-prototype/alvenqis-*/README.md",
+    "Blockchain-prototype/alvenqis-sdk-rust/docs/**/*.md"
+  ],
+  "internal_prefixes": [
+    ".agents/",
+    ".codex/",
+    "memory/",
+    "Blockchain-docs/internal/",
+    "Blockchain-docs/ai/",
+    "Blockchain-docs/human/operator/pr-drafts/",
+    "Blockchain-docs/human/operator/UNCOMMITTED_SPLIT_PLAN.md",
+    "AGENTS.md",
+    "TASK_MASTER.md"
+  ],
+  "historical_prefixes": [
+    "RUST_CODE_ANALYSIS_REPORT.md",
+    "Blockchain-docs/human/release/CANDIDATE_CHAIN_RESET_"
+  ]
+}

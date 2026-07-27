@@ -1,0 +1,280 @@
+@import "@fontsource/space-grotesk/400.css";
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
+
+/*
+  Alvenqis Control Center (Tauri) — design tokens
+  Shared non-color on :root; colors on [data-theme]
+*/
+
+:root {
+  /* Geometry */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius: 14px;
+  --border-width: 1px;
+
+  /* Type */
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Layout — denser crypto-dashboard defaults */
+  --sidebar-width: 232px;
+  --titlebar-h: 38px;
+  --footer-h: 32px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 10px;
+  --space-4: 14px;
+  --space-5: 20px;
+  --space-6: 28px;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 300ms;
+  --duration-slow: 550ms;
+  --duration-chart: 500ms;
+
+  /* RGB channels (overridden per theme for rgba(var(--x-rgb), a)) */
+  --accent-primary-rgb: 32, 213, 255;
+  --accent-primary-soft-rgb: 0, 196, 239;
+  --accent-gold-rgb: 225, 176, 91;
+  --positive-rgb: 82, 211, 126;
+  --negative-rgb: 229, 72, 77;
+  --warning-rgb: 227, 169, 59;
+  --bg-deep-rgb: 1, 8, 13;
+  --bg-base-rgb: 3, 12, 18;
+  --panel-rgb: 8, 27, 38;
+  --border-rgb: 23, 61, 78;
+  --text-primary-rgb: 218, 235, 245;
+  /* Ink used for translucent insets (black in dark, slate in light) */
+  --overlay-ink: 0, 0, 0;
+  --ink-on-accent: #031018;
+
+  /* Semantic surfaces (components should use these, not raw black) */
+  --surface-inset: rgba(0, 0, 0, 0.16);
+  --surface-muted: rgba(0, 0, 0, 0.12);
+  --surface-toolbar: rgba(1, 8, 13, 0.88);
+  --surface-console: rgba(0, 0, 0, 0.42);
+  --surface-chip: rgba(0, 0, 0, 0.18);
+  --surface-row: rgba(0, 0, 0, 0.14);
+  --grad-card: linear-gradient(155deg, rgba(8, 27, 38, 0.98) 0%, rgba(3, 12, 18, 0.96) 100%);
+  --grad-dialog: linear-gradient(145deg, rgba(7, 28, 39, 0.99), rgba(1, 9, 14, 0.99));
+
+  /* Default = dark (FOUC-safe) */
+  --bg-void: #01080d;
+  --bg-base: #030c12;
+  --bg-deep: #01080d;
+  --bg-elevated: #05141c;
+  --panel: #081b26;
+  --panel-solid: #081b26;
+  --panel-raised: #0b2431;
+  --panel-hover: #0e2c3b;
+  --panel-glass: rgba(4, 18, 28, 0.62);
+  --border: #173d4e;
+  --border-strong: #1f5268;
+  --border-glow: rgba(32, 213, 255, 0.45);
+  --text-primary: #daebf5;
+  --text-muted: #7b95a4;
+  --text-soft: #9bb4c2;
+  --text-dim: #5a7484;
+  --accent-primary: #20d5ff;
+  --accent-primary-soft: #00c4ef;
+  --accent-secondary: #3ad4ff;
+  --accent-violet: #4ec4ff;
+  --accent-magenta: #5ad8ff;
+  --accent-gold: #e1b05b;
+  --accent-orange: #e3a93b;
+  --positive: #52d37e;
+  --negative: #e5484d;
+  --warning: #e3a93b;
+  --glow: 0 0 28px rgba(32, 213, 255, 0.16);
+  --glow-strong: 0 0 42px rgba(32, 213, 255, 0.28);
+  --glow-violet: 0 0 28px rgba(32, 213, 255, 0.12);
+  --glow-gold: 0 0 24px rgba(225, 176, 91, 0.14);
+  --shadow: 0 20px 56px rgba(var(--overlay-ink), 0.42);
+  --shadow-sm: 0 10px 28px rgba(var(--overlay-ink), 0.3);
+  --shadow-card: 0 10px 36px rgba(var(--overlay-ink), 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  --focus-ring: 0 0 0 2px rgba(32, 213, 255, 0.38);
+  --surface-titlebar: rgba(1, 8, 13, 0.93);
+  --surface-sidebar: rgba(1, 10, 16, 0.9);
+  --surface-footer: rgba(1, 8, 13, 0.95);
+  --surface-overlay: rgba(0, 8, 13, 0.78);
+  --surface-input: rgba(var(--overlay-ink), 0.22);
+  --hex-grid-opacity: 0.035;
+  --chart-grid-opacity: 0.45;
+  --grad-brand: linear-gradient(135deg, #20d5ff 0%, #00a8cc 55%, #20d5ff 100%);
+  --grad-brand-soft: linear-gradient(135deg, rgba(32, 213, 255, 0.16), rgba(0, 180, 220, 0.08));
+  --grad-gold: linear-gradient(135deg, #e1b05b, #c9943a);
+  --grad-panel: linear-gradient(155deg, rgba(8, 27, 38, 0.96) 0%, rgba(3, 12, 18, 0.94) 100%);
+  --grad-hero: radial-gradient(ellipse 80% 60% at 70% 20%, rgba(32, 213, 255, 0.13), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 12% 80%, rgba(0, 140, 180, 0.1), transparent 45%),
+    radial-gradient(ellipse 40% 30% at 90% 90%, rgba(225, 176, 91, 0.06), transparent 40%),
+    linear-gradient(160deg, #041620 0%, #01080d 55%, #030c12 100%);
+  --grad-mesh: radial-gradient(at 20% 20%, rgba(32, 213, 255, 0.07) 0, transparent 45%),
+    radial-gradient(at 80% 10%, rgba(0, 160, 200, 0.06) 0, transparent 40%),
+    radial-gradient(at 50% 90%, rgba(225, 176, 91, 0.04) 0, transparent 45%);
+}
+
+[data-theme="dark"] {
+  --accent-primary-rgb: 32, 213, 255;
+  --accent-primary-soft-rgb: 0, 196, 239;
+  --accent-gold-rgb: 225, 176, 91;
+  --positive-rgb: 82, 211, 126;
+  --negative-rgb: 229, 72, 77;
+  --warning-rgb: 227, 169, 59;
+  --bg-deep-rgb: 1, 8, 13;
+  --bg-base-rgb: 3, 12, 18;
+  --panel-rgb: 8, 27, 38;
+  --border-rgb: 23, 61, 78;
+  --text-primary-rgb: 218, 235, 245;
+  --overlay-ink: 0, 0, 0;
+  --ink-on-accent: #031018;
+  --surface-inset: rgba(0, 0, 0, 0.16);
+  --surface-muted: rgba(0, 0, 0, 0.12);
+  --surface-toolbar: rgba(1, 8, 13, 0.88);
+  --surface-console: rgba(0, 0, 0, 0.42);
+  --surface-chip: rgba(0, 0, 0, 0.18);
+  --surface-row: rgba(0, 0, 0, 0.14);
+  --grad-card: linear-gradient(155deg, rgba(8, 27, 38, 0.98) 0%, rgba(3, 12, 18, 0.96) 100%);
+  --grad-dialog: linear-gradient(145deg, rgba(7, 28, 39, 0.99), rgba(1, 9, 14, 0.99));
+
+  --bg-void: #01080d;
+  --bg-base: #030c12;
+  --bg-deep: #01080d;
+  --bg-elevated: #05141c;
+  --panel: #081b26;
+  --panel-solid: #081b26;
+  --panel-raised: #0b2431;
+  --panel-hover: #0e2c3b;
+  --panel-glass: rgba(4, 18, 28, 0.62);
+  --border: #173d4e;
+  --border-strong: #1f5268;
+  --border-glow: rgba(32, 213, 255, 0.45);
+  --text-primary: #daebf5;
+  --text-muted: #7b95a4;
+  --text-soft: #9bb4c2;
+  --text-dim: #5a7484;
+  --accent-primary: #20d5ff;
+  --accent-primary-soft: #00c4ef;
+  --accent-secondary: #3ad4ff;
+  --accent-gold: #e1b05b;
+  --positive: #52d37e;
+  --negative: #e5484d;
+  --warning: #e3a93b;
+  --glow: 0 0 28px rgba(32, 213, 255, 0.16);
+  --glow-strong: 0 0 42px rgba(32, 213, 255, 0.28);
+  --shadow: 0 20px 56px rgba(var(--overlay-ink), 0.42);
+  --shadow-card: 0 10px 36px rgba(var(--overlay-ink), 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  --focus-ring: 0 0 0 2px rgba(32, 213, 255, 0.38);
+  --surface-titlebar: rgba(1, 8, 13, 0.93);
+  --surface-sidebar: rgba(1, 10, 16, 0.9);
+  --surface-footer: rgba(1, 8, 13, 0.95);
+  --surface-overlay: rgba(0, 8, 13, 0.78);
+  --surface-input: rgba(var(--overlay-ink), 0.22);
+  --hex-grid-opacity: 0.035;
+  --chart-grid-opacity: 0.45;
+  --grad-brand: linear-gradient(135deg, #20d5ff 0%, #00a8cc 55%, #20d5ff 100%);
+  --grad-brand-soft: linear-gradient(135deg, rgba(32, 213, 255, 0.16), rgba(0, 180, 220, 0.08));
+  --grad-gold: linear-gradient(135deg, #e1b05b, #c9943a);
+  --grad-panel: linear-gradient(155deg, rgba(8, 27, 38, 0.96) 0%, rgba(3, 12, 18, 0.94) 100%);
+  --grad-hero: radial-gradient(ellipse 80% 60% at 70% 20%, rgba(32, 213, 255, 0.13), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 12% 80%, rgba(0, 140, 180, 0.1), transparent 45%),
+    radial-gradient(ellipse 40% 30% at 90% 90%, rgba(225, 176, 91, 0.06), transparent 40%),
+    linear-gradient(160deg, #041620 0%, #01080d 55%, #030c12 100%);
+  --grad-mesh: radial-gradient(at 20% 20%, rgba(32, 213, 255, 0.07) 0, transparent 45%),
+    radial-gradient(at 80% 10%, rgba(0, 160, 200, 0.06) 0, transparent 40%),
+    radial-gradient(at 50% 90%, rgba(225, 176, 91, 0.04) 0, transparent 45%);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --accent-primary-rgb: 0, 145, 184;
+  --accent-primary-soft-rgb: 0, 166, 201;
+  --accent-gold-rgb: 169, 118, 31;
+  --positive-rgb: 31, 157, 82;
+  --negative-rgb: 198, 40, 40;
+  --warning-rgb: 185, 121, 10;
+  --bg-deep-rgb: 226, 235, 241;
+  --bg-base-rgb: 238, 244, 248;
+  --panel-rgb: 255, 255, 255;
+  --border-rgb: 196, 212, 224;
+  --text-primary-rgb: 11, 36, 49;
+  /* Slate ink for translucent surfaces — NEVER pure black */
+  --overlay-ink: 18, 48, 66;
+  --ink-on-accent: #ffffff;
+
+  --bg-void: #e6eef4;
+  --bg-base: #eef4f8;
+  --bg-deep: #e2ebf2;
+  --bg-elevated: #f7fafc;
+  --panel: #ffffff;
+  --panel-solid: #ffffff;
+  --panel-raised: #f8fbfd;
+  --panel-hover: #eef5f9;
+  --panel-glass: rgba(255, 255, 255, 0.82);
+  --border: #c4d4e0;
+  --border-strong: #9eb4c4;
+  --border-glow: rgba(0, 145, 184, 0.4);
+  --text-primary: #0b2431;
+  --text-muted: #5b7280;
+  --text-soft: #3d5563;
+  --text-dim: #7a90a0;
+  --accent-primary: #0088ad;
+  --accent-primary-soft: #00a0c4;
+  --accent-secondary: #007a9c;
+  --accent-gold: #9a6a14;
+  --positive: #1a8f4a;
+  --negative: #c62828;
+  --warning: #b07008;
+  --glow: 0 0 0 1px rgba(0, 136, 173, 0.08);
+  --glow-strong: 0 10px 28px rgba(0, 136, 173, 0.14);
+  --glow-gold: 0 8px 20px rgba(154, 106, 20, 0.12);
+  --shadow: 0 12px 32px rgba(18, 48, 66, 0.1);
+  --shadow-sm: 0 6px 16px rgba(18, 48, 66, 0.08);
+  --shadow-card: 0 4px 18px rgba(18, 48, 66, 0.08), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --focus-ring: 0 0 0 2px rgba(0, 136, 173, 0.35);
+  --surface-titlebar: rgba(255, 255, 255, 0.94);
+  --surface-sidebar: #f4f8fb;
+  --surface-footer: rgba(255, 255, 255, 0.96);
+  --surface-overlay: rgba(18, 48, 66, 0.4);
+  --surface-input: #f0f5f8;
+  --surface-inset: rgba(18, 48, 66, 0.05);
+  --surface-muted: rgba(18, 48, 66, 0.06);
+  --surface-toolbar: #eef4f8;
+  --surface-console: #e8eef4;
+  --surface-chip: rgba(18, 48, 66, 0.06);
+  --surface-row: rgba(18, 48, 66, 0.04);
+  --hex-grid-opacity: 0.02;
+  --chart-grid-opacity: 0.65;
+  --grad-brand: linear-gradient(135deg, #0088ad 0%, #00a0c4 55%, #0088ad 100%);
+  --grad-brand-soft: linear-gradient(135deg, rgba(0, 136, 173, 0.1), rgba(0, 160, 196, 0.05));
+  --grad-gold: linear-gradient(135deg, #9a6a14, #7d560f);
+  --grad-panel: linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
+  --grad-card: linear-gradient(180deg, #ffffff 0%, #f5f9fb 100%);
+  --grad-dialog: linear-gradient(180deg, #ffffff 0%, #f4f8fb 100%);
+  --grad-hero: radial-gradient(ellipse 80% 60% at 78% 18%, rgba(0, 136, 173, 0.1), transparent 52%),
+    radial-gradient(ellipse 50% 40% at 12% 80%, rgba(0, 140, 180, 0.06), transparent 48%),
+    radial-gradient(ellipse 40% 30% at 90% 90%, rgba(154, 106, 20, 0.05), transparent 42%),
+    linear-gradient(165deg, #ffffff 0%, #f0f6fa 48%, #e6eef4 100%);
+  --grad-mesh: radial-gradient(at 18% 18%, rgba(0, 136, 173, 0.06) 0, transparent 48%),
+    radial-gradient(at 82% 12%, rgba(0, 160, 196, 0.05) 0, transparent 42%),
+    radial-gradient(at 50% 92%, rgba(154, 106, 20, 0.04) 0, transparent 46%);
+  color-scheme: light;
+}
+
+@property --progress {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}

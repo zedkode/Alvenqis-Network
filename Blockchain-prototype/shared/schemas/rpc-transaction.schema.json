@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alvenqis.local/schemas/rpc-transaction.schema.json",
+  "title": "Alvenqis RPC Transaction Response",
+  "type": "object",
+  "required": [
+    "hash",
+    "block_height",
+    "block_hash",
+    "version",
+    "nonce",
+    "from",
+    "to",
+    "amount_atomic",
+    "fee_atomic",
+    "memo_hash",
+    "sender_public_key_hex",
+    "signature_hex",
+    "authorization_state",
+    "signatures_status"
+  ],
+  "properties": {
+    "hash": { "type": "string" },
+    "block_height": { "type": "integer", "minimum": 0 },
+    "block_hash": { "type": "string" },
+    "version": { "type": "integer", "minimum": 0 },
+    "nonce": { "type": "integer", "minimum": 0 },
+    "from": { "type": ["string", "null"] },
+    "to": { "type": "string" },
+    "amount_atomic": { "type": "integer", "minimum": 0 },
+    "fee_atomic": { "type": "integer", "minimum": 0 },
+    "memo_hash": { "type": ["string", "null"] },
+    "sender_public_key_hex": { "type": ["string", "null"] },
+    "signature_hex": { "type": ["string", "null"] },
+    "authorization_state": { "type": "string" },
+    "signatures_status": { "type": "string" }
+  },
+  "additionalProperties": false
+}

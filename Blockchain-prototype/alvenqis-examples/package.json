@@ -1,0 +1,16 @@
+{
+    "name":  "alvenqis-examples",
+    "version":  "1.0.0",
+    "private":  true,
+    "type":  "module",
+    "description":  "Runnable examples for Alvenqis Mainnet Candidate (uses @alvenqis/sdk)",
+    "scripts":  {
+                    "chain-status":  "node scripts/chain-status.mjs",
+                    "pool-status":  "node scripts/pool-status.mjs",
+                    "pool-maturity":  "node scripts/pool-maturity.mjs",
+                    "address-lookup":  "node scripts/address-lookup.mjs"
+                },
+    "engines":  {
+                    "node":  "\u003e=18"
+                }
+}

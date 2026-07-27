@@ -1,0 +1,15 @@
+﻿{
+    "opencl_mining":  false,
+    "operator":  "alvenqis.ps1",
+    "binaries":  [
+                     "bin/alvenqis-miner.exe",
+                     "bin/alvenqis-node.exe",
+                     "bin/alvenqis-rpc-gateway.exe",
+                     "bin/alvenqis-indexer.exe"
+                 ],
+    "keystore_helper":  "bin/alvenqis-keystore-helper.exe",
+    "mining_backend":  "cuda",
+    "platform":  "windows",
+    "prepared_at_utc":  "2026-07-26T19:09:21.6062926Z",
+    "cpu_mining":  false
+}

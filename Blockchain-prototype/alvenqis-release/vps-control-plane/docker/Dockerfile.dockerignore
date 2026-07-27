@@ -1,0 +1,10 @@
+.git
+**/.env
+**/state
+**/secrets
+**/__pycache__
+**/*.pyc
+target
+release-artifacts
+*.zip
+*.tar.gz

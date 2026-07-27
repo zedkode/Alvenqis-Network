@@ -1,0 +1,282 @@
+# -----------------------------------------------------------------------------
+# Repository-private material and local tooling
+# -----------------------------------------------------------------------------
+/.agents/
+/.agent/
+/.codex/
+/.claude/
+/.gemini/
+/.cursor/
+/.windsurf/
+/.continue/
+/.aider/
+/.aider*
+/.superdev/
+/.superdesign/
+/.review/
+/.idea/
+/.vscode/
+/.vs/
+/.fleet/
+
+/llms.md
+/Blockchain-docs/ai/
+/Blockchain-docs/internal/
+/Blockchain-docs/human/internal/
+/Blockchain-docs/human/source-info/
+
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+AI_INSTRUCTIONS.md
+AI-INSTRUCTIONS.md
+**/.github/copilot-instructions.md
+
+# -----------------------------------------------------------------------------
+# Local runtime, generated release content, and test targets
+# -----------------------------------------------------------------------------
+/.alvenqis-local/
+/target-miner-test/
+/release-artifacts/
+/release-staging/
+
+# -----------------------------------------------------------------------------
+# Secrets and machine-local configuration
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template
+
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.kdbx
+*.age
+*.gpg
+*.asc
+*.credentials
+credentials.json
+credentials.*.json
+service-account*.json
+secrets/
+**/state/secrets/
+**/.installer.env
+wallet.dat
+*.wallet
+*.seed
+*.mnemonic
+
+# -----------------------------------------------------------------------------
+# Editors and operating systems
+# -----------------------------------------------------------------------------
+*.code-workspace
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.ntvs*
+*.njsproj
+*.sw?
+*~
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# -----------------------------------------------------------------------------
+# Rust and Cargo
+# -----------------------------------------------------------------------------
+target/
+**/target/
+*.rlib
+*.rmeta
+*.dSYM/
+.cargo/credentials
+.cargo/credentials.toml
+
+# -----------------------------------------------------------------------------
+# Node.js, TypeScript, and frontend builds
+# -----------------------------------------------------------------------------
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+dist-ssr/
+**/dist-ssr/
+build/
+**/build/
+out/
+**/out/
+.next/
+.nuxt/
+.svelte-kit/
+.astro/
+.vite/
+.vite-inspect/
+.parcel-cache/
+.turbo/
+.nx/
+.eslintcache
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+
+# -----------------------------------------------------------------------------
+# Android, Gradle, and native builds
+# -----------------------------------------------------------------------------
+.gradle/
+**/.gradle/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+**/src/main/jniLibs/
+*.apk
+*.aab
+*.aar
+*.hprof
+
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+compile_commands.json
+Debug/
+Release/
+x64/
+x86/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.ilk
+*.pdb
+
+# -----------------------------------------------------------------------------
+# Python
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# -----------------------------------------------------------------------------
+# Tauri generated and bundled runtime resources
+# -----------------------------------------------------------------------------
+**/src-tauri/gen/schemas/
+**/src-tauri/binaries/*
+!**/src-tauri/binaries/.gitkeep
+**/src-tauri/resources/bin/
+**/src-tauri/resources/scripts/
+**/src-tauri/resources/configs/
+**/src-tauri/resources/docs/
+**/src-tauri/resources/explorer/
+
+# -----------------------------------------------------------------------------
+# Runtime state, databases, caches, logs, and temporary files
+# -----------------------------------------------------------------------------
+logs/
+**/logs/
+*.log
+*.pid
+*.pid.lock
+*.sock
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.profraw
+*.lcov
+coverage/
+**/coverage/
+.cache/
+**/.cache/
+cache/
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.rej
+
+**/alvenqis-release/vps-control-plane/state/
+
+# -----------------------------------------------------------------------------
+# Release artifacts, staging, packages, and archives
+# -----------------------------------------------------------------------------
+**/alvenqis-release/apps/
+artifacts/
+**/artifacts/
+staging/
+**/staging/
+stage/
+**/stage/
+packages/
+**/packages/
+*.exe
+*.dll
+*.msi
+*.msix
+*.appx
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+*.tar.bz2
+*.tar.xz
+*.gz
+
+# -----------------------------------------------------------------------------
+# Infrastructure and local deployment overrides
+# -----------------------------------------------------------------------------
+docker-compose.override.yml
+docker-compose.override.yaml
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl.backup

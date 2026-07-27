@@ -1,0 +1,47 @@
+name: Cleanup Legacy Container Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type DELETE_LEGACY_PACKAGES to confirm permanent deletion"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  delete:
+    if: ${{ inputs.confirmation == 'DELETE_LEGACY_PACKAGES' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Delete superseded container packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          for package in vireon-runtime vireon-backup-scheduler vireon-ops; do
+            response="$(mktemp)"
+            status="$(
+              curl -sS \
+                -o "$response" \
+                -w '%{http_code}' \
+                -X DELETE \
+                -H 'Accept: application/vnd.github+json' \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "https://api.github.com/user/packages/container/${package}"
+            )"
+            if [[ "$status" == 204 ]]; then
+              echo "Deleted package: $package"
+            elif [[ "$status" == 404 ]]; then
+              echo "Package already absent: $package"
+            else
+              message="$(jq -r '.message // "unknown GitHub API error"' "$response")"
+              echo "Failed to delete $package (HTTP $status): $message" >&2
+              exit 1
+            fi
+            rm -f "$response"
+          done

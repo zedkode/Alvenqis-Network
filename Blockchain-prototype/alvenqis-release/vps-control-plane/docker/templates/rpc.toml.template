@@ -1,0 +1,25 @@
+bind_host = "0.0.0.0"
+bind_port = 10787
+network = "mainnet-candidate"
+network_id = "alvenqis-mainnet-candidate"
+human_name = "Alvenqis Mainnet Candidate"
+status_label = "Planned / Mainnet Candidate"
+address_prefix = "alve"
+chain_data_path = "/data/.alvenqis-mainnet/chain"
+indexer_data_path = "/data/.alvenqis-mainnet/indexer"
+mempool_data_path = "/data/.alvenqis-mainnet/mempool"
+public_rpc_allowed = true
+access_mode = "${RPC_ACCESS_MODE}"
+expose_mining_endpoints = ${RPC_EXPOSE_MINING}
+max_mempool_transactions = 4096
+max_request_body_bytes = 65536
+cors_allowed_origin = "https://${RPC_HOST}"
+cors_allowed_origins = [
+  "https://${RPC_HOST}",
+  "https://${CONTROL_HOST}",
+  "http://127.0.0.1:4173",
+  "http://localhost:4173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5173"
+]
+allow_mainnet_candidate = true

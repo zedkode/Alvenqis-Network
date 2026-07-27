@@ -1,0 +1,38 @@
+# Alvenqis Cargo workspace -- intentionally scoped (see ../Blockchain-docs/human/engineering/WORKSPACE_AND_LINTS.md).
+#
+# Members = Rust crates built/tested together by `cargo test --workspace` and G1 release-gate.
+# NOT members (managed separately on purpose):
+#   - alvenqis-explorer, alvenqis-website  -> Node/Vite frontends (npm)
+#   - alvenqis-desktop-tauri             -> own [workspace] + Tauri toolchain (Control Center)
+#   - alvenqis-android                   -> Gradle/Kotlin + mobile-core FFI
+#   - alvenqis-desktop-tauri/native/keystore-helper -> sidecar with nested [workspace]
+#   - docs-only / empty product stubs (sdk, contracts, faucet, ...)
+[workspace]
+members = [
+    "alvenqis-core",
+    "alvenqis-node",
+    "alvenqis-rpc-gateway",
+    "alvenqis-wallet",
+    "alvenqis-sdk-rust",
+    "alvenqis-browser/host",
+    "alvenqis-indexer",
+    "alvenqis-miner",
+    "alvenqis-mining-pool",
+    "alvenqis-mobile-core",
+    "alvenqis-release/vps-control-plane/admin-server",
+]
+resolver = "2"
+
+# Workspace-wide Clippy defaults for members that opt in with:
+#   [lints]
+#   workspace = true
+# Tests still use expect/unwrap freely; production code should prefer Result + ?.
+# Full policy: ../Blockchain-docs/human/engineering/WORKSPACE_AND_LINTS.md
+[workspace.lints.clippy]
+# Keep noise low for legitimate test fixtures; CI release-gate still uses -D warnings
+# for correctness lints. unwrap/expect remain "allow" at workspace level so historical
+# test modules compile; scanners should filter #[cfg(test)] (see engineering doc).
+unwrap_used = "allow"
+expect_used = "allow"
+panic = "allow"
+too_many_arguments = "warn"

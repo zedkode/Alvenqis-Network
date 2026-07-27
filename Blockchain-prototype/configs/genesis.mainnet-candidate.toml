@@ -1,0 +1,8 @@
+network = "mainnet-candidate"
+network_id = "alvenqis-mainnet-candidate"
+human_name = "Alvenqis Mainnet Candidate"
+status_label = "Planned / Mainnet Candidate"
+address_prefix = "alve"
+timestamp = 1720000000
+difficulty_leading_zero_bits = 16
+recipient_strategy = "default_miner_address"

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 88" role="img" aria-labelledby="title desc">
+  <title id="title">Alvenqis Network</title>
+  <desc id="desc">Elegant ion Alvenqis Network logo.</desc>
+  <defs>
+    <linearGradient id="mark" x1="32" x2="76" y1="16" y2="72">
+      <stop stop-color="#7dd3fc"/>
+      <stop offset=".55" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="88" rx="20" fill="#05060d"/>
+  <g transform="translate(22 16)">
+    <rect width="56" height="56" rx="12" fill="#0a0d18" stroke="#38bdf8" stroke-opacity=".32"/>
+    <path d="M10 9h12.4l8.1 31.5L39.1 9H50L36.5 48H23.9L10 9Z" fill="url(#mark)"/>
+    <path d="M16.9 9H50l-2.9 9.2H20.2L16.9 9Z" fill="#eef7ff" fill-opacity=".9"/>
+    <circle cx="48" cy="48" r="3" fill="#8b5cf6"/>
+  </g>
+  <text x="96" y="39" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800" letter-spacing="7">ALVENQIS</text>
+  <text x="98" y="60" fill="#38bdf8" fill-opacity=".82" font-family="Inter, Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="3">NETWORK / ALVE</text>
+</svg>

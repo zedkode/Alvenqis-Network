@@ -1,0 +1,39 @@
+{
+    "name": "alvenqis-network-website",
+    "private": true,
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite --host 0.0.0.0",
+        "build": "vite build",
+        "prestart": "npm run build",
+        "start": "node scripts/serve-production.mjs",
+        "preview": "vite preview --host 0.0.0.0",
+        "server:dev": "npm --prefix server run dev",
+        "server:start": "npm --prefix server run start",
+        "server:migrate": "npm --prefix server run prisma:migrate",
+        "server:seed": "npm --prefix server run seed",
+        "server:cms:migrate": "npm --prefix server run cms:migrate",
+        "server:test": "npm --prefix server run test",
+        "docs:audit": "node ../../Blockchain-scripts/docs/audit-docs.mjs"
+    },
+    "dependencies": {
+        "@react-three/drei": "^10.7.7",
+        "@react-three/fiber": "^9.6.1",
+        "framer-motion": "^12.42.2",
+        "lucide-react": "^0.468.0",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "react-markdown": "^10.1.0",
+        "recharts": "^3.9.1",
+        "remark-gfm": "^4.0.1",
+        "three": "^0.185.0"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-react": "^5.0.0",
+        "autoprefixer": "^10.4.20",
+        "postcss": "^8.4.49",
+        "tailwindcss": "^3.4.17",
+        "vite": "^6.0.0"
+    }
+}
