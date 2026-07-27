@@ -10,6 +10,6 @@
     "keystore_helper":  "bin/alvenqis-keystore-helper.exe",
     "mining_backend":  "cuda",
     "platform":  "windows",
-    "prepared_at_utc":  "2026-07-27T23:01:54.1043132Z",
+    "prepared_at_utc":  "2026-07-27T23:35:46.7353364Z",
     "cpu_mining":  false
 }
