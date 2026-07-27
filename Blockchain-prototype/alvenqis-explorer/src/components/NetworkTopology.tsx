@@ -24,7 +24,7 @@ export function NetworkTopology({ fleet, p2p }: NetworkTopologyProps) {
       <div className="topology-grid">
         <div className="topology-core">
           <img src="/alvenqis-logo.png" alt="" />
-          <strong>Local RPC view</strong>
+          <strong>Configured RPC view</strong>
           <span>{p2p.local_peer_id || "P2P unavailable"}</span>
         </div>
         <div className="topology-links" aria-hidden="true" />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "../lib/router";
 import {
   fetchJson,
   HealthResponse,
@@ -83,11 +83,11 @@ export function DashboardPage() {
     <>
       <PageHeader
         title="Explorer Dashboard"
-        description="Local prototype visibility for Alvenqis chain status, indexed state and recent block activity."
+        description="Read-only Alvenqis chain status, indexed state and recent block activity from the configured public RPC."
       />
 
       {error ? <ErrorPanel message={error} /> : null}
-      {!state && !error ? <LoadingPanel message="Loading local RPC and indexer state..." /> : null}
+      {!state && !error ? <LoadingPanel message="Loading RPC and indexer state..." /> : null}
 
       {state ? (
         <div className="grid" style={{ gap: 20 }}>

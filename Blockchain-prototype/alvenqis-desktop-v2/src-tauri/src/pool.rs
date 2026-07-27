@@ -132,7 +132,7 @@ async fn get_json_tracked(
                     .clone()
                     .unwrap_or_else(|| "Pool connection circuit is open.".into()),
             ),
-            connection,
+            *connection,
         ));
     }
     let started = Instant::now();

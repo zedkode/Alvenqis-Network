@@ -206,7 +206,7 @@ async fn tracked_request(
                     .clone()
                     .unwrap_or_else(|| "Connection circuit is open.".into()),
             ),
-            connection,
+            *connection,
         ));
     }
 

@@ -69,6 +69,7 @@ def main() -> None:
         "DEPLOYMENT_SOURCE": "build",
         "ALVENQIS_HOST_WORKSPACE": str(workspace),
         "ALVENQIS_HOST_REPO": str(prototype_root),
+        "ALVENQIS_HOST_ROOT": str(repo_root),
         "ALVENQIS_VERSION": args.version,
         "ALVENQIS_RUNTIME_IMAGE": "alvenqis-runtime",
         "ALVENQIS_OPS_IMAGE": "alvenqis-ops",

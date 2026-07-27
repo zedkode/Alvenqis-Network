@@ -114,11 +114,11 @@ fn circuits() -> &'static Mutex<HashMap<String, Circuit>> {
     CIRCUITS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub fn begin(key: &str, endpoint: &str) -> Result<(), ConnectionAvailability> {
+pub fn begin(key: &str, endpoint: &str) -> Result<(), Box<ConnectionAvailability>> {
     begin_at(key, endpoint, unix_now())
 }
 
-fn begin_at(key: &str, endpoint: &str, now: u64) -> Result<(), ConnectionAvailability> {
+fn begin_at(key: &str, endpoint: &str, now: u64) -> Result<(), Box<ConnectionAvailability>> {
     let mut states = circuits().lock();
     let circuit = states
         .entry(key.into())
@@ -140,7 +140,7 @@ fn begin_at(key: &str, endpoint: &str, now: u64) -> Result<(), ConnectionAvailab
             Some("Circuit is open after repeated connection failures.".into()),
         );
         availability.checked_at_unix_seconds = now;
-        return Err(availability);
+        return Err(Box::new(availability));
     }
 
     if circuit.phase == CircuitPhase::HalfOpen && circuit.probe_in_flight {
@@ -150,7 +150,7 @@ fn begin_at(key: &str, endpoint: &str, now: u64) -> Result<(), ConnectionAvailab
             Some("Circuit recovery probe is already in progress.".into()),
         );
         availability.checked_at_unix_seconds = now;
-        return Err(availability);
+        return Err(Box::new(availability));
     }
 
     if circuit.phase == CircuitPhase::HalfOpen {

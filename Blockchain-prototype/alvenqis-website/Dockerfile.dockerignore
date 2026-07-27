@@ -12,6 +12,4 @@
 **/release-staging
 **/state
 Blockchain-prototype/alvenqis-release/apps
-Blockchain-docs/internal
-Blockchain-docs/review
 *.log

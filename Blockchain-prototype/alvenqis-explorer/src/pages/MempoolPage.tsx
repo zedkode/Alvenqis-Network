@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "../lib/router";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyPanel, ErrorPanel, LoadingPanel } from "../components/StatePanels";
 import { SummaryCard } from "../components/SummaryCard";

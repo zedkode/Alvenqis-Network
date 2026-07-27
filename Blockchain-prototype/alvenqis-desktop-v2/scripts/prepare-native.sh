@@ -24,6 +24,7 @@ fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPO="$(cd "$ROOT/.." && pwd)"
+WORKSPACE_ROOT="$(cd "$REPO/.." && pwd)"
 HELPER_MANIFEST="$ROOT/native/keystore-helper/Cargo.toml"
 BIN_DIR="$ROOT/src-tauri/binaries"
 RES_DIR="$ROOT/src-tauri/resources"
@@ -85,16 +86,21 @@ stage_operator_and_assets() {
     fi
   done
 
-  # Optional genesis review artifacts
-  if [[ -d "$REPO/docs/release" ]]; then
-    mkdir -p "$RES_DIR/docs/release"
-    for f in GENESIS_APPROVAL.mainnet-candidate.json GENESIS_REVIEW.mainnet-candidate.json; do
-      if [[ -f "$REPO/docs/release/$f" ]]; then
-        cp -f "$REPO/docs/release/$f" "$RES_DIR/docs/release/$f"
-        echo "  + docs/release/$f"
-      fi
-    done
-  fi
+  release_docs="$WORKSPACE_ROOT/Blockchain-docs/human/release"
+  mkdir -p "$RES_DIR/docs/release"
+  for f in \
+    GENESIS_APPROVAL.mainnet-candidate.json \
+    GENESIS_REVIEW.mainnet-candidate.json \
+    genesis.mainnet-candidate.block.json \
+    NETWORK_MATURITY.md
+  do
+    if [[ ! -f "$release_docs/$f" ]]; then
+      echo "Missing required release document: $release_docs/$f" >&2
+      exit 1
+    fi
+    cp -f "$release_docs/$f" "$RES_DIR/docs/release/$f"
+    echo "  + docs/release/$f"
+  done
 
   # Static explorer (built frontend) if present
   if [[ -d "$REPO/alvenqis-explorer/dist" ]]; then

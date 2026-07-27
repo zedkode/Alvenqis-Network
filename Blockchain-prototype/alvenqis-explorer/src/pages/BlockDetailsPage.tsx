@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "../lib/router";
 import { fetchJson, IndexedBlock, IndexedTransaction } from "../lib/api";
 import { formatAtomic, formatTimestamp } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";

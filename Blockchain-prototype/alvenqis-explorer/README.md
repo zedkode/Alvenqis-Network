@@ -1,6 +1,6 @@
 # alvenqis-explorer
 
-Status: Draft / Mainnet Candidate / Prototype / Not Live Mainnet
+Status: Mainnet Candidate / Read-only public explorer
 
 This app provides a read-only Mainnet Candidate explorer UI served exclusively by `alvenqis-rpc-gateway`.
 

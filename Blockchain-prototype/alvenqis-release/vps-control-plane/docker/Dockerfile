@@ -3,7 +3,7 @@ FROM rust:1.88-bookworm AS builder
 ENV CARGO_BUILD_JOBS=2
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential ca-certificates clang cmake libssl-dev pkg-config python3 && rm -rf /var/lib/apt/lists/*
-COPY . .
+COPY Blockchain-prototype .
 RUN --mount=type=cache,id=alvenqis-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=alvenqis-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=alvenqis-cargo-target,target=/src/target,sharing=locked \
@@ -28,12 +28,12 @@ COPY --from=builder /out/alvenqis-rpc-gateway /usr/local/bin/alvenqis-rpc-gatewa
 COPY --from=builder /out/alvenqis-indexer /usr/local/bin/alvenqis-indexer
 COPY --from=builder /out/alvenqis-vps-admin /usr/local/bin/alvenqis-vps-admin
 COPY --from=builder /out/alvenqis-mining-pool /usr/local/bin/alvenqis-mining-pool
-COPY alvenqis-release/vps-control-plane/docker/entrypoint.sh /usr/local/bin/alvenqis-entrypoint
-COPY alvenqis-release/vps-control-plane/docker/indexer-loop.sh /usr/local/bin/alvenqis-indexer-loop
-COPY alvenqis-release/vps-control-plane/docker/pool-supervisor.sh /usr/local/bin/alvenqis-pool-supervisor
-COPY alvenqis-release/vps-control-plane/docker/templates /app/templates
-COPY configs /app/configs
-COPY docs/release /app/docs/release
+COPY Blockchain-prototype/alvenqis-release/vps-control-plane/docker/entrypoint.sh /usr/local/bin/alvenqis-entrypoint
+COPY Blockchain-prototype/alvenqis-release/vps-control-plane/docker/indexer-loop.sh /usr/local/bin/alvenqis-indexer-loop
+COPY Blockchain-prototype/alvenqis-release/vps-control-plane/docker/pool-supervisor.sh /usr/local/bin/alvenqis-pool-supervisor
+COPY Blockchain-prototype/alvenqis-release/vps-control-plane/docker/templates /app/templates
+COPY Blockchain-prototype/configs /app/configs
+COPY Blockchain-docs/human/release /app/docs/release
 RUN chmod 0755 /usr/local/bin/alvenqis-* && mkdir -p /config /data/.alvenqis-mainnet/chain /data/.alvenqis-mainnet/mempool /data/.alvenqis-mainnet/indexer /data/.alvenqis-mainnet/node /data/control /data/pool && chown -R alvenqis:alvenqis /config /data /app
 USER alvenqis
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/local/bin/alvenqis-entrypoint"]

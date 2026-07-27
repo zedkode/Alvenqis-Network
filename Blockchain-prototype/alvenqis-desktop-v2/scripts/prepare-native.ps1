@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Repo = Split-Path -Parent $Root
+$WorkspaceRoot = Split-Path -Parent $Repo
 $HelperManifest = Join-Path $Root "native\keystore-helper\Cargo.toml"
 $BinDir = Join-Path $Root "src-tauri\binaries"
 $ResDir = Join-Path $Root "src-tauri\resources"
@@ -50,6 +51,18 @@ New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ResDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ResBin | Out-Null
 
+# Never mix Linux ELF sidecars into a Windows bundle.
+foreach ($staleLinuxBinary in @(
+  "alvenqis-keystore-helper",
+  "alvenqis-miner",
+  "alvenqis-node",
+  "alvenqis-rpc-gateway",
+  "alvenqis-indexer"
+)) {
+  Remove-Item -LiteralPath (Join-Path $BinDir $staleLinuxBinary) -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath (Join-Path $ResBin $staleLinuxBinary) -Force -ErrorAction SilentlyContinue
+}
+
 Write-Host "==> Building alvenqis-keystore-helper (release)"
 cargo build --release --locked --manifest-path $HelperManifest
 if ($LASTEXITCODE -ne 0) { throw "keystore helper build failed" }
@@ -83,6 +96,39 @@ foreach ($logo in $logoCandidates) {
   }
 }
 
+$configsDir = Join-Path $ResDir "configs"
+New-Item -ItemType Directory -Force -Path $configsDir | Out-Null
+foreach ($configName in @(
+  "mainnet-candidate.toml",
+  "genesis.mainnet-candidate.toml",
+  "local.toml",
+  "rpc.mainnet-candidate.toml",
+  "rpc.local.toml"
+)) {
+  $configSource = Join-Path $Repo "configs\$configName"
+  if (Test-Path -LiteralPath $configSource) {
+    Copy-Item -LiteralPath $configSource -Destination (Join-Path $configsDir $configName) -Force
+    Write-Host "  + configs\$configName"
+  }
+}
+
+$releaseDocsSource = Join-Path $WorkspaceRoot "Blockchain-docs\human\release"
+$releaseDocsDestination = Join-Path $ResDir "docs\release"
+New-Item -ItemType Directory -Force -Path $releaseDocsDestination | Out-Null
+foreach ($releaseFile in @(
+  "GENESIS_APPROVAL.mainnet-candidate.json",
+  "GENESIS_REVIEW.mainnet-candidate.json",
+  "genesis.mainnet-candidate.block.json",
+  "NETWORK_MATURITY.md"
+)) {
+  $releaseSource = Join-Path $releaseDocsSource $releaseFile
+  if (-not (Test-Path -LiteralPath $releaseSource)) {
+    throw "Missing required release document: $releaseSource"
+  }
+  Copy-Item -LiteralPath $releaseSource -Destination (Join-Path $releaseDocsDestination $releaseFile) -Force
+  Write-Host "  + docs\release\$releaseFile"
+}
+
 if ($WithSidecars) {
   Write-Host "==> Building monorepo release sidecars (Windows)"
   Push-Location $Repo
@@ -105,20 +151,6 @@ if ($WithSidecars) {
       Write-Host "  + bin\$name.exe"
     } else {
       Write-Host "  ! missing $name.exe"
-    }
-  }
-
-  $Stage = Join-Path $Repo "alvenqis-desktop\installer\stage"
-  if (Test-Path $Stage) {
-    Write-Host "==> Syncing optional installer stage extras"
-    foreach ($item in @("scripts", "configs", "docs", "explorer")) {
-      $from = Join-Path $Stage $item
-      if (Test-Path $from) {
-        $to = Join-Path $ResDir $item
-        if (Test-Path $to) { Remove-Item $to -Recurse -Force }
-        Copy-Item $from $to -Recurse -Force
-        Write-Host "  + $item"
-      }
     }
   }
 

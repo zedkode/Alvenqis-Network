@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "../lib/router";
 import { PageHeader } from "../components/PageHeader";
 import { EmptyPanel, ErrorPanel, LoadingPanel } from "../components/StatePanels";
 import { AddressActivity, fetchJson, IndexedBlock, RpcTransactionResponse } from "../lib/api";

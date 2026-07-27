@@ -7,4 +7,6 @@ COPY nginx.conf.template /etc/alvenqis/nginx.conf.template
 
 RUN chmod 0555 /usr/local/bin/alvenqis-gateway-entrypoint
 
+USER nginx
+
 ENTRYPOINT ["/usr/local/bin/alvenqis-gateway-entrypoint"]

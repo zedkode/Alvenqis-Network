@@ -192,6 +192,100 @@ fn copy_missing_tree(source: &Path, destination: &Path) -> AppResult<()> {
     Ok(())
 }
 
+pub fn settings_path() -> PathBuf {
+    user_data_dir().join("settings.json")
+}
+
+fn is_workspace(candidate: &Path) -> bool {
+    has_bundled_node(candidate)
+        || candidate
+            .join("scripts")
+            .join("local")
+            .join("alvenqis-local.ps1")
+            .exists()
+        || candidate
+            .join("scripts")
+            .join("local")
+            .join("start-all.sh")
+            .exists()
+        || candidate.join("alvenqis-core").join("Cargo.toml").exists()
+}
+
+fn has_operator_script(candidate: &Path) -> bool {
+    candidate.join("alvenqis.ps1").exists() || candidate.join("alvenqis.sh").exists()
+}
+
+fn has_bundled_node(candidate: &Path) -> bool {
+    let binary = if cfg!(windows) {
+        "alvenqis-node.exe"
+    } else {
+        "alvenqis-node"
+    };
+    candidate.join("bin").join(binary).exists()
+}
+
+fn has_bundled_miner(candidate: &Path) -> bool {
+    let binary = if cfg!(windows) {
+        "alvenqis-miner.exe"
+    } else {
+        "alvenqis-miner"
+    };
+    candidate.join("bin").join(binary).exists()
+}
+
+pub fn keystore_helper_path(_workspace: &Path) -> PathBuf {
+    let binary = if cfg!(windows) {
+        "alvenqis-keystore-helper.exe"
+    } else {
+        "alvenqis-keystore-helper"
+    };
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let candidates = [
+                parent.join(binary),
+                parent.join("bin").join(binary),
+                parent.join("resources").join("bin").join(binary),
+            ];
+            for path in candidates {
+                if path.exists() {
+                    return path;
+                }
+            }
+        }
+    }
+
+    if let Some(resource) = RESOURCE_ROOT.get() {
+        for root in resource_candidates(resource) {
+            for path in [root.join("bin").join(binary), root.join(binary)] {
+                if path.exists() {
+                    return path;
+                }
+            }
+        }
+    }
+
+    let tauri_bin = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("binaries")
+        .join(binary);
+    if tauri_bin.exists() {
+        return tauri_bin;
+    }
+
+    let native = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("native")
+        .join("keystore-helper")
+        .join("target")
+        .join("release")
+        .join(binary);
+    if native.exists() {
+        return native;
+    }
+
+    tauri_bin
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,102 +443,4 @@ mod tests {
         fs::create_dir_all(&path).unwrap();
         path
     }
-}
-
-pub fn settings_path() -> PathBuf {
-    user_data_dir().join("settings.json")
-}
-
-fn is_workspace(candidate: &Path) -> bool {
-    has_bundled_node(candidate)
-        || candidate
-            .join("scripts")
-            .join("local")
-            .join("alvenqis-local.ps1")
-            .exists()
-        || candidate
-            .join("scripts")
-            .join("local")
-            .join("start-all.sh")
-            .exists()
-        || candidate.join("alvenqis-core").join("Cargo.toml").exists()
-}
-
-fn has_operator_script(candidate: &Path) -> bool {
-    candidate.join("alvenqis.ps1").exists() || candidate.join("alvenqis.sh").exists()
-}
-
-fn has_bundled_node(candidate: &Path) -> bool {
-    let binary = if cfg!(windows) {
-        "alvenqis-node.exe"
-    } else {
-        "alvenqis-node"
-    };
-    candidate.join("bin").join(binary).exists()
-}
-
-fn has_bundled_miner(candidate: &Path) -> bool {
-    let binary = if cfg!(windows) {
-        "alvenqis-miner.exe"
-    } else {
-        "alvenqis-miner"
-    };
-    candidate.join("bin").join(binary).exists()
-}
-
-pub fn keystore_helper_path(_workspace: &Path) -> PathBuf {
-    let binary = if cfg!(windows) {
-        "alvenqis-keystore-helper.exe"
-    } else {
-        "alvenqis-keystore-helper"
-    };
-
-    // 1) Next to the running executable (externalBin install layout)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            let candidates = [
-                parent.join(binary),
-                parent.join("bin").join(binary),
-                parent.join("resources").join("bin").join(binary),
-            ];
-            for path in candidates {
-                if path.exists() {
-                    return path;
-                }
-            }
-        }
-    }
-
-    // 2) Resource root staged layout
-    if let Some(resource) = RESOURCE_ROOT.get() {
-        for root in resource_candidates(resource) {
-            for path in [root.join("bin").join(binary), root.join(binary)] {
-                if path.exists() {
-                    return path;
-                }
-            }
-        }
-    }
-
-    // 3) Tauri project binaries (dev after prepare-native)
-    let tauri_bin = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("binaries")
-        .join(binary);
-    if tauri_bin.exists() {
-        return tauri_bin;
-    }
-
-    // 4) Local native crate release build
-    let native = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("native")
-        .join("keystore-helper")
-        .join("target")
-        .join("release")
-        .join(binary);
-    if native.exists() {
-        return native;
-    }
-
-    tauri_bin
 }

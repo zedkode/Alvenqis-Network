@@ -168,6 +168,12 @@ Release/
 !Blockchain-scripts/release/
 Blockchain-scripts/release/*
 !Blockchain-scripts/release/build-windows-installer.ps1
+!Blockchain-scripts/release/build-linux-desktop.sh
+!Blockchain-scripts/release/build-vps-control-plane-bundle.sh
+!Blockchain-scripts/release/release-gate.ps1
+!Blockchain-scripts/release/release-gate.sh
+!Blockchain-scripts/release/setup-wsl-linux-build-host.sh
+!Blockchain-scripts/release/wsl-linux-setup.sh
 x64/
 x86/
 *.o

@@ -3,7 +3,7 @@ name: Linux Desktop Standalone Release
 on:
   push:
     tags:
-      - "v*-linux.*"
+      - "desktop-v*-linux.*"
   workflow_dispatch:
     inputs:
       tag:
@@ -39,7 +39,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: Blockchain-prototype/alvenqis-desktop-tauri/package-lock.json
+          cache-dependency-path: Blockchain-prototype/alvenqis-desktop-v2/package-lock.json
 
       - name: Install Linux packaging dependencies
         run: >-
@@ -55,7 +55,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-publish/linux
-          find Blockchain-prototype/alvenqis-release/apps/linux -maxdepth 1 -type f -exec cp {} release-publish/linux/ \;
+          find release-artifacts/linux-v2 -maxdepth 1 -type f -exec cp {} release-publish/linux/ \;
           test -n "$(find release-publish/linux -type f -print -quit)"
           (
             cd release-publish/linux

@@ -2,12 +2,12 @@ param(
     [switch]$SkipChecks,
     [switch]$StageOnly,
     [switch]$AllowUnsigned,
-    [ValidateSet("v1", "v2")]
-    [string]$DesktopChannel = "v1"
+    [ValidateSet("v2")]
+    [string]$DesktopChannel = "v2"
 )
 
 # Builds Alvenqis Control Center (Tauri 2) for Windows — NSIS + portable stage.
-# Product path: Tauri only (alvenqis-desktop-tauri).
+# Product path: Tauri desktop-v2 only.
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -25,6 +25,8 @@ $installerHooks = Join-Path $desktop "src-tauri\windows\installer-hooks.nsh"
 $bundleRoot = Join-Path $desktop "src-tauri\target\release\bundle"
 $signingConfig = $null
 $signTool = $null
+$thumbprint = $null
+$timestampUrl = $null
 
 if (-not (Test-Path -LiteralPath $desktop)) {
     throw "Tauri desktop project not found: $desktop"
@@ -135,9 +137,24 @@ try {
     npm ci
     if ($LASTEXITCODE -ne 0) { throw "npm ci failed in $desktopFolder" }
 
-    # Keystore helper + optional miner/node sidecars for full operator builds
+    # Keystore helper + miner/node sidecars for full operator builds.
     npm run prepare:native:sidecars
     if ($LASTEXITCODE -ne 0) { throw "prepare:native:sidecars failed" }
+
+    if ($signingConfig) {
+        $prepackageExecutables = @(
+            Get-ChildItem -LiteralPath (Join-Path $desktop "src-tauri\binaries") -Filter "*.exe" -File -ErrorAction SilentlyContinue
+            Get-ChildItem -LiteralPath (Join-Path $desktop "src-tauri\resources\bin") -Filter "*.exe" -File -ErrorAction SilentlyContinue
+            Get-Item -LiteralPath (Join-Path $desktop "native\keystore-helper\target\release\alvenqis-keystore-helper.exe") -ErrorAction SilentlyContinue
+        ) | Where-Object { $_ } | Sort-Object FullName -Unique
+        foreach ($executable in $prepackageExecutables) {
+            & $signTool sign /sha1 $thumbprint /fd SHA256 /tr $timestampUrl /td SHA256 $executable.FullName
+            if ($LASTEXITCODE -ne 0) {
+                throw "Authenticode signing failed before packaging: $($executable.FullName)"
+            }
+        }
+        Write-Host "Signed $($prepackageExecutables.Count) helper/sidecar executable(s) before packaging."
+    }
 
     if ($StageOnly) {
         npm run build
@@ -243,6 +260,14 @@ if (-not $AllowUnsigned) {
     $signedFiles = @($copied | Where-Object { [System.IO.Path]::GetExtension($_) -eq ".exe" })
     if ($releaseExe) {
         $signedFiles += $releaseExe.FullName
+    }
+    $signedFiles += @(
+        Get-ChildItem -LiteralPath (Join-Path $desktop "src-tauri\resources\bin") -Filter "*.exe" -File -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+    )
+    $keystoreHelper = Join-Path $desktop "src-tauri\target\release\alvenqis-keystore-helper.exe"
+    if (Test-Path -LiteralPath $keystoreHelper) {
+        $signedFiles += $keystoreHelper
     }
     foreach ($signedFile in ($signedFiles | Sort-Object -Unique)) {
         & $signTool verify /pa /all /v $signedFile

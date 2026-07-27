@@ -19,8 +19,8 @@ x-runtime-image: &runtime-image
   <<: *service-guardrails
   image: ${ALVENQIS_RUNTIME_IMAGE:-ghcr.io/zedkode/alvenqis-runtime}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
   build:
-    context: ${ALVENQIS_HOST_REPO:-../..}
-    dockerfile: alvenqis-release/vps-control-plane/docker/Dockerfile
+    context: ${ALVENQIS_HOST_ROOT:-../../..}
+    dockerfile: Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile
 
 x-runtime-common: &runtime-common
   <<: *runtime-image
@@ -249,8 +249,8 @@ services:
     <<: *service-guardrails
     image: ${ALVENQIS_WEBSITE_IMAGE:-ghcr.io/zedkode/alvenqis-website}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
     build:
-      context: ${ALVENQIS_HOST_REPO:-../..}/alvenqis-website
-      dockerfile: Dockerfile
+      context: ${ALVENQIS_HOST_ROOT:-../../..}
+      dockerfile: Blockchain-prototype/alvenqis-website/Dockerfile
       args:
         VITE_ALVENQIS_RPC_URL: https://${RPC_HOST}
         VITE_ALVENQIS_POOL_URL: https://${POOL_HOST}

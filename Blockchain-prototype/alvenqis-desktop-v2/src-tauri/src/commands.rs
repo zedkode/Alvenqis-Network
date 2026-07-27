@@ -203,12 +203,12 @@ fn explorer_url(explorer: &str, path: &str) -> AppResult<url::Url> {
     let clean = path.trim().trim_start_matches('/');
     let base = format!("{}/", explorer.trim_end_matches('/'));
     let url = if clean.is_empty() {
-        url::Url::parse(&explorer)?
+        url::Url::parse(explorer)?
     } else {
         url::Url::parse(&base)?.join(clean)?
     };
     if url.origin().ascii_serialization()
-        != url::Url::parse(&explorer)?.origin().ascii_serialization()
+        != url::Url::parse(explorer)?.origin().ascii_serialization()
     {
         return Err(crate::error::AppError::msg(
             "Explorer path escapes the configured public Explorer origin",
@@ -403,12 +403,12 @@ mod tests {
 
     #[test]
     fn explorer_url_keeps_routes_on_configured_origin() {
-        let url = explorer_url("https://dohotstudio.com/explorer", "blocks/42").unwrap();
-        assert_eq!(url.as_str(), "https://dohotstudio.com/explorer/blocks/42");
+        let url = explorer_url("https://explorer.dohotstudio.com", "blocks/42").unwrap();
+        assert_eq!(url.as_str(), "https://explorer.dohotstudio.com/blocks/42");
     }
 
     #[test]
     fn explorer_url_rejects_origin_escape() {
-        assert!(explorer_url("https://dohotstudio.com/explorer", "https://example.com").is_err());
+        assert!(explorer_url("https://explorer.dohotstudio.com", "https://example.com").is_err());
     }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "../lib/router";
 import { fetchJson, RpcTransactionResponse } from "../lib/api";
 import { formatAtomic } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
@@ -38,7 +38,7 @@ export function TransactionDetailsPage() {
     <>
       <PageHeader
         title="Transaction Details"
-        description="Read-only local transaction metadata, indexing linkage and draft signature state."
+        description="Read-only transaction metadata, indexing linkage and signature state from the configured RPC."
       />
       {error ? <ErrorPanel message={error} /> : null}
       {!transaction && !error ? <LoadingPanel message="Loading indexed transaction..." /> : null}

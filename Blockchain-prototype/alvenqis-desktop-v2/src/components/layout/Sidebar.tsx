@@ -87,7 +87,7 @@ export function Sidebar({
         </div>
         <div className="brand-name">ALVENQIS</div>
         <div className="brand-subtitle">Control Center</div>
-        <span className="brand-version">V2 PREVIEW</span>
+        <span className="brand-version">V2</span>
       </div>
 
       <nav className="nav" aria-label="Primary">

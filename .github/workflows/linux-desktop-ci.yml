@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "Blockchain-prototype/alvenqis-desktop-tauri/**"
+      - "Blockchain-prototype/alvenqis-desktop-v2/**"
       - "Blockchain-prototype/alvenqis-core/**"
       - "Blockchain-prototype/alvenqis-node/**"
       - "Blockchain-prototype/alvenqis-rpc-gateway/**"
@@ -17,7 +17,7 @@ on:
       - ".github/workflows/linux-desktop-ci.yml"
   pull_request:
     paths:
-      - "Blockchain-prototype/alvenqis-desktop-tauri/**"
+      - "Blockchain-prototype/alvenqis-desktop-v2/**"
       - "Blockchain-prototype/alvenqis-core/**"
       - "Blockchain-prototype/alvenqis-node/**"
       - "Blockchain-prototype/alvenqis-rpc-gateway/**"
@@ -55,7 +55,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: Blockchain-prototype/alvenqis-desktop-tauri/package-lock.json
+          cache-dependency-path: Blockchain-prototype/alvenqis-desktop-v2/package-lock.json
 
       - name: Install Linux packaging dependencies
         run: >-
@@ -72,4 +72,4 @@ jobs:
         with:
           name: alvenqis-linux-desktop
           if-no-files-found: error
-          path: Blockchain-prototype/alvenqis-release/apps/linux/*
+          path: release-artifacts/linux-v2/*

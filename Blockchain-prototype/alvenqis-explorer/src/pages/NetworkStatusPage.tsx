@@ -66,7 +66,7 @@ export function NetworkStatusPage() {
     <>
       <PageHeader
         title="Network Status"
-        description="Static and dynamic local network status pulled from the local RPC gateway and stored index."
+        description="Live network, indexer, P2P, fleet and pool status pulled from the configured RPC gateway."
       />
       {error ? <ErrorPanel message={error} /> : null}
       {!state && !error ? <LoadingPanel message="Loading network metadata..." /> : null}

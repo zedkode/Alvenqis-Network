@@ -718,18 +718,6 @@ async fn run_p2p_service_async(
                     &mut discovered_peers,
                     &mut seed_states,
                 )?;
-                reputation.persist(&runtime_dir)?;
-                persist_status(
-                    &runtime_dir,
-                    &config,
-                    &data_dir,
-                    &local_peer_id,
-                    &mut status,
-                    &peers,
-                    &mut network_miners,
-                    &reputation,
-                    discovered_peers.len(),
-                )?;
             }
         }
     }

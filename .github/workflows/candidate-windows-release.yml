@@ -3,7 +3,6 @@ name: Candidate Windows Release
 on:
   push:
     tags:
-      - "v*-candidate.*"
       - "desktop-v*-candidate.*"
   workflow_dispatch:
     inputs:
@@ -85,7 +84,6 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
-            Blockchain-prototype/alvenqis-desktop-tauri/package-lock.json
             Blockchain-prototype/alvenqis-desktop-v2/package-lock.json
             Blockchain-prototype/alvenqis-explorer/package-lock.json
 
@@ -93,27 +91,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "$RELEASE_TAG" in
-            desktop-v2.*)
-              DESKTOP_CHANNEL=v2
-              PACKAGE=./Blockchain-prototype/alvenqis-desktop-v2/package.json
-              EXPECTED_PREFIX=desktop-v
-              ;;
-            desktop-v1.*)
-              DESKTOP_CHANNEL=v1
-              PACKAGE=./Blockchain-prototype/alvenqis-desktop-tauri/package.json
-              EXPECTED_PREFIX=desktop-v
-              ;;
-            v*)
-              DESKTOP_CHANNEL=v1
-              PACKAGE=./Blockchain-prototype/alvenqis-desktop-tauri/package.json
-              EXPECTED_PREFIX=v
-              ;;
-            *)
-              echo "Unsupported desktop release tag: $RELEASE_TAG" >&2
-              exit 1
-              ;;
-          esac
+          DESKTOP_CHANNEL=v2
+          PACKAGE=./Blockchain-prototype/alvenqis-desktop-v2/package.json
+          EXPECTED_PREFIX=desktop-v
           DESKTOP_VERSION="$(node -e "const j=require('$PACKAGE'); process.stdout.write(j.version)")"
           EXPECTED_TAG_PREFIX="${EXPECTED_PREFIX}${DESKTOP_VERSION}-candidate."
           if [[ "$RELEASE_TAG" != "$EXPECTED_TAG_PREFIX"* ]]; then
@@ -157,13 +137,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-publish/windows
-          if [[ "$DESKTOP_CHANNEL" == "v2" ]]; then
-            product="Alvenqis Control Center V2"
-            slug="Alvenqis-Control-Center-V2"
-          else
-            product="Alvenqis Control Center"
-            slug="Alvenqis-Control-Center"
-          fi
+          product="Alvenqis Control Center V2"
+          slug="Alvenqis-Control-Center-V2"
           cp "release-artifacts/${product}_${DESKTOP_VERSION}_x64-setup.exe" \
             "release-publish/windows/${slug}-${DESKTOP_VERSION}-Windows-x64-Setup.exe"
           cp "release-artifacts/${slug}-${DESKTOP_VERSION}-Windows-x64-Portable.zip" \
@@ -206,7 +181,7 @@ jobs:
           cat > release-notes.md <<'EOF'
           ## Mainnet Candidate prerelease — not public Mainnet
 
-          This release contains the verified Windows build for one explicit desktop channel. V1 and V2 are published separately so their updaters cannot cross-install the other application.
+          This release contains the verified Alvenqis Control Center V2 Windows build.
 
           The desktop product is Tauri-based. Electron, CPU mining and OpenCL mining are not shipped. Pool mining uses TLS-secured Stratum and CUDA GPUs only. Verify `SHA256SUMS` before testing any asset.
           EOF

@@ -3,11 +3,11 @@ name: Candidate Linux Release
 on:
   push:
     tags:
-      - "v*-candidate.*"
+      - "desktop-v*-candidate.*"
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing candidate tag, for example v1.0.0-candidate.1
+        description: Existing candidate tag, for example desktop-v2.0.0-candidate.1
         required: true
         type: string
       force_build:
@@ -85,7 +85,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: |
-            Blockchain-prototype/alvenqis-desktop-tauri/package-lock.json
+            Blockchain-prototype/alvenqis-desktop-v2/package-lock.json
             Blockchain-prototype/alvenqis-explorer/package-lock.json
 
       - name: Install Linux packaging dependencies
@@ -98,9 +98,9 @@ jobs:
       - name: Verify tag matches desktop version
         run: |
           set -euo pipefail
-          DESKTOP_VERSION="$(node -e "const j=require('./Blockchain-prototype/alvenqis-desktop-tauri/package.json'); process.stdout.write(j.version)")"
+          DESKTOP_VERSION="$(node -e "const j=require('./Blockchain-prototype/alvenqis-desktop-v2/package.json'); process.stdout.write(j.version)")"
           case "$RELEASE_TAG" in
-            "v${DESKTOP_VERSION}-candidate."*) ;;
+            "desktop-v${DESKTOP_VERSION}-candidate."*) ;;
             *)
               echo "Release tag $RELEASE_TAG does not match desktop version $DESKTOP_VERSION" >&2
               exit 1
@@ -114,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-publish/linux
-          find Blockchain-prototype/alvenqis-release/apps/linux -maxdepth 1 -type f -exec cp {} release-publish/linux/ \;
+          find release-artifacts/linux-v2 -maxdepth 1 -type f -exec cp {} release-publish/linux/ \;
 
           if find release-publish/linux -iname '*electron*' | grep -q .; then
             echo "Electron artifacts must not ship" >&2

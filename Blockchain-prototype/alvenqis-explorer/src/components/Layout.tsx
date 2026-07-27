@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink } from "../lib/router";
 import { fetchJson, NetworkResponse, RPC_BASE_URL } from "../lib/api";
 import { StatusBadge } from "./StatusBadge";
 import { ExplorerSearch } from "./ExplorerSearch";

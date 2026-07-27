@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 
 pub const DEFAULT_RPC_URL: &str = alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_RPC;
 pub const DEFAULT_MINING_RPC_URL: &str = alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_MINING_RPC;
-pub const DEFAULT_EXPLORER_URL: &str = "https://dohotstudio.com/explorer";
+pub const DEFAULT_EXPLORER_URL: &str = "https://explorer.dohotstudio.com";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]

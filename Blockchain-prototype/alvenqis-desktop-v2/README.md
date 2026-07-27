@@ -1,7 +1,7 @@
 # Alvenqis Control Center V2
 
-**Status:** Mainnet Candidate / Prototype — UI/UX rebuild branch product
-**Package:** `alvenqis-desktop-v2` (`2.0.0-candidate`)
+**Status:** Mainnet Candidate
+**Package:** `alvenqis-desktop-v2` (`2.0.0`)
 **Base:** evolved from the original Control Center implementation (logic, Rust bridge, mining, wallet)
 
 V2 is a **presentation-layer evolution**: denser shell, glass panels, motion, Analytics
@@ -47,7 +47,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
 The public web Explorer is configured independently from the JSON RPC gateway under
-**Settings -> Network -> Explorer**. The default is `https://dohotstudio.com/explorer`;
+**Settings -> Network -> Explorer**. The default is `https://explorer.dohotstudio.com`;
 custom remote Explorer endpoints must use HTTPS.
 
 ## Full user guide

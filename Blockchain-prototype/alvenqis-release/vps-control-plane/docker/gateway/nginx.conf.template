@@ -1,4 +1,3 @@
-user nginx;
 worker_processes auto;
 worker_rlimit_nofile 65536;
 pid /tmp/nginx.pid;
