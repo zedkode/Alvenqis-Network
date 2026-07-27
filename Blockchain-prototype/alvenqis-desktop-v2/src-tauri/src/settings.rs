@@ -43,6 +43,12 @@ pub struct AppSettings {
     pub default_miner_backend: String,
     pub default_gpu_intensity: u8,
     #[serde(default)]
+    pub default_gpu_batch_size: u64,
+    #[serde(default = "default_template_refresh_seconds")]
+    pub default_template_refresh_seconds: u64,
+    #[serde(default = "default_status_interval_seconds")]
+    pub default_status_interval_seconds: u64,
+    #[serde(default)]
     pub default_gpu_devices: Vec<String>,
     pub default_pool_url: String,
     /// Saved pool endpoints for multi-pool Control Center selection (HTTP or HTTPS base URLs).
@@ -59,6 +65,8 @@ pub struct AppSettings {
     pub stratum_skip_tls_verify: bool,
     #[serde(default)]
     pub stratum_password: String,
+    #[serde(default = "default_stratum_timeout_seconds")]
+    pub stratum_timeout_seconds: u64,
     #[serde(default = "default_miner_custom_commands")]
     pub miner_custom_commands: Vec<String>,
     pub default_page: String,
@@ -67,7 +75,19 @@ pub struct AppSettings {
 }
 
 fn default_stratum_port() -> u16 {
-    3333
+    alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_STRATUM_PORT
+}
+
+fn default_template_refresh_seconds() -> u64 {
+    3
+}
+
+fn default_status_interval_seconds() -> u64 {
+    2
+}
+
+fn default_stratum_timeout_seconds() -> u64 {
+    20
 }
 
 fn default_miner_custom_commands() -> Vec<String> {
@@ -114,18 +134,23 @@ impl Default for AppSettings {
             show_technical_labels: true,
             // Pool uses lower share difficulty (VarDiff) so the miner shows progress;
             // solo RPC requires full network difficulty (often 30+ bits) and can look "broken".
-            default_miner_mode: "pool".into(),
+            default_miner_mode: "stratum".into(),
             default_miner_backend: "cuda".into(),
             default_gpu_intensity: 90,
+            default_gpu_batch_size: 0,
+            default_template_refresh_seconds: default_template_refresh_seconds(),
+            default_status_interval_seconds: default_status_interval_seconds(),
             default_gpu_devices: Vec::new(),
             default_pool_url: alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_POOL.to_owned(),
             pool_urls: vec![alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_POOL.to_owned()],
             default_worker_name: "desktop-01".into(),
-            stratum_host: String::new(),
+            stratum_host:
+                alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_STRATUM_HOST.to_owned(),
             stratum_port: default_stratum_port(),
             stratum_use_tls: true,
             stratum_skip_tls_verify: false,
             stratum_password: String::new(),
+            stratum_timeout_seconds: default_stratum_timeout_seconds(),
             miner_custom_commands: default_miner_custom_commands(),
             default_page: "overview".into(),
             open_external_explorer: true,
@@ -145,7 +170,7 @@ fn load_from_disk() -> AppSettings {
     match fs::read_to_string(&path) {
         Ok(raw) => {
             let mut settings: AppSettings = serde_json::from_str(&raw).unwrap_or_default();
-            migrate_official_mining_endpoints_to_http(&mut settings);
+            migrate_mining_settings(&mut settings);
             let _ = persist(&settings);
             settings
         }
@@ -153,7 +178,7 @@ fn load_from_disk() -> AppSettings {
     }
 }
 
-fn migrate_official_mining_endpoints_to_http(settings: &mut AppSettings) {
+fn migrate_mining_settings(settings: &mut AppSettings) {
     if settings.mining_rpc_url.eq_ignore_ascii_case(DEFAULT_RPC_URL) {
         settings.mining_rpc_url = DEFAULT_MINING_RPC_URL.to_owned();
     }
@@ -166,6 +191,13 @@ fn migrate_official_mining_endpoints_to_http(settings: &mut AppSettings) {
         if pool_url.eq_ignore_ascii_case(legacy_pool) {
             *pool_url = alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_POOL.to_owned();
         }
+    }
+    if settings.default_miner_mode == "pool" {
+        settings.default_miner_mode = "stratum".into();
+    }
+    if settings.stratum_host.trim().is_empty() {
+        settings.stratum_host =
+            alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_STRATUM_HOST.to_owned();
     }
 }
 
@@ -215,6 +247,16 @@ pub fn update(patch: serde_json::Value) -> AppResult<AppSettings> {
     settings.auto_update_interval_secs = settings.auto_update_interval_secs.clamp(60, 86_400);
     settings.keep_logs_days = settings.keep_logs_days.clamp(1, 365);
     settings.default_gpu_intensity = settings.default_gpu_intensity.clamp(1, 100);
+    settings.default_gpu_batch_size = if settings.default_gpu_batch_size == 0 {
+        0
+    } else {
+        settings.default_gpu_batch_size.clamp(256, 131_072)
+    };
+    settings.default_template_refresh_seconds =
+        settings.default_template_refresh_seconds.clamp(1, 60);
+    settings.default_status_interval_seconds =
+        settings.default_status_interval_seconds.clamp(1, 60);
+    settings.stratum_timeout_seconds = settings.stratum_timeout_seconds.clamp(5, 120);
     settings.default_gpu_devices = settings
         .default_gpu_devices
         .into_iter()
@@ -222,8 +264,9 @@ pub fn update(patch: serde_json::Value) -> AppResult<AppSettings> {
         .filter(|id| !id.is_empty())
         .take(16)
         .collect();
-    if settings.default_miner_mode != "solo"
-        && settings.default_miner_mode != "pool"
+    if settings.default_miner_mode == "pool" {
+        settings.default_miner_mode = "stratum".into();
+    } else if settings.default_miner_mode != "solo"
         && settings.default_miner_mode != "stratum"
     {
         settings.default_miner_mode = "solo".into();
@@ -234,6 +277,39 @@ pub fn update(patch: serde_json::Value) -> AppResult<AppSettings> {
         "gpu" | "cuda" | "auto" => "cuda".into(),
         _ => "cuda".into(),
     };
+    settings.stratum_host = settings.stratum_host.trim().to_owned();
+    if settings.stratum_host.is_empty()
+        || settings.stratum_host.contains("://")
+        || settings.stratum_host.chars().any(char::is_whitespace)
+    {
+        return Err(AppError::msg(
+            "Stratum host must be a DNS name or IP address without a URL scheme.",
+        ));
+    }
+    settings.default_worker_name = settings.default_worker_name.trim().to_owned();
+    if settings.default_worker_name.is_empty()
+        || settings.default_worker_name.len() > 64
+        || settings
+            .default_worker_name
+            .chars()
+            .any(|ch| ch.is_control() || ch.is_whitespace())
+    {
+        return Err(AppError::msg(
+            "Worker name must contain 1-64 non-whitespace characters.",
+        ));
+    }
+    let local_stratum = matches!(
+        settings.stratum_host.to_ascii_lowercase().as_str(),
+        "127.0.0.1" | "localhost" | "::1" | "[::1]"
+    );
+    if !local_stratum && !settings.stratum_use_tls {
+        return Err(AppError::msg("Remote Stratum requires TLS."));
+    }
+    if !local_stratum && settings.stratum_skip_tls_verify {
+        return Err(AppError::msg(
+            "Remote Stratum certificate verification cannot be disabled.",
+        ));
+    }
     // Multi-pool list: normalize, dedupe, keep default_pool_url first when present.
     let mut pool_urls: Vec<String> = settings
         .pool_urls

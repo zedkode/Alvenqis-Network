@@ -163,6 +163,9 @@ cmake-build-*/
 compile_commands.json
 Debug/
 Release/
+!Blockchain-scripts/release/
+Blockchain-scripts/release/*
+!Blockchain-scripts/release/build-windows-installer.ps1
 x64/
 x86/
 *.o

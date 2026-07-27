@@ -320,7 +320,6 @@ impl UpdateService {
             let result = match *role {
                 "miner" | "keystore" | "node" | "rpc" | "indexer" => install_sidecar(role, path),
                 "control_center_setup" => run_silent_setup(path).await,
-                "control_center_msi" => run_silent_msi(path).await,
                 _ => Ok(()),
             };
             if let Err(err) = result {
@@ -938,18 +937,6 @@ async fn run_silent_setup(path: &Path) -> AppResult<()> {
         return Err(AppError::msg(format!(
             "installer exited with status {status}"
         )));
-    }
-    Ok(())
-}
-
-async fn run_silent_msi(path: &Path) -> AppResult<()> {
-    let status = tokio::process::Command::new("msiexec.exe")
-        .args(["/i", path.to_str().unwrap_or(""), "/qn", "/norestart"])
-        .status()
-        .await
-        .map_err(|e| AppError::msg(format!("msiexec failed: {e}")))?;
-    if !status.success() {
-        return Err(AppError::msg(format!("msiexec status {status}")));
     }
     Ok(())
 }

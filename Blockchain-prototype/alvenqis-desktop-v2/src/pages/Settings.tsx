@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   Bell, Boxes, Cpu, FolderOpen, HardDrive, Info, KeyRound, Monitor, Network,
-  Plug, RefreshCw, RotateCcw, Share2, Shield, ShieldAlert, SlidersHorizontal, Trash2, Wallet
+  Plug, RefreshCw, RotateCcw, Shield, ShieldAlert, SlidersHorizontal, Trash2, Wallet
 } from "lucide-react";
 import { AlvenqisLogo } from "../components/brand/AlvenqisLogo";
 import type {
@@ -35,7 +35,7 @@ const sections: Array<{ id: SectionId; label: string; icon: typeof Monitor; hint
   { id: "general", label: "General", icon: SlidersHorizontal, hint: "Language, cadence, startup" },
   { id: "appearance", label: "Appearance", icon: Monitor, hint: "Theme, density, accent, motion (V2)" },
   { id: "network", label: "Network", icon: Network, hint: "RPC endpoint and identity" },
-  { id: "mining", label: "Mining defaults", icon: Cpu, hint: "Threads, pool, worker" },
+  { id: "mining", label: "Mining defaults", icon: Cpu, hint: "CUDA, solo, pool and Stratum" },
   { id: "wallet", label: "Wallet & security", icon: KeyRound, hint: "Identity, vault, recovery phrase" },
   { id: "notifications", label: "Notifications", icon: Bell, hint: "Blocks, sound, updates, message center" },
   { id: "data", label: "Data & paths", icon: HardDrive, hint: "Workspace and chain root" },
@@ -128,6 +128,15 @@ export function Settings() {
   const [gpuIntensityDraft, setGpuIntensityDraft] = useState(
     String(settings.default_gpu_intensity || 75)
   );
+  const [gpuBatchSizeDraft, setGpuBatchSizeDraft] = useState(
+    String(settings.default_gpu_batch_size ?? 0)
+  );
+  const [templateRefreshDraft, setTemplateRefreshDraft] = useState(
+    String(settings.default_template_refresh_seconds ?? 3)
+  );
+  const [statusIntervalDraft, setStatusIntervalDraft] = useState(
+    String(settings.default_status_interval_seconds ?? 2)
+  );
   const [stratumHostDraft, setStratumHostDraft] = useState(settings.stratum_host ?? "");
   const [stratumPortDraft, setStratumPortDraft] = useState(
     String(settings.stratum_port ?? 3333)
@@ -137,6 +146,9 @@ export function Settings() {
     settings.stratum_skip_tls_verify ?? false
   );
   const [stratumPasswordDraft, setStratumPasswordDraft] = useState(settings.stratum_password ?? "");
+  const [stratumTimeoutDraft, setStratumTimeoutDraft] = useState(
+    String(settings.stratum_timeout_seconds ?? 20)
+  );
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnectBusy, setDisconnectBusy] = useState(false);
   const [recoveryImportOpen, setRecoveryImportOpen] = useState(false);
@@ -153,11 +165,15 @@ export function Settings() {
     setWorkerDraft(settings.default_worker_name);
     setBackendDraft(settings.default_miner_backend || "cuda");
     setGpuIntensityDraft(String(settings.default_gpu_intensity || 75));
+    setGpuBatchSizeDraft(String(settings.default_gpu_batch_size ?? 0));
+    setTemplateRefreshDraft(String(settings.default_template_refresh_seconds ?? 3));
+    setStatusIntervalDraft(String(settings.default_status_interval_seconds ?? 2));
     setStratumHostDraft(settings.stratum_host ?? "");
     setStratumPortDraft(String(settings.stratum_port ?? 3333));
     setStratumUseTlsDraft(settings.stratum_use_tls ?? true);
     setStratumSkipTlsVerifyDraft(settings.stratum_skip_tls_verify ?? false);
     setStratumPasswordDraft(settings.stratum_password ?? "");
+    setStratumTimeoutDraft(String(settings.stratum_timeout_seconds ?? 20));
   }, [settings]);
 
   const loadMeta = useCallback(async () => {
@@ -204,15 +220,22 @@ export function Settings() {
 
   const saveMiningDefaults = async () => {
     const intensity = Math.max(1, Math.min(100, Number(gpuIntensityDraft) || 75));
+    const gpuBatchSize = Math.max(0, Math.min(131072, Number(gpuBatchSizeDraft) || 0));
+    const templateRefresh = Math.max(1, Math.min(60, Number(templateRefreshDraft) || 3));
+    const statusInterval = Math.max(1, Math.min(60, Number(statusIntervalDraft) || 2));
     const backend = "cuda";
     const pool = poolDraft.trim().replace(/\/$/, "");
     const urls = Array.from(
       new Set([pool, ...(settings.pool_urls ?? [])].filter(Boolean))
     );
     const stratumPort = Math.max(1, Math.min(65535, Number(stratumPortDraft) || 3333));
+    const stratumTimeout = Math.max(5, Math.min(120, Number(stratumTimeoutDraft) || 20));
     await patch({
       default_miner_backend: backend,
       default_gpu_intensity: intensity,
+      default_gpu_batch_size: gpuBatchSize,
+      default_template_refresh_seconds: templateRefresh,
+      default_status_interval_seconds: statusInterval,
       mining_rpc_url: miningRpcDraft.trim().replace(/\/$/, ""),
       default_pool_url: pool,
       pool_urls: urls,
@@ -221,7 +244,8 @@ export function Settings() {
       stratum_port: stratumPort,
       stratum_use_tls: stratumUseTlsDraft,
       stratum_skip_tls_verify: stratumSkipTlsVerifyDraft,
-      stratum_password: stratumPasswordDraft
+      stratum_password: stratumPasswordDraft,
+      stratum_timeout_seconds: stratumTimeout
     }, "Mining defaults saved for the next miner start.");
   };
 
@@ -604,13 +628,12 @@ export function Settings() {
         {section === "mining" && (
           <div className="grid settings-stack">
             <Panel title="Default miner profile" detail="Applied on Miner start">
-              <Segmented<"solo" | "pool" | "stratum">
+              <Segmented<"solo" | "stratum">
                 value={settings.default_miner_mode}
                 onChange={(default_miner_mode) => void patch({ default_miner_mode })}
                 options={[
                   { id: "solo", label: "Solo", detail: "Mine to the active wallet", icon: Wallet },
-                  { id: "pool", label: "Pool", detail: "Share work with a pool URL", icon: Share2 },
-                  { id: "stratum", label: "Stratum", detail: "Persistent TCP/TLS socket", icon: Plug }
+                  { id: "stratum", label: "Pool / Stratum", detail: "Persistent TLS socket", icon: Plug }
                 ]}
               />
               <div className="field" style={{ marginTop: 12 }}>
@@ -640,19 +663,19 @@ export function Settings() {
                 </p>
               </div>
               <div className="field" style={{ marginTop: 12 }}>
-                <label htmlFor="pool-url">Default pool URL (also used by Pool page)</label>
+                <label htmlFor="pool-url">Pool dashboard URL (status and payout views only)</label>
                 <input
                   id="pool-url"
                   value={poolDraft}
                   spellCheck={false}
-                  placeholder="http://rpcnode.dohotstudio.com/pool"
+                  placeholder="https://pool.dohotstudio.com"
                   onChange={(event) => setPoolDraft(event.target.value)}
                 />
               </div>
               {(settings.pool_urls ?? []).length > 0 ? (
                 <p className="field-hint" style={{ marginTop: 6 }}>
                   Saved pools ({settings.pool_urls.length}): manage multi-pool list on the{" "}
-                  <strong>Pool</strong> page. Default is applied on miner start in pool mode.
+                  <strong>Pool</strong> page. Mining work itself always uses Stratum TLS.
                 </p>
               ) : null}
               <div className="field" style={{ marginTop: 12 }}>
@@ -683,11 +706,58 @@ export function Settings() {
                 <label htmlFor="worker">Default worker name</label>
                 <input id="worker" value={workerDraft} maxLength={48} onChange={(event) => setWorkerDraft(event.target.value)} />
               </div>
+              <div className="grid cols-2">
+                <div className="field">
+                  <label htmlFor="gpu-batch-size">GPU batch size (0 = automatic)</label>
+                  <input
+                    id="gpu-batch-size"
+                    type="number"
+                    min={0}
+                    max={131072}
+                    step={256}
+                    value={gpuBatchSizeDraft}
+                    onChange={(event) => setGpuBatchSizeDraft(event.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="template-refresh">Template refresh (seconds)</label>
+                  <input
+                    id="template-refresh"
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={templateRefreshDraft}
+                    onChange={(event) => setTemplateRefreshDraft(event.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="status-interval">Telemetry interval (seconds)</label>
+                  <input
+                    id="status-interval"
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={statusIntervalDraft}
+                    onChange={(event) => setStatusIntervalDraft(event.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="stratum-timeout">Stratum timeout (seconds)</label>
+                  <input
+                    id="stratum-timeout"
+                    type="number"
+                    min={5}
+                    max={120}
+                    value={stratumTimeoutDraft}
+                    onChange={(event) => setStratumTimeoutDraft(event.target.value)}
+                  />
+                </div>
+              </div>
               <div className="field-stack" style={{ marginTop: 4 }}>
                 <p className="field-stack-title">Default Stratum endpoint (alvenqis-stratum-v1)</p>
                 <p className="field-hint" style={{ marginTop: -4 }}>
-                  Used whenever the profile above is set to Stratum, and pre-filled on the Miner
-                  page. Same field on Miner overrides this per session.
+                  Pool mining uses this endpoint exclusively. HTTP work/share routes are retired.
+                  The Miner page can override these values for one session.
                 </p>
                 <div className="grid cols-2">
                   <div className="field">
@@ -714,12 +784,16 @@ export function Settings() {
                 </div>
                 <Toggle
                   checked={stratumUseTlsDraft}
-                  onChange={setStratumUseTlsDraft}
-                  label="TLS"
-                  description="stratum+ssl/tls (recommended)"
+                  onChange={(value) => {
+                    const local = /^(localhost|127\.0\.0\.1|::1|\[::1\])$/i.test(stratumHostDraft.trim());
+                    setStratumUseTlsDraft(local ? value : true);
+                  }}
+                  label="TLS transport"
+                  description="Required for every remote Stratum endpoint"
                 />
                 <Toggle
                   checked={stratumSkipTlsVerifyDraft}
+                  disabled={!/^(localhost|127\.0\.0\.1|::1|\[::1\])$/i.test(stratumHostDraft.trim())}
                   onChange={setStratumSkipTlsVerifyDraft}
                   label="Skip TLS verify"
                   description="Lab only — never on public internet"

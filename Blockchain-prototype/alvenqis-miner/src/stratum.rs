@@ -180,11 +180,30 @@ impl StratumWorkSource {
         let sock_addrs: Vec<std::net::SocketAddr> = std::net::ToSocketAddrs::to_socket_addrs(&addr)
             .map_err(|e| MinerError::Rpc(format!("stratum resolve {addr}: {e}")))?
             .collect();
-        let target = sock_addrs
-            .first()
-            .ok_or_else(|| MinerError::Rpc(format!("stratum resolve {addr}: no addresses")))?;
-        let tcp = TcpStream::connect_timeout(target, self.timeout())
-            .map_err(|e| MinerError::Rpc(format!("stratum connect {addr}: {e}")))?;
+        if sock_addrs.is_empty() {
+            return Err(MinerError::Rpc(format!(
+                "stratum resolve {addr}: no addresses"
+            )));
+        }
+        let mut last_error = None;
+        let mut connected = None;
+        for target in sock_addrs {
+            match TcpStream::connect_timeout(&target, self.timeout()) {
+                Ok(stream) => {
+                    connected = Some(stream);
+                    break;
+                }
+                Err(error) => last_error = Some(error),
+            }
+        }
+        let tcp = connected.ok_or_else(|| {
+            MinerError::Rpc(format!(
+                "stratum connect {addr}: {}",
+                last_error
+                    .map(|error| error.to_string())
+                    .unwrap_or_else(|| "all resolved addresses failed".to_owned())
+            ))
+        })?;
         tcp.set_nodelay(true).ok();
         let stream = if self.endpoint.use_tls {
             let connector = if self.endpoint.skip_tls_verify {

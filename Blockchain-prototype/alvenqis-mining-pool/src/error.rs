@@ -7,6 +7,8 @@ use serde_json::json;
 pub enum PoolError {
     #[error("configuration error: {0}")]
     Config(String),
+    #[error("protocol error: {0}")]
+    Protocol(String),
     #[error("invalid share: {0}")]
     InvalidShare(String),
     #[error("stale share: {0}")]
@@ -28,7 +30,7 @@ pub type Result<T> = std::result::Result<T, PoolError>;
 impl IntoResponse for PoolError {
     fn into_response(self) -> Response {
         let status = match self {
-            Self::InvalidShare(_) | Self::Config(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidShare(_) | Self::Config(_) | Self::Protocol(_) => StatusCode::BAD_REQUEST,
             Self::Stale(_) => StatusCode::CONFLICT,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::RateLimited(_) | Self::Banned(_) => StatusCode::TOO_MANY_REQUESTS,

@@ -224,13 +224,15 @@ export type OperatorCommand =
   | "validate" | "backup" | "miner-start" | "miner-stop";
 
 export interface MinerStartOptions {
-  /** Solo RPC, HTTP pool, or Stratum TCP/TLS work source; nonce search is CUDA-only. */
-  mode: "solo" | "pool" | "stratum";
+  /** Solo RPC or pool mining through Stratum TCP/TLS; nonce search is CUDA-only. */
+  mode: "solo" | "stratum";
   /** Product compute backend. */
   backend?: "cuda";
   gpu_intensity?: number;
   gpu_devices?: string[];
-  pool_url?: string;
+  gpu_batch_size?: number;
+  template_refresh_seconds?: number;
+  status_interval_seconds?: number;
   worker_name?: string;
   /** Stratum host (when mode=stratum). */
   stratum_host?: string;
@@ -238,6 +240,7 @@ export interface MinerStartOptions {
   stratum_use_tls?: boolean;
   stratum_skip_tls_verify?: boolean;
   stratum_password?: string;
+  stratum_timeout_seconds?: number;
 }
 
 /** Result of Control Center explorer in-app lookup (public RPC data only). */
@@ -324,11 +327,15 @@ export interface AppSettings {
   mask_addresses: boolean;
   show_advanced_metrics: boolean;
   show_technical_labels: boolean;
-  /** Default work source for Miner page: solo (local RPC), pool (HTTP), or stratum (TCP/TLS). */
-  default_miner_mode: "solo" | "pool" | "stratum";
+  /** Default work source for Miner page: solo RPC or pool through Stratum TLS. */
+  default_miner_mode: "solo" | "stratum";
   /** Default compute backend; only NVIDIA CUDA is supported. */
   default_miner_backend: "cuda";
   default_gpu_intensity: number;
+  /** Explicit CUDA dispatch size; 0 selects intensity-based automatic sizing. */
+  default_gpu_batch_size: number;
+  default_template_refresh_seconds: number;
+  default_status_interval_seconds: number;
   /** Selected CUDA device ids from alvenqis-miner devices (empty = all CUDA GPUs). */
   default_gpu_devices: string[];
   default_pool_url: string;
@@ -340,6 +347,7 @@ export interface AppSettings {
   stratum_use_tls: boolean;
   stratum_skip_tls_verify: boolean;
   stratum_password: string;
+  stratum_timeout_seconds: number;
   /** Saved custom miner console command lines (allowlisted verbs only). */
   miner_custom_commands: string[];
   default_page: string;

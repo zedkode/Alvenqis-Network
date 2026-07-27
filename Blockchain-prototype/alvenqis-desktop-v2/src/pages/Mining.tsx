@@ -5,7 +5,6 @@ import {
   HardDrive,
   Play,
   Plug,
-  Share2,
   Square,
   Terminal,
   Users,
@@ -31,7 +30,7 @@ import { useApp } from "../model";
 
 type BackendMode = "cuda";
 
-const FORM_KEY = "alvenqis.miner.form.v3";
+const FORM_KEY = "alvenqis.miner.form.v4";
 const LOG_SESSION_KEY = "alvenqis.miner.sessionLog.v1";
 const CONSOLE_LINES = 400;
 
@@ -39,13 +38,19 @@ function normalizeBackend(_raw: unknown): BackendMode {
   return "cuda";
 }
 
-type MinerMode = "solo" | "pool" | "stratum";
+type MinerMode = "solo" | "stratum";
+
+function normalizeMinerMode(raw: unknown): MinerMode {
+  return raw === "solo" ? "solo" : "stratum";
+}
 
 type MinerForm = {
   mode: MinerMode;
   backend: BackendMode;
   gpuIntensity: number;
-  poolUrl: string;
+  gpuBatchSize: number;
+  templateRefreshSeconds: number;
+  statusIntervalSeconds: number;
   workerName: string;
   gpuDevices: string[];
   stratumHost: string;
@@ -53,6 +58,7 @@ type MinerForm = {
   stratumUseTls: boolean;
   stratumSkipTlsVerify: boolean;
   stratumPassword: string;
+  stratumTimeoutSeconds: number;
 };
 
 function extractHexHashes(text: string): string[] {
@@ -111,7 +117,7 @@ export function Mining() {
   const { settings, update: updateSettings } = useAppSettings();
   const session = loadSessionForm();
   const [mode, setMode] = useState<MinerMode>(
-    (session?.mode as MinerMode | undefined) ?? settings.default_miner_mode
+    normalizeMinerMode(session?.mode ?? settings.default_miner_mode)
   );
   const [backend, setBackend] = useState<BackendMode>(
     normalizeBackend(session?.backend ?? settings.default_miner_backend ?? "cuda")
@@ -119,7 +125,15 @@ export function Mining() {
   const [gpuIntensity, setGpuIntensity] = useState(
     session?.gpuIntensity ?? (settings.default_gpu_intensity || 75)
   );
-  const [poolUrl, setPoolUrl] = useState(session?.poolUrl ?? settings.default_pool_url);
+  const [gpuBatchSize, setGpuBatchSize] = useState(
+    session?.gpuBatchSize ?? settings.default_gpu_batch_size ?? 0
+  );
+  const [templateRefreshSeconds, setTemplateRefreshSeconds] = useState(
+    session?.templateRefreshSeconds ?? settings.default_template_refresh_seconds ?? 3
+  );
+  const [statusIntervalSeconds, setStatusIntervalSeconds] = useState(
+    session?.statusIntervalSeconds ?? settings.default_status_interval_seconds ?? 2
+  );
   const [workerName, setWorkerName] = useState(
     session?.workerName ?? settings.default_worker_name
   );
@@ -140,6 +154,9 @@ export function Mining() {
   );
   const [stratumPassword, setStratumPassword] = useState(
     session?.stratumPassword ?? settings.stratum_password ?? ""
+  );
+  const [stratumTimeoutSeconds, setStratumTimeoutSeconds] = useState(
+    session?.stratumTimeoutSeconds ?? settings.stratum_timeout_seconds ?? 20
   );
   const [hydrated, setHydrated] = useState(Boolean(session));
   const [history, setHistory] = useState<SeriesPoint[]>([]);
@@ -165,10 +182,12 @@ export function Mining() {
       setHydrated(true);
       return;
     }
-    setMode(settings.default_miner_mode);
+    setMode(normalizeMinerMode(settings.default_miner_mode));
     setBackend(normalizeBackend(settings.default_miner_backend || "cuda"));
     setGpuIntensity(settings.default_gpu_intensity || 75);
-    setPoolUrl(settings.default_pool_url);
+    setGpuBatchSize(settings.default_gpu_batch_size ?? 0);
+    setTemplateRefreshSeconds(settings.default_template_refresh_seconds ?? 3);
+    setStatusIntervalSeconds(settings.default_status_interval_seconds ?? 2);
     setWorkerName(settings.default_worker_name);
     setGpuDevices(settings.default_gpu_devices ?? []);
     setStratumHost(settings.stratum_host ?? "");
@@ -176,6 +195,7 @@ export function Mining() {
     setStratumUseTls(settings.stratum_use_tls ?? true);
     setStratumSkipTlsVerify(settings.stratum_skip_tls_verify ?? false);
     setStratumPassword(settings.stratum_password ?? "");
+    setStratumTimeoutSeconds(settings.stratum_timeout_seconds ?? 20);
     setCmdHistory(settings.miner_custom_commands ?? [...MINER_SAFE_COMMANDS]);
     setHydrated(true);
   }, [settings, hydrated, session]);
@@ -187,14 +207,17 @@ export function Mining() {
       mode,
       backend,
       gpuIntensity,
-      poolUrl,
+      gpuBatchSize,
+      templateRefreshSeconds,
+      statusIntervalSeconds,
       workerName,
       gpuDevices,
       stratumHost,
       stratumPort,
       stratumUseTls,
       stratumSkipTlsVerify,
-      stratumPassword
+      stratumPassword,
+      stratumTimeoutSeconds
     };
     saveSessionForm(form);
     if (persistTimer.current) window.clearTimeout(persistTimer.current);
@@ -203,14 +226,17 @@ export function Mining() {
         default_miner_mode: mode,
         default_miner_backend: backend,
         default_gpu_intensity: gpuIntensity,
+        default_gpu_batch_size: gpuBatchSize,
+        default_template_refresh_seconds: templateRefreshSeconds,
+        default_status_interval_seconds: statusIntervalSeconds,
         default_gpu_devices: gpuDevices,
-        default_pool_url: poolUrl,
         default_worker_name: workerName,
         stratum_host: stratumHost,
         stratum_port: stratumPort,
         stratum_use_tls: stratumUseTls,
         stratum_skip_tls_verify: stratumSkipTlsVerify,
         stratum_password: stratumPassword,
+        stratum_timeout_seconds: stratumTimeoutSeconds,
         miner_custom_commands: cmdHistory.slice(0, 24)
       });
     }, 400);
@@ -222,7 +248,9 @@ export function Mining() {
     mode,
     backend,
     gpuIntensity,
-    poolUrl,
+    gpuBatchSize,
+    templateRefreshSeconds,
+    statusIntervalSeconds,
     workerName,
     gpuDevices,
     stratumHost,
@@ -230,6 +258,7 @@ export function Mining() {
     stratumUseTls,
     stratumSkipTlsVerify,
     stratumPassword,
+    stratumTimeoutSeconds,
     cmdHistory,
     updateSettings
   ]);
@@ -369,11 +398,10 @@ export function Mining() {
           `── miner start ${new Date().toISOString()} ──`,
           `mode=${mode} backend=${backend} gpu_intensity=${gpuIntensity}`,
           gpuDevices.length ? `gpu_devices=${gpuDevices.join(",")}` : "gpu_devices=auto",
-          mode === "pool"
-            ? `pool=${poolUrl} worker=${workerName}`
-            : mode === "stratum"
-              ? `stratum=${stratumUseTls ? "stratum+tls" : "stratum"}://${stratumHost}:${stratumPort} worker=${workerName}`
-              : "work=solo RPC"
+          mode === "stratum"
+            ? `pool=${stratumUseTls ? "stratum+tls" : "stratum"}://${stratumHost}:${stratumPort} worker=${workerName}`
+            : "work=solo RPC",
+          `gpu_batch_size=${gpuBatchSize || "auto"} template_refresh=${templateRefreshSeconds}s status_interval=${statusIntervalSeconds}s`
         ].join("\n");
         appendSessionLog(banner);
         setConsoleOutput(banner);
@@ -385,14 +413,17 @@ export function Mining() {
               mode,
               backend,
               gpu_intensity: gpuIntensity,
+              gpu_batch_size: gpuBatchSize,
+              template_refresh_seconds: templateRefreshSeconds,
+              status_interval_seconds: statusIntervalSeconds,
               gpu_devices: gpuDevices,
-              pool_url: poolUrl,
               worker_name: workerName,
               stratum_host: stratumHost,
               stratum_port: stratumPort,
               stratum_use_tls: stratumUseTls,
               stratum_skip_tls_verify: stratumSkipTlsVerify,
-              stratum_password: stratumPassword
+              stratum_password: stratumPassword,
+              stratum_timeout_seconds: stratumTimeoutSeconds
             }
           : undefined
       );
@@ -518,8 +549,8 @@ export function Mining() {
       : `${Math.max(0, Math.floor(Date.now() / 1000) - n.miner_updated_at_unix_seconds)}s ago`;
   const acceptedBlocks = n.miner_accepted_blocks ?? 0;
   const acceptedShares = n.miner_accepted_shares ?? 0;
-  // Pool and Stratum both submit shares against a share difficulty; only Solo submits full blocks.
-  const isShareBased = mode === "pool" || mode === "stratum";
+  // Stratum submits shares against pool difficulty; only Solo submits full blocks.
+  const isShareBased = mode === "stratum";
   const accepted = isShareBased ? acceptedShares : acceptedBlocks;
   const logCadence = Math.max(
     1,
@@ -542,19 +573,18 @@ export function Mining() {
   const poolWorkers = n.pool_workers ?? 0;
   const p2pMiners = n.miners?.length ?? 0;
   const localSolo = n.miner_running && mode === "solo" ? 1 : 0;
-  const localPool = n.miner_running && mode === "pool" ? 1 : 0;
   const localStratum = n.miner_running && mode === "stratum" ? 1 : 0;
   // Local activity can already be present in the remote aggregate; never double-count it.
-  // Stratum is a persistent-socket pool connection, so it counts toward pool miners like HTTP pool mode.
+  // Stratum is the supported persistent pool connection.
   const soloMiners = Math.max(p2pMiners, localSolo);
-  const poolMiners = Math.max(poolWorkers, localPool, localStratum);
-  // Prefer live local hashrate when mining; fold into network view for solo/pool/stratum alike.
+  const poolMiners = Math.max(poolWorkers, localStratum);
+  // Prefer live local hashrate when mining; fold into the selected network view.
   const localHs = n.miner_running ? (n.miner_hashrate_hs ?? 0) : 0;
   const poolHs = n.pool_hashrate_hs ?? 0;
   const networkHs = Math.max(
     n.observed_network_hashrate_hs ?? 0,
     mode === "solo" ? localHs : 0,
-    mode === "pool" || mode === "stratum" ? Math.max(poolHs, localHs) : 0
+    mode === "stratum" ? Math.max(poolHs, localHs) : 0
   );
 
   const fullConsole = [commandOutput, consoleOutput].filter(Boolean).join("\n\n");
@@ -565,7 +595,7 @@ export function Mining() {
         kicker={n.miner_running ? "POW ACTIVE" : "MINER STANDBY"}
         title="FiroPoW"
         titleAccent="mining deck"
-        description="GPU-only FiroPoW 0.9.4 mining on real NVIDIA CUDA kernels, with the DAG generated directly in VRAM. Work comes from your own RPC (solo), the official pool, or a persistent Stratum TCP/TLS socket."
+        description="GPU-only FiroPoW 0.9.4 mining on real NVIDIA CUDA kernels, with the DAG generated directly in VRAM. Work comes from your own RPC (solo) or a persistent verified Stratum TLS socket."
         actions={
           <>
             <button
@@ -650,11 +680,11 @@ export function Mining() {
           icon={<Activity size={14} />}
         />
         <StatCard
-          label={isShareBased ? (mode === "stratum" ? "Stratum + local H/s" : "Pool + local H/s") : "Solo / network H/s"}
+          label={isShareBased ? "Pool / Stratum + local H/s" : "Solo / network H/s"}
           value={formatHashrate(networkHs)}
           detail={
             isShareBased
-              ? `${mode === "stratum" ? "Stratum" : "Pool"} ${formatHashrate(poolHs)} · local ${formatHashrate(localHs)} · workers ${poolMiners}`
+              ? `Pool / Stratum ${formatHashrate(poolHs)} · local ${formatHashrate(localHs)} · workers ${poolMiners}`
               : `Local ${formatHashrate(localHs)} · full-node miners ${soloMiners}`
           }
           icon={<Users size={14} />}
@@ -664,7 +694,7 @@ export function Mining() {
           value={accepted}
           detail={
             isShareBased
-              ? `${mode === "stratum" ? "Stratum" : "Pool"} shares · blocks ${acceptedBlocks} · net_diff ${n.miner_difficulty_leading_zero_bits ?? "—"}`
+              ? `Pool shares · blocks ${acceptedBlocks} · net_diff ${n.miner_difficulty_leading_zero_bits ?? "—"}`
               : `Full blocks only · net_diff ${n.miner_difficulty_leading_zero_bits ?? "—"}`
           }
           tone="gold"
@@ -689,7 +719,7 @@ export function Mining() {
               <strong>{poolMiners}</strong>
               <span>
                 Workers online {poolWorkers}
-                {localPool ? " · + this PC" : ""}
+                {localStratum ? " · + this PC" : ""}
               </span>
               <span className="muted">
                 {n.pool_online ? n.pool_name ?? "pool online" : "pool unreachable"} ·{" "}
@@ -788,11 +818,9 @@ export function Mining() {
           </KeyValue>
           <KeyValue label="Active backend">{activeBackend}</KeyValue>
           <KeyValue label="Work source">
-            {mode === "pool"
-              ? poolUrl
-              : mode === "stratum"
-                ? `${stratumUseTls ? "stratum+tls" : "stratum"}://${stratumHost || "?"}:${stratumPort}`
-                : `${settings.mining_rpc_url || "Mining RPC"} /mining/template`}
+            {mode === "stratum"
+              ? `${stratumUseTls ? "stratum+tls" : "stratum"}://${stratumHost || "?"}:${stratumPort}`
+              : `${settings.mining_rpc_url || "Mining RPC"} /mining/template`}
           </KeyValue>
           <KeyValue label="Algorithm">FiroPoW 0.9.4 · NVIDIA CUDA GPU</KeyValue>
           <KeyValue label="Selected GPUs">
@@ -802,9 +830,6 @@ export function Mining() {
           <div className="field" style={{ marginTop: 10 }}>
             <label>Work source</label>
             <div className="backend-pills mode-pills">
-              <button type="button" className={mode === "pool" ? "active" : ""} onClick={() => setMode("pool")}>
-                <Share2 size={13} /> HTTP pool
-              </button>
               <button type="button" className={mode === "solo" ? "active" : ""} onClick={() => setMode("solo")}>
                 <Wallet size={13} /> Solo RPC
               </button>
@@ -813,7 +838,7 @@ export function Mining() {
                 className={mode === "stratum" ? "active" : ""}
                 onClick={() => setMode("stratum")}
               >
-                <Plug size={13} /> Stratum TCP/TLS
+                <Plug size={13} /> Pool / Stratum TLS
               </button>
             </div>
             {mode === "solo" ? (
@@ -1028,19 +1053,68 @@ export function Mining() {
                 </p>
               )}
               <p className="field-hint">
-                Est. GPU batch ~{formatCompactCount(Math.round(1_048_576 * (gpuIntensity / 100)))}{" "}
-                work-items/dispatch. Higher intensity = more VRAM/GPU load.
+                Effective GPU batch:{" "}
+                {gpuBatchSize
+                  ? formatCompactCount(gpuBatchSize)
+                  : `auto (~${formatCompactCount(Math.round(131_072 * (gpuIntensity / 100)))})`}{" "}
+                work-items/dispatch.
               </p>
+              <div className="grid cols-2">
+                <div className="field">
+                  <label>GPU batch size (0 = auto)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={131072}
+                    step={256}
+                    value={gpuBatchSize}
+                    onChange={(event) =>
+                      setGpuBatchSize(Math.max(0, Math.min(131072, Number(event.target.value) || 0)))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label>Template refresh (seconds)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={templateRefreshSeconds}
+                    onChange={(event) =>
+                      setTemplateRefreshSeconds(Math.max(1, Math.min(60, Number(event.target.value) || 3)))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label>Telemetry interval (seconds)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={statusIntervalSeconds}
+                    onChange={(event) =>
+                      setStatusIntervalSeconds(Math.max(1, Math.min(60, Number(event.target.value) || 2)))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <label>Stratum timeout (seconds)</label>
+                  <input
+                    type="number"
+                    min={5}
+                    max={120}
+                    disabled={mode !== "stratum"}
+                    value={stratumTimeoutSeconds}
+                    onChange={(event) =>
+                      setStratumTimeoutSeconds(Math.max(5, Math.min(120, Number(event.target.value) || 20)))
+                    }
+                  />
+                </div>
+              </div>
             </section>
           </div>
 
-          {mode === "pool" ? (
-            <div className="field">
-              <label>Pool URL</label>
-              <input value={poolUrl} onChange={(e) => setPoolUrl(e.target.value)} />
-            </div>
-          ) : null}
-          {mode === "pool" || mode === "stratum" ? (
+          {mode === "stratum" ? (
             <div className="field">
               <label>Worker name</label>
               <input value={workerName} onChange={(e) => setWorkerName(e.target.value)} />

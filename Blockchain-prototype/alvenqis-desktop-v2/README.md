@@ -40,7 +40,7 @@ npm run lint
 
 See **[DESKTOP_V2_USER_GUIDE.md](../../Blockchain-docs/human/operator/DESKTOP_V2_USER_GUIDE.md)** for:
 
-- install, mining modes (solo / HTTP pool / Stratum TCP·TLS)
+- install, mining modes (solo RPC / verified Stratum TLS)
 - modern console + allowlisted custom miner commands
 - predictive errors, refresh cadence, security rules
 

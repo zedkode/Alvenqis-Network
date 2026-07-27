@@ -38,7 +38,7 @@ export function predictFromMessage(raw: string): PredictedIssue {
       actions: [
         "Verify host/port and TLS toggle match the pool operator configuration.",
         "Confirm firewall allows outbound TCP to the Stratum port.",
-        "If this specific Stratum endpoint is down, HTTP Pool mode (api/v1/work) is an equivalent fallback."
+        "Retry the verified Stratum TLS endpoint, or switch to Solo RPC only when a synchronized local node is available."
       ]
     };
   }

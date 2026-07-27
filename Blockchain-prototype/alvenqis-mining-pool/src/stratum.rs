@@ -67,11 +67,27 @@ pub async fn serve(state: PoolState, config: StratumConfig) -> Result<()> {
     let refresh_state = state.clone();
     let refresh_seconds = state.config.job_cache_seconds.max(1);
     tokio::spawn(async move {
+        let mut consecutive_failures = 0u64;
+        let mut last_error = String::new();
         loop {
             if let Err(error) =
                 crate::app::ensure_current_job(&refresh_state, crate::app::unix_seconds()).await
             {
-                eprintln!("stratum upstream refresh failed: {error}");
+                consecutive_failures = consecutive_failures.saturating_add(1);
+                let message = error.to_string();
+                let periodic_log = consecutive_failures % (60 / refresh_seconds).max(1) == 0;
+                if message != last_error || consecutive_failures == 1 || periodic_log {
+                    eprintln!(
+                        "stratum upstream refresh failed (attempt {consecutive_failures}): {message}"
+                    );
+                }
+                last_error = message;
+            } else if consecutive_failures > 0 {
+                println!(
+                    "stratum upstream refresh recovered after {consecutive_failures} failed attempts"
+                );
+                consecutive_failures = 0;
+                last_error.clear();
             }
             tokio::time::sleep(Duration::from_secs(refresh_seconds)).await;
         }
@@ -105,7 +121,9 @@ async fn serve_listener(
         tokio::spawn(async move {
             let _permit = permit;
             if let Err(error) = serve_connection(acceptor, tcp, peer, state, config).await {
-                eprintln!("stratum peer {peer} disconnected: {error}");
+                if !is_expected_peer_disconnect(&error) {
+                    eprintln!("stratum peer {peer} disconnected: {error}");
+                }
             }
         });
     }
@@ -126,13 +144,13 @@ async fn serve_connection(
     )
     .await
     .map_err(|_| {
-        PoolError::Config(format!(
+        PoolError::Protocol(format!(
             "TLS handshake timeout after {}s (client must use stratum+tls and complete TLS before JSON-RPC)",
             config.handshake_timeout_seconds
         ))
     })?
     .map_err(|error| {
-        PoolError::Config(format!(
+        PoolError::Protocol(format!(
             "TLS handshake failed: {error} (use stratum+tls://HOST:PORT with a valid client TLS stack; plaintext TCP is rejected)"
         ))
     })?;
@@ -173,7 +191,7 @@ async fn run_session(
                             || msg.contains("early eof")
                             || msg.contains("UnexpectedEof")
                         {
-                            PoolError::Config(format!("peer closed TLS session: {msg}"))
+                            PoolError::Protocol(format!("peer closed TLS session: {msg}"))
                         } else {
                             PoolError::InvalidShare(format!("invalid Stratum frame: {msg}"))
                         }
@@ -223,6 +241,21 @@ async fn run_session(
             }
         }
     }
+}
+
+fn is_expected_peer_disconnect(error: &PoolError) -> bool {
+    let message = error.to_string().to_ascii_lowercase();
+    [
+        "close_notify",
+        "connection reset",
+        "broken pipe",
+        "early eof",
+        "unexpected eof",
+        "unexpected_eof",
+        "peer closed tls",
+    ]
+    .iter()
+    .any(|expected| message.contains(expected))
 }
 
 async fn handle_request(
@@ -582,6 +615,20 @@ mod tests {
         assert_eq!(bare.worker_name, "default");
         assert!(parse_authorize(&json!([".gpu", "x"])).is_err());
         assert!(parse_authorize(&json!(["btc1notalve.worker", "x"])).is_err());
+    }
+
+    #[test]
+    fn expected_tls_disconnects_do_not_pollute_error_logs() {
+        assert!(is_expected_peer_disconnect(&PoolError::Protocol(
+            "peer closed TLS session: peer closed connection without sending TLS close_notify"
+                .to_owned()
+        )));
+        assert!(is_expected_peer_disconnect(&PoolError::Storage(
+            "cannot write Stratum response: Connection reset by peer".to_owned()
+        )));
+        assert!(!is_expected_peer_disconnect(&PoolError::Protocol(
+            "TLS handshake failed: received corrupt message of type InvalidContentType".to_owned()
+        )));
     }
 
     #[tokio::test]

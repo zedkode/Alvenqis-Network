@@ -136,6 +136,11 @@ fn main() {
 }
 
 fn run() -> Result<()> {
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--purge-uninstall")) {
+        purge_for_uninstall()?;
+        output(&serde_json::json!({ "purged": true }))?;
+        return Ok(());
+    }
     let mut bytes = Vec::new();
     std::io::stdin()
         .read_to_end(&mut bytes)
@@ -676,6 +681,30 @@ fn remove_wallet() -> Result<()> {
     Ok(())
 }
 
+fn purge_for_uninstall() -> Result<()> {
+    let mut accounts = load_wallets()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|wallet| wallet.credential_account)
+        .collect::<Vec<_>>();
+    accounts.push(LEGACY_ACCOUNT.to_owned());
+    accounts.sort();
+    accounts.dedup();
+
+    for account in accounts {
+        remove_credential_from_service(SERVICE, &account);
+        for service in legacy_credential_services() {
+            remove_credential_from_service(service, &account);
+        }
+    }
+
+    let root = wallet_root()?;
+    if root.exists() {
+        fs::remove_dir_all(&root).map_err(metadata_error)?;
+    }
+    Ok(())
+}
+
 fn credential(account: &str) -> Result<Entry> {
     Entry::new(SERVICE, account).map_err(credential_error)
 }
@@ -709,7 +738,11 @@ fn load_private_key(account: &str) -> Result<String> {
     }
 }
 fn remove_private_key(account: &str) {
-    if let Ok(entry) = credential(account) {
+    remove_credential_from_service(SERVICE, account);
+}
+
+fn remove_credential_from_service(service: &str, account: &str) {
+    if let Ok(entry) = Entry::new(service, account) {
         let _ = entry.delete_credential();
     }
 }

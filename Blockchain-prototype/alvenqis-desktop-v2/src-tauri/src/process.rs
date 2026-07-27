@@ -17,6 +17,12 @@ pub struct MinerStartOptions {
     pub gpu_intensity: Option<u8>,
     #[serde(default)]
     pub gpu_devices: Option<Vec<String>>,
+    #[serde(default)]
+    pub gpu_batch_size: Option<u64>,
+    #[serde(default)]
+    pub template_refresh_seconds: Option<u64>,
+    #[serde(default)]
+    pub status_interval_seconds: Option<u64>,
     pub pool_url: Option<String>,
     pub worker_name: Option<String>,
     #[serde(default)]
@@ -29,6 +35,8 @@ pub struct MinerStartOptions {
     pub stratum_skip_tls_verify: Option<bool>,
     #[serde(default)]
     pub stratum_password: Option<String>,
+    #[serde(default)]
+    pub stratum_timeout_seconds: Option<u64>,
 }
 
 #[cfg(windows)]
@@ -200,6 +208,9 @@ async fn start_remote_miner(
         backend: Some(settings::get().default_miner_backend),
         gpu_intensity: Some(settings::get().default_gpu_intensity),
         gpu_devices: None,
+        gpu_batch_size: Some(settings::get().default_gpu_batch_size),
+        template_refresh_seconds: Some(settings::get().default_template_refresh_seconds),
+        status_interval_seconds: Some(settings::get().default_status_interval_seconds),
         pool_url: Some(settings::get().default_pool_url),
         worker_name: Some(settings::get().default_worker_name),
         stratum_host: Some(settings::get().stratum_host.clone()),
@@ -207,6 +218,7 @@ async fn start_remote_miner(
         stratum_use_tls: Some(settings::get().stratum_use_tls),
         stratum_skip_tls_verify: Some(settings::get().stratum_skip_tls_verify),
         stratum_password: Some(settings::get().stratum_password.clone()),
+        stratum_timeout_seconds: Some(settings::get().stratum_timeout_seconds),
     });
     let backend = options
         .backend
@@ -228,19 +240,9 @@ async fn start_remote_miner(
         .unwrap_or_else(|| settings::get().default_gpu_devices.clone());
     let mode = options.mode.trim().to_ascii_lowercase();
     let mode = match mode.as_str() {
-        "pool" => "pool",
-        "stratum" => "stratum",
+        "pool" | "stratum" => "stratum",
         _ => "solo",
     };
-    let mut pool_url = options
-        .pool_url
-        .unwrap_or_else(|| settings::get().default_pool_url)
-        .trim()
-        .trim_end_matches('/')
-        .to_string();
-    if pool_url.is_empty() {
-        pool_url = alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_POOL.into();
-    }
     let worker_name = options
         .worker_name
         .filter(|s| !s.trim().is_empty())
@@ -261,6 +263,21 @@ async fn start_remote_miner(
     let stratum_password = options
         .stratum_password
         .unwrap_or_else(|| settings::get().stratum_password.clone());
+    let gpu_batch_size = options
+        .gpu_batch_size
+        .unwrap_or_else(|| settings::get().default_gpu_batch_size);
+    let template_refresh = options
+        .template_refresh_seconds
+        .unwrap_or_else(|| settings::get().default_template_refresh_seconds)
+        .clamp(1, 60);
+    let status_interval = options
+        .status_interval_seconds
+        .unwrap_or_else(|| settings::get().default_status_interval_seconds)
+        .clamp(1, 60);
+    let stratum_timeout = options
+        .stratum_timeout_seconds
+        .unwrap_or_else(|| settings::get().stratum_timeout_seconds)
+        .clamp(5, 120);
     let rpc_url = get_mining_rpc_url();
 
     // Short client for light probes; longer client for work/template.
@@ -284,45 +301,26 @@ async fn start_remote_miner(
         if stratum_port == 0 {
             return Err(AppError::msg("Stratum port must be non-zero."));
         }
-    } else if mode == "pool" {
-        // Pool mode talks only to the pool URL. Do NOT require public RPC /health.
-        let probe = format!("{pool_url}/api/v1/pool/status");
-        let response = light.get(&probe).send().await.map_err(|e| {
-            AppError::msg(format!(
-                "Pool unreachable at {pool_url}: {e}. Expected {}. Check Settings > Network / Mining defaults for the pool URL.",
-                alvenqis_sdk_rust::DEFAULT_MAINNET_CANDIDATE_POOL
-            ))
-        })?;
-        let pool_status = response.status();
-        if !pool_status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(AppError::msg(format!(
-                "Pool status failed (HTTP {pool_status}) at {probe}. Body: {body}"
-            )));
+        if stratum_host.contains("://")
+            || stratum_host.chars().any(char::is_whitespace)
+            || worker_name.len() > 64
+            || worker_name.chars().any(|ch| ch.is_control() || ch.is_whitespace())
+        {
+            return Err(AppError::msg(
+                "Stratum host must not include a URL scheme, and worker name must contain 1-64 non-whitespace characters.",
+            ));
         }
-        // Soft work probe: if pool is up but work is temporarily 502/504, still start miner.
-        let work = format!(
-            "{pool_url}/api/v1/work?miner_address={}&worker_name={}",
-            urlencoding_lite(address),
-            urlencoding_lite(&worker_name)
+        let local_stratum = matches!(
+            stratum_host.trim().to_ascii_lowercase().as_str(),
+            "127.0.0.1" | "localhost" | "::1" | "[::1]"
         );
-        match heavy.get(&work).send().await {
-            Ok(work_resp) if work_resp.status().is_success() => {}
-            Ok(work_resp) => {
-                let status = work_resp.status();
-                let body = work_resp.text().await.unwrap_or_default();
-                if status.as_u16() == 400 || status.as_u16() == 401 || status.as_u16() == 403 {
-                    return Err(AppError::msg(format!(
-                        "Pool rejected work for this wallet (HTTP {status}). Detail: {body}"
-                    )));
-                }
-                eprintln!(
-                    "alvenqis: pool work probe HTTP {status} (starting miner anyway). Body: {body}"
-                );
-            }
-            Err(err) => {
-                eprintln!("alvenqis: pool work probe failed ({err}); starting miner anyway");
-            }
+        if !local_stratum && !stratum_use_tls {
+            return Err(AppError::msg("Remote Stratum requires TLS."));
+        }
+        if !local_stratum && stratum_skip_tls_verify {
+            return Err(AppError::msg(
+                "Remote Stratum certificate verification cannot be disabled.",
+            ));
         }
     } else {
         // Solo: prefer a real mining template. Soft-fail /health so transient
@@ -352,7 +350,7 @@ async fn start_remote_miner(
                 "VPS solo mining template failed at {rpc_url}: {e}. \
                  Check Settings > Mining > Mining RPC URL (use http://rpcnode.dohotstudio.com, not 127.0.0.1). \
                  Public gateways may disable /mining/template; enable expose_mining on a private mining RPC, \
-                 or switch Miner mode to Pool and use {pool_url}."
+                 or switch Miner mode to Pool / Stratum TLS."
             ))
         })?;
         let template_status = response.status();
@@ -367,7 +365,7 @@ async fn start_remote_miner(
             let code = template_status.as_u16();
             let hint = if code == 404 {
                 " Mining endpoints are not registered on this gateway (public-submit often disables them). \
-                 Point solo at a private mining RPC with expose_mining=true, or use Pool mode."
+                 Point solo at a private mining RPC with expose_mining=true, or use Pool / Stratum TLS."
             } else if code == 401 || code == 403 {
                 " Mining write auth is required or this wallet is blocked."
             } else if code == 429 {
@@ -377,7 +375,7 @@ async fn start_remote_miner(
             };
             return Err(AppError::msg(format!(
                 "VPS mining template rejected (HTTP {template_status}) at {probe}.{hint} Detail: {body_short} \
-                 Or switch Miner mode to Pool and use {pool_url}."
+                 Or switch Miner mode to Pool / Stratum TLS."
             )));
         }
         // Soft identity probe: warn (do not hard-block) if gateway still serves foreign chain ids.
@@ -386,7 +384,7 @@ async fn start_remote_miner(
                 return Err(AppError::msg(format!(
                     "RPC at {rpc_url} still serves a legacy/foreign identity (veiron/vireon), not Alvenqis \
                      (alvenqis-mainnet-candidate / alvenqis-mining-v1). Redeploy the Alvenqis control-plane \
-                     gateway with mining enabled, or use an Alvenqis pool at {pool_url}."
+                     gateway with mining enabled, or use Alvenqis Pool / Stratum TLS."
                 )));
             }
             if !text.contains("alvenqis-mining-v1") && !text.contains("alvenqis-mainnet-candidate")
@@ -413,34 +411,28 @@ async fn start_remote_miner(
     let config_path = miner_dir.join("config.toml");
     // TOML string with Windows paths: use forward slashes (accepted by Rust Path).
     let metrics_toml = metrics_path.to_string_lossy().replace('\\', "/");
-    let source_block = if mode == "pool" {
-        format!(
-            r#"[source]
-kind = "pool"
-url = "{pool_url}"
-worker_name = "{worker_name}"
-timeout_seconds = 20
-"#
-        )
-    } else if mode == "stratum" {
-        let pass = stratum_password.replace('\\', "\\\\").replace('"', "\\\"");
+    let source_block = if mode == "stratum" {
+        let host = toml_escape(&stratum_host);
+        let worker = toml_escape(&worker_name);
+        let pass = toml_escape(&stratum_password);
         format!(
             r#"[source]
 kind = "stratum"
-host = "{stratum_host}"
+host = "{host}"
 port = {stratum_port}
 use_tls = {stratum_use_tls}
 skip_tls_verify = {stratum_skip_tls_verify}
-worker_name = "{worker_name}"
+worker_name = "{worker}"
 password = "{pass}"
-timeout_seconds = 20
+timeout_seconds = {stratum_timeout}
 "#
         )
     } else {
+        let rpc = toml_escape(&rpc_url);
         format!(
             r#"[source]
 kind = "rpc"
-url = "{rpc_url}"
+url = "{rpc}"
 timeout_seconds = 20
 "#
         )
@@ -455,18 +447,6 @@ timeout_seconds = 20
             .collect();
         format!("gpu_devices = [{}]\n", items.join(", "))
     };
-    // Pool/stratum refresh work more often so stale jobs are replaced quickly.
-    let template_refresh = if mode == "pool" || mode == "stratum" {
-        3
-    } else {
-        5
-    };
-    // Short status interval so Control Center hashrate updates frequently.
-    let status_interval = if mode == "pool" || mode == "stratum" {
-        2
-    } else {
-        3
-    };
     // GPU-only product: intensity scales CUDA work-items.
     // Keep batches modest so:
     //  1) first hashrate sample appears within ~1–2s after DAG warm-up
@@ -474,7 +454,13 @@ timeout_seconds = 20
     // Previous defaults (350k–500k) left the UI at 0 H/s while CPU sat at 100%.
     let intensity_u = u64::from(gpu_intensity.clamp(1, 100));
     let gpu_base = 131_072_u64;
-    let gpu_batch_size = (gpu_base.saturating_mul(intensity_u) / 100).clamp(16_384, 131_072);
+    let automatic_gpu_batch =
+        (gpu_base.saturating_mul(intensity_u) / 100).clamp(16_384, 131_072);
+    let gpu_batch_size = if gpu_batch_size == 0 {
+        automatic_gpu_batch
+    } else {
+        gpu_batch_size.clamp(256, 131_072)
+    };
     let nonce_batch_size = gpu_batch_size;
     let gpu_batch_toml = format!("gpu_batch_size = {gpu_batch_size}\n");
     let config = format!(
@@ -514,7 +500,7 @@ kernel_validation = true
             "stale": 0,
             "gpu_devices": 0,
             "last_error": "starting alvenqis-miner (fetching work / building DAG)",
-            "work_source": if mode == "pool" { pool_url.as_str() } else { rpc_url.as_str() },
+            "work_source": if mode == "stratum" { stratum_host.as_str() } else { rpc_url.as_str() },
             "updated_at_unix_seconds": std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
@@ -529,7 +515,7 @@ kernel_validation = true
 
     // Write a startup banner so the console is never empty.
     let banner = format!(
-        "starting alvenqis-miner\nbinary={}\nconfig={}\nwork_mode={mode}\nbackend={backend}\ngpu_intensity={gpu_intensity}\nrpc={rpc_url}\npool={pool_url}\naddress={address}\n",
+        "starting alvenqis-miner\nbinary={}\nconfig={}\nwork_mode={mode}\nbackend={backend}\ngpu_intensity={gpu_intensity}\ngpu_batch_size={gpu_batch_size}\ntemplate_refresh_seconds={template_refresh}\nstatus_interval_seconds={status_interval}\nrpc={rpc_url}\nstratum_host={stratum_host}\nstratum_port={stratum_port}\naddress={address}\n",
         miner_bin.display(),
         config_path.display()
     );
@@ -590,8 +576,17 @@ kernel_validation = true
 
     Ok(format!(
         "Miner started (pid {pid})\nWork mode: {mode}\nBackend: {backend}\nGPU intensity: {gpu_intensity}\nWork: {}\nAddress: {address}\nMetrics: {}\nLogs: {}\nBinary: {}",
-        if mode == "pool" {
-            pool_url
+        if mode == "stratum" {
+            format!(
+                "{}://{}:{}",
+                if stratum_use_tls {
+                    "stratum+tls"
+                } else {
+                    "stratum+tcp"
+                },
+                stratum_host,
+                stratum_port
+            )
         } else {
             rpc_url
         },
@@ -773,28 +768,7 @@ async fn run_local_stack_operator(
             let address = miner_address.ok_or_else(|| {
                 AppError::msg("Create or import a wallet before starting the miner")
             })?;
-            let options = miner_options.unwrap_or(MinerStartOptions {
-                mode: "pool".into(),
-                backend: Some("cuda".into()),
-                gpu_intensity: Some(75),
-                gpu_devices: None,
-                pool_url: None,
-                worker_name: None,
-                stratum_host: None,
-                stratum_port: None,
-                stratum_use_tls: None,
-                stratum_skip_tls_verify: None,
-                stratum_password: None,
-            });
             args.extend(["-MinerAddress".into(), address.into()]);
-            if options.mode == "pool" {
-                args.extend([
-                    "-PoolUrl".into(),
-                    options.pool_url.unwrap_or_default(),
-                    "-WorkerName".into(),
-                    options.worker_name.unwrap_or_default(),
-                ]);
-            }
         }
     } else {
         args.push(script.to_string_lossy().into_owned());
@@ -1059,4 +1033,13 @@ fn urlencoding_lite(value: &str) -> String {
         }
     }
     out
+}
+
+fn toml_escape(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
 }

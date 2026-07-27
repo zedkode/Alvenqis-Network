@@ -134,9 +134,13 @@ impl MinerConfig {
                 "nonce_batch_size must be at least 1".to_owned(),
             ));
         }
-        if self.template_refresh_seconds == 0 || self.status_interval_seconds == 0 {
+        if self.template_refresh_seconds == 0
+            || self.template_refresh_seconds > 60
+            || self.status_interval_seconds == 0
+            || self.status_interval_seconds > 60
+        {
             return Err(MinerError::Config(
-                "refresh and status intervals must be at least 1 second".to_owned(),
+                "refresh and status intervals must be between 1 and 60 seconds".to_owned(),
             ));
         }
         crate::backends::MiningMode::parse(&self.backend_mode)?;
@@ -151,22 +155,35 @@ impl MinerConfig {
             use_tls,
             skip_tls_verify,
             worker_name,
+            timeout_seconds,
             ..
         } = &self.source
         {
-            if host.trim().is_empty() {
-                return Err(MinerError::Config("stratum host cannot be empty".into()));
+            let host = host.trim();
+            if host.is_empty() || host.contains("://") || host.chars().any(char::is_whitespace) {
+                return Err(MinerError::Config(
+                    "stratum host must be a hostname or IP without scheme or whitespace".into(),
+                ));
             }
             if *port == 0 {
                 return Err(MinerError::Config("stratum port must be non-zero".into()));
             }
-            if worker_name.trim().is_empty() {
+            let worker_name = worker_name.trim();
+            if worker_name.is_empty()
+                || worker_name.len() > 64
+                || worker_name.chars().any(char::is_whitespace)
+            {
                 return Err(MinerError::Config(
-                    "stratum worker_name cannot be empty".into(),
+                    "stratum worker_name must contain 1-64 non-whitespace characters".into(),
+                ));
+            }
+            if !(5..=120).contains(timeout_seconds) {
+                return Err(MinerError::Config(
+                    "stratum timeout_seconds must be between 5 and 120".into(),
                 ));
             }
             let local = matches!(
-                host.trim().to_ascii_lowercase().as_str(),
+                host.to_ascii_lowercase().as_str(),
                 "127.0.0.1" | "localhost" | "::1" | "[::1]"
             );
             if !*use_tls && !local {
