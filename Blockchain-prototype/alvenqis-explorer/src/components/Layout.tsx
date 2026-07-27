@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
-import { fetchJson, NetworkResponse } from "../lib/api";
+import { Link, NavLink } from "react-router-dom";
+import { fetchJson, NetworkResponse, RPC_BASE_URL } from "../lib/api";
 import { StatusBadge } from "./StatusBadge";
 import { ExplorerSearch } from "./ExplorerSearch";
 
@@ -10,6 +10,17 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const [network, setNetwork] = useState<NetworkResponse | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const websiteUrl = (import.meta.env.VITE_ALVENQIS_WEBSITE_URL ?? "https://dohotstudio.com").replace(/\/+$/, "");
+  const navItems = [
+    ["OV", "Dashboard", "/dashboard"],
+    ["BL", "Blocks", "/blocks"],
+    ["TX", "Transactions", "/transactions"],
+    ["AD", "Addresses", "/addresses"],
+    ["SP", "Supply", "/supply"],
+    ["MP", "Mempool", "/mempool"],
+    ["NW", "Network", "/network"],
+  ];
 
   useEffect(() => {
     let active = true;
@@ -32,52 +43,38 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside className={`sidebar ${menuOpen ? "open" : ""}`}>
         <div className="sidebar-frame">
-          <div className="brand-mark">
-            <div className="brand-badge" />
+          <Link className="brand-mark" to="/dashboard" onClick={() => setMenuOpen(false)}>
+            <img className="brand-logo" src="/alvenqis-logo.png" alt="Alvenqis" />
             <div>
               <div className="brand-title">Alvenqis Explorer</div>
               <div className="brand-subtitle">
                 {network
-                  ? `${network.network_name} read-only local UI`
-                  : "Local network read-only UI"}
+                  ? `${network.network_name} · ${network.status_label}`
+                  : "Read-only chain observability"}
               </div>
             </div>
-          </div>
+          </Link>
 
           <div className="sidebar-section-label">Navigation</div>
           <nav className="nav-list">
-            <NavLink className="nav-link" to="/dashboard">
-              Dashboard
-            </NavLink>
-            <NavLink className="nav-link" to="/blocks">
-              Blocks
-            </NavLink>
-            <NavLink className="nav-link" to="/transactions">
-              Transactions
-            </NavLink>
-            <NavLink className="nav-link" to="/addresses">
-              Addresses
-            </NavLink>
-            <NavLink className="nav-link" to="/supply">
-              Supply
-            </NavLink>
-            <NavLink className="nav-link" to="/mempool">
-              Mempool
-            </NavLink>
-            <NavLink className="nav-link" to="/network">
-              Network Status
-            </NavLink>
+            {navItems.map(([code, label, path]) => (
+              <NavLink className="nav-link" to={path} key={path} onClick={() => setMenuOpen(false)}>
+                <span className="nav-code">{code}</span>
+                <span>{label}</span>
+              </NavLink>
+            ))}
           </nav>
 
           <div className="sidebar-note">
-            <div className="sidebar-note-title">Environment</div>
+            <div className="sidebar-note-title">
+              <span className={`live-dot ${network ? "online" : ""}`} />
+              RPC connection
+            </div>
             <div className="badge-grid">
-              <StatusBadge label="Draft" tone="warn" />
               <StatusBadge label="Read Only" />
-              <StatusBadge label="Prototype" />
-              <StatusBadge label="Not Live Mainnet" tone="warn" />
+              <StatusBadge label={network?.status_label ?? "Unavailable"} tone={network ? undefined : "warn"} />
             </div>
             <div className="sidebar-meta">
               <div className="sidebar-meta-row">
@@ -94,19 +91,36 @@ export function Layout({ children }: LayoutProps) {
               </div>
             </div>
             <p>
-              This explorer reads local RPC and indexer data only. It does not send
-              transactions, connect wallets or expose public infrastructure.
+              Reads the configured Alvenqis RPC and indexer. It never requests keys,
+              connects wallets or submits transactions.
             </p>
+            <a className="sidebar-public-link" href={websiteUrl}>
+              Public website <span aria-hidden="true">↗</span>
+            </a>
           </div>
         </div>
       </aside>
 
       <main className="main-shell">
+        <header className="mobile-topbar">
+          <Link className="mobile-brand" to="/dashboard">
+            <img src="/alvenqis-logo.png" alt="" />
+            <span>Alvenqis Explorer</span>
+          </Link>
+          <button type="button" aria-label="Toggle navigation" onClick={() => setMenuOpen((open) => !open)}>
+            {menuOpen ? "Close" : "Menu"}
+          </button>
+        </header>
         <div className="content-frame">
           <ExplorerSearch />
           {children}
+          <footer className="explorer-footer">
+            <span>Alvenqis Explorer · Read-only Mainnet Candidate data</span>
+            <span className="hash-text">{RPC_BASE_URL}</span>
+          </footer>
         </div>
       </main>
+      {menuOpen ? <button className="sidebar-backdrop" type="button" aria-label="Close navigation" onClick={() => setMenuOpen(false)} /> : null}
     </div>
   );
 }

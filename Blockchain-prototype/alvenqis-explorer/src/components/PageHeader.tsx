@@ -16,10 +16,9 @@ export function PageHeader({ title, description }: PageHeaderProps) {
       <aside className="page-header-panel">
         <div className="page-header-panel-title">Current Mode</div>
         <div className="badge-grid compact">
-          <StatusBadge label="Draft" tone="warn" />
-          <StatusBadge label="Local Network" />
-          <StatusBadge label="Prototype" />
-          <StatusBadge label="Not Live Mainnet" tone="warn" />
+          <StatusBadge label="Mainnet Candidate" tone="warn" />
+          <StatusBadge label="Read Only" />
+          <StatusBadge label="Live RPC Data" />
         </div>
       </aside>
     </header>

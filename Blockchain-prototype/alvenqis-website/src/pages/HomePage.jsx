@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ArrowRight, Blocks, ChevronDown, Cpu, Fingerprint, Orbit, ShieldCheck, Sparkles, WalletCards } from 'lucide-react'
+import { ArrowRight, Blocks, ChevronDown, Cpu, Fingerprint, MonitorSmartphone, Orbit, ShieldCheck, Sparkles } from 'lucide-react'
 import HeroScene from '../components/HeroScene.jsx'
 import { FeatureCard, SectionHeader, fadeUp } from '../components/ui/PageShell.jsx'
 import VisualPanel from '../components/ui/VisualPanel.jsx'
@@ -36,7 +36,7 @@ function Hero() {
             A mineable Layer 1 direction for apps, games, software licenses and verifiable digital ownership.
           </motion.p>
           <motion.p variants={fadeUp} className="mt-5 max-w-xl text-base leading-8 text-frost/62 sm:text-lg">
-            The public layer explains what Core must prove, how Passport gives the chain a human-facing trust surface, and why wallet, explorer, mining and app flows stay gated until they are real.
+            One public portal connects the protocol, the read-only explorer and Alvenqis Desktop—the only product surface for wallet, mining and node control.
           </motion.p>
           <motion.div variants={fadeUp} className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a href="/network" className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-ionHot to-violetCore px-6 py-3 font-bold text-void shadow-ion transition hover:scale-[1.02]">
@@ -71,9 +71,9 @@ function Hero() {
             <div className="mt-4 space-y-3">
               {[
                 ['Alvenqis Core', 'building'],
-                ['Wallet layer', 'gated'],
+                ['Desktop wallet', 'integrated'],
                 ['Passport proofs', 'planned'],
-                ['Explorer data', 'gated'],
+                ['Web explorer', 'read-only'],
               ].map(([item, status]) => (
                 <div key={item} className="flex items-center justify-between rounded-lg border border-line bg-void/45 px-3 py-2">
                   <span className="text-sm text-frost/78">{item}</span>
@@ -230,10 +230,9 @@ function ConfirmationStrip({ confirmationModel }) {
 function ProductGateway() {
   const links = [
     ['Core', '/core', 'Consensus, blocks, state and validation.', Blocks],
-    ['Mining', '/mining', 'PoW, reward math and future pool path.', Cpu],
+    ['Desktop', '/desktop', 'Wallet, mining, node control and local telemetry in one signed application.', MonitorSmartphone],
     ['Tokenomics', '/tokenomics', 'Supply, rewards, halvings and open allocation decisions.', Sparkles],
-    ['Wallet', '/wallet', 'ALVE, assets, licenses and Passport proofs.', WalletCards],
-    ['Explorer', '/explorer', 'Blocks, transactions, assets and status.', Blocks],
+    ['Explorer', '/explorer', 'Read-only blocks, transactions, addresses, supply and network health.', Blocks],
     ['Passport', '/passport', 'Identity, access, ownership and reputation proofs.', Fingerprint],
     ['Developers', '/developers', 'SDK, contracts, standards and examples.', Orbit],
   ]
@@ -244,7 +243,7 @@ function ProductGateway() {
         <SectionHeader
           eyebrow="Product gateway"
           title="More than a landing page: a complete L1 product map."
-          text="Each card opens a dedicated page with real context, planned modules and honest readiness."
+          text="Wallet and mining are intentionally composed inside Desktop. Public chain inspection remains isolated in the read-only explorer."
         />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {links.map(([title, href, text, Icon], index) => (
@@ -277,7 +276,7 @@ function EcosystemPreview({ ecosystemProducts }) {
       <div className="mx-auto max-w-7xl">
         <SectionHeader
           eyebrow="Ecosystem modules"
-          title="Wallet, explorer, indexer, RPC, Passport and SDK."
+          title="Desktop, explorer, indexer, RPC, Passport and SDK."
           text="This is the minimum product layer needed for a modern app/game-friendly Layer 1."
         />
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">

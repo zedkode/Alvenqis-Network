@@ -15,6 +15,7 @@ import {
 import { formatAtomic, formatCount, formatHashrate } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
 import { ErrorPanel, LoadingPanel } from "../components/StatePanels";
+import { NetworkTopology } from "../components/NetworkTopology";
 
 interface NetworkState {
   health: HealthResponse;
@@ -70,7 +71,9 @@ export function NetworkStatusPage() {
       {error ? <ErrorPanel message={error} /> : null}
       {!state && !error ? <LoadingPanel message="Loading network metadata..." /> : null}
       {state ? (
-        <div className="grid two-col">
+        <div className="grid" style={{ gap: 20 }}>
+          <NetworkTopology fleet={state.fleet} p2p={state.p2p} />
+          <div className="grid two-col">
           <section className="panel">
             <h2>RPC Status</h2>
             <div className="detail-list">
@@ -216,6 +219,7 @@ export function NetworkStatusPage() {
               <div className="detail-row"><div className="detail-label">Active bans</div><div>{state.pool.active_bans}</div></div>
             </div> : <p className="muted">No mining-pool service is exposed by the selected endpoint.</p>}
           </section>
+          </div>
         </div>
       ) : null}
     </>

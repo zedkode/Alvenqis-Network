@@ -1,11 +1,10 @@
 export const navItems = [
-  { label: 'Core', href: '/core' },
-  { label: 'Mining', href: '/mining' },
-  { label: 'Wallet', href: '/wallet' },
+  { label: 'Network', href: '/network' },
   { label: 'Explorer', href: '/explorer' },
-  { label: 'Downloads', href: '/downloads' },
-  { label: 'Passport', href: '/passport' },
+  { label: 'Desktop', href: '/desktop' },
+  { label: 'Core', href: '/core' },
   { label: 'Developers', href: '/developers' },
+  { label: 'Docs', href: '/docs' },
   { label: 'Roadmap', href: '/roadmap' },
   { label: 'Status', href: '/status' },
 ]

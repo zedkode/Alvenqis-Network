@@ -16,6 +16,7 @@ import { formatAtomic, formatCount, formatHashrate, formatTimestamp, shortHash }
 import { PageHeader } from "../components/PageHeader";
 import { EmptyPanel, ErrorPanel, LoadingPanel } from "../components/StatePanels";
 import { SummaryCard } from "../components/SummaryCard";
+import { BlockActivityChart } from "../components/BlockActivityChart";
 
 interface DashboardState {
   health: HealthResponse;
@@ -41,7 +42,7 @@ export function DashboardPage() {
             fetchJson<HealthResponse>("/health"),
             fetchJson<StatusResponse>("/status"),
             fetchJson<IndexerStatusResponse>("/indexer/status"),
-            fetchJson<IndexOverviewResponse>("/indexer/overview?blocks=5&transactions=6"),
+            fetchJson<IndexOverviewResponse>("/indexer/overview?blocks=18&transactions=10"),
             fetchJson<MempoolStatusResponse>("/mempool/status").catch(() => ({
               status: "unavailable",
               pending_count: 0,
@@ -133,6 +134,8 @@ export function DashboardPage() {
               note={`${state.p2pStatus.validated_peer_count} handshake validated`}
             />
           </div>
+
+          <BlockActivityChart blocks={state.latestBlocks} />
 
           <div className="grid two-col">
             <section className="panel">

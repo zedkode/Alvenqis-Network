@@ -18,6 +18,7 @@ const internalRoutes = [
   '/tokenomics',
   '/faq',
   '/core',
+  '/desktop',
   '/mining',
   '/wallet',
   '/explorer',
@@ -80,7 +81,8 @@ export function useRoutePath() {
 function Header({ path }) {
   const [open, setOpen] = useState(false)
   const { content } = useContent('global')
-  const navItems = content.navItems || []
+  const staleProductRoutes = new Set(['/wallet', '/mining', '/downloads'])
+  const navItems = (content.navItems || []).filter((item) => !staleProductRoutes.has(item.href))
 
   useEffect(() => {
     setOpen(false)
@@ -152,8 +154,8 @@ function Header({ path }) {
 
 function Footer() {
   const footerGroups = [
-    ['Build', [['Core', '/core'], ['Mining', '/mining'], ['Roadmap', '/roadmap']]],
-    ['Product', [['Wallet', '/wallet'], ['Explorer', '/explorer'], ['Downloads', '/downloads'], ['Passport', '/passport']]],
+    ['Network', [['Core', '/core'], ['Protocol', '/protocol'], ['Roadmap', '/roadmap']]],
+    ['Product', [['Desktop', '/desktop'], ['Explorer', '/explorer'], ['Passport', '/passport'], ['Ecosystem', '/ecosystem']]],
     ['Docs', [['Developers', '/developers'], ['Whitepaper', '/whitepaper'], ['Tokenomics', '/tokenomics'], ['FAQ', '/faq'], ['Status', '/status']]],
   ]
 
@@ -163,7 +165,7 @@ function Footer() {
         <div>
           <Logo />
           <p className="mt-5 max-w-md text-sm leading-7 text-frost/58">
-            A premium public website prototype for Alvenqis Network. Built to communicate the project without overstating readiness.
+            The public entry point for Alvenqis Network, its desktop control center, explorer, protocol documentation and candidate-network status.
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -180,8 +182,8 @@ function Footer() {
         </div>
       </div>
       <div className="mx-auto mt-10 flex max-w-7xl flex-col gap-3 border-t border-line pt-6 text-xs text-frost/42 sm:flex-row sm:items-center sm:justify-between">
-        <span>Alvenqis Network / ALVE. Mainnet Candidate interface.</span>
-        <span>Candidate wallet, explorer and pool exist; public production Mainnet, staking and contracts are not claimed.</span>
+        <span>Alvenqis Network / ALVE · Mainnet Candidate.</span>
+        <span>Wallet and mining live inside Alvenqis Desktop. The web explorer remains read-only.</span>
       </div>
     </footer>
   )
