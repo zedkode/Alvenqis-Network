@@ -1,7 +1,14 @@
 # Alvenqis Network
 
 > **Repo map (2026 layout):** [`init.md`](./init.md) · [`PROJECT_STRUCTURE.md`](./PROJECT_STRUCTURE.md)
-> **Code:** [`Blockchain-prototype/`](./Blockchain-prototype/) · **Docs:** [`Blockchain-docs/`](./Blockchain-docs/) · **Scripts:** [`Blockchain-scripts/`](./Blockchain-scripts/) · **Stubs:** [`planned/`](./planned/)
+
+> **Code:** [`Blockchain-prototype/`](./Blockchain-prototype/) ·
+
+> **Docs:** [`Blockchain-docs/`](./Blockchain-docs/) ·
+
+> **Scripts:** [`Blockchain-scripts/`](./Blockchain-scripts/) ·
+
+> **Stubs:** [`planned/`](./planned/)
 
 Alvenqis Network is an independent, Rust-based Proof-of-Work Layer 1 blockchain currently under active development.
 
