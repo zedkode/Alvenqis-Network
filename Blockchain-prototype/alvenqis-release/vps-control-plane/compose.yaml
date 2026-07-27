@@ -62,7 +62,7 @@ services:
     environment:
       ALVENQIS_COMPONENT: rpc
       # One gateway owns chain reads/writes. Mining remains Docker-internal:
-      # Caddy retires every public /mining route with HTTP 410.
+      # the edge gateway retires every public /mining route with HTTP 410.
       RPC_ACCESS_MODE: public-submit
       RPC_EXPOSE_MINING: "true"
     depends_on:
@@ -245,31 +245,73 @@ services:
     cpus: ${OPS_CPU_LIMIT:-0.35}
     pids_limit: 256
 
-  caddy:
+  alvenqis-website:
     <<: *service-guardrails
-    image: caddy:2.9-alpine
-    container_name: alvenqis-caddy
+    image: ${ALVENQIS_WEBSITE_IMAGE:-ghcr.io/zedkode/alvenqis-website}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_REPO:-../..}/alvenqis-website
+      dockerfile: Dockerfile
+      args:
+        VITE_ALVENQIS_RPC_URL: https://${RPC_HOST}
+        VITE_ALVENQIS_POOL_URL: https://${POOL_HOST}
+        VITE_ALVENQIS_EXPLORER_URL: https://${EXPLORER_HOST}
+    container_name: alvenqis-website
+    read_only: true
+    tmpfs: [/tmp:size=32m]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${WEBSITE_MEMORY_LIMIT:-192M}
+    cpus: ${WEBSITE_CPU_LIMIT:-0.15}
+    pids_limit: 128
+
+  alvenqis-explorer:
+    <<: *service-guardrails
+    image: ${ALVENQIS_EXPLORER_IMAGE:-ghcr.io/zedkode/alvenqis-explorer}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_REPO:-../..}/alvenqis-explorer
+      dockerfile: Dockerfile
+      args:
+        VITE_ALVENQIS_RPC_URL: https://${RPC_HOST}
+    container_name: alvenqis-explorer
+    read_only: true
+    tmpfs: [/tmp:size=32m]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${EXPLORER_MEMORY_LIMIT:-192M}
+    cpus: ${EXPLORER_CPU_LIMIT:-0.15}
+    pids_limit: 128
+
+  gateway:
+    <<: *service-guardrails
+    image: ${ALVENQIS_GATEWAY_IMAGE:-ghcr.io/zedkode/alvenqis-gateway}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}/docker/gateway
+      dockerfile: Dockerfile
+    container_name: alvenqis-gateway
     env_file: [.env]
-    entrypoint: ["/usr/local/bin/alvenqis-caddy-entrypoint.sh"]
-    volumes:
-      - ./docker/caddy/caddy-entrypoint.sh:/usr/local/bin/alvenqis-caddy-entrypoint.sh:ro
-      - ./docker/caddy/Caddyfile.template:/etc/caddy/Caddyfile.template:ro
-      - ./state/caddy/data:/data
-      - ./state/caddy/config:/config
     secrets: [admin_password]
     depends_on:
       alvenqis-control: {condition: service_started}
       alvenqis-rpc: {condition: service_started}
       alvenqis-ops: {condition: service_started}
+      alvenqis-website: {condition: service_healthy}
+      alvenqis-explorer: {condition: service_healthy}
       grafana: {condition: service_started}
+    read_only: true
+    tmpfs: [/tmp:size=64m]
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:2019/config/"]
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/gateway-health"]
       interval: 20s
       timeout: 5s
       retries: 8
-    cap_add: [NET_BIND_SERVICE]
-    mem_limit: ${CADDY_MEMORY_LIMIT:-256M}
-    cpus: ${CADDY_CPU_LIMIT:-0.35}
+    mem_limit: ${GATEWAY_MEMORY_LIMIT:-192M}
+    cpus: ${GATEWAY_CPU_LIMIT:-0.20}
     pids_limit: 256
 
   cloudflared:
@@ -277,11 +319,10 @@ services:
     image: cloudflare/cloudflared:2026.7.2
     container_name: alvenqis-cloudflared
     profiles: [cloudflare]
-    networks: [alvenqis-internal, onepanel-runtime]
     command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:20241", "run", "--token-file", "/run/secrets/cloudflare_tunnel_token"]
     secrets: [cloudflare_tunnel_token]
     depends_on:
-      caddy: {condition: service_healthy}
+      gateway: {condition: service_healthy}
     healthcheck:
       test: ["CMD", "cloudflared", "version"]
       interval: 30s
@@ -363,6 +404,37 @@ services:
     mem_limit: ${NODE_EXPORTER_MEMORY_LIMIT:-128M}
     cpus: ${NODE_EXPORTER_CPU_LIMIT:-0.10}
     pids_limit: 128
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:0.55.1
+    container_name: alvenqis-cadvisor
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    privileged: true
+    security_opt: [no-new-privileges:true]
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+      - --max_housekeeping_interval=30s
+      - --store_container_labels=false
+      - --disable_metrics=percpu,sched,hugetlb,referenced_memory,resctrl,udp,advtcp
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    healthcheck:
+      test: ["CMD", "/usr/bin/cadvisor", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    mem_limit: ${CADVISOR_MEMORY_LIMIT:-256M}
+    cpus: ${CADVISOR_CPU_LIMIT:-0.15}
+    pids_limit: 256
 
   alvenqis-metrics-exporter:
     <<: *service-guardrails
@@ -495,9 +567,6 @@ networks:
   alvenqis-internal:
     name: alvenqis-internal
     driver: bridge
-  onepanel-runtime:
-    name: 1panel-network
-    external: true
 
 secrets:
   admin_password: {file: ./state/secrets/admin_password}
