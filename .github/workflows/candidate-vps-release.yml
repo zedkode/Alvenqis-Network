@@ -72,12 +72,21 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
 
+      - name: Install RocksDB build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential clang cmake libclang-dev
+
+      - name: Check RocksDB runtime feature
+        run: cargo check --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --locked --features storage-rocksdb
+
       - name: Install control-plane validation parser
         run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.2
 
       - name: Validate Docker control plane
         working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
         run: ./scripts/validate-stack.sh --require-docker
+
+      - name: Build RocksDB runtime image
+        run: docker build --file Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile --tag alvenqis-runtime:candidate .
 
       - name: Build VPS control-plane bundle
         run: bash Blockchain-scripts/release/build-vps-control-plane-bundle.sh

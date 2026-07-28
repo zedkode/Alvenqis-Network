@@ -8,6 +8,10 @@ on:
       - "Blockchain-scripts/security/**"
       - "Blockchain-scripts/release/**"
       - "Blockchain-scripts/git/**"
+      - "Blockchain-prototype/Cargo.toml"
+      - "Blockchain-prototype/Cargo.lock"
+      - "Blockchain-prototype/alvenqis-core/**"
+      - "Blockchain-prototype/alvenqis-node/**"
       - "Blockchain-prototype/alvenqis-release/**"
       - ".github/workflows/release-gate.yml"
   pull_request:
@@ -15,6 +19,10 @@ on:
       - "Blockchain-scripts/security/**"
       - "Blockchain-scripts/release/**"
       - "Blockchain-scripts/git/**"
+      - "Blockchain-prototype/Cargo.toml"
+      - "Blockchain-prototype/Cargo.lock"
+      - "Blockchain-prototype/alvenqis-core/**"
+      - "Blockchain-prototype/alvenqis-node/**"
       - "Blockchain-prototype/alvenqis-release/**"
       - ".github/workflows/release-gate.yml"
   workflow_dispatch:
@@ -43,7 +51,7 @@ jobs:
         uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
 
       - name: Install Linux build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential clang cmake libclang-dev libdbus-1-dev
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -67,6 +75,11 @@ jobs:
 
       - name: Config safety scan
         run: bash Blockchain-scripts/security/check-config-safety.sh
+
+      - name: Verify RocksDB state backend
+        run: |
+          cargo test --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --locked --features storage-rocksdb --lib
+          cargo clippy --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --all-targets --locked --features storage-rocksdb -- -D warnings
 
       - name: Release gate
         run: bash Blockchain-scripts/release/release-gate.sh

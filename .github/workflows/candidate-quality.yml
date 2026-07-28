@@ -38,7 +38,7 @@ jobs:
         uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
 
       - name: Install Linux build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential clang cmake libclang-dev libdbus-1-dev
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -46,5 +46,11 @@ jobs:
       - name: Run workspace tests
         run: cargo test --manifest-path Blockchain-prototype/Cargo.toml --workspace --locked
 
+      - name: Test RocksDB state backend
+        run: cargo test --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --locked --features storage-rocksdb --lib
+
       - name: Run Clippy
         run: cargo clippy --manifest-path Blockchain-prototype/Cargo.toml --workspace --all-targets --locked -- -D warnings
+
+      - name: Run RocksDB Clippy
+        run: cargo clippy --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --all-targets --locked --features storage-rocksdb -- -D warnings

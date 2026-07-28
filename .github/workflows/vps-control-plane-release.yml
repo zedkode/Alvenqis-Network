@@ -34,7 +34,7 @@ jobs:
           components: clippy,rustfmt
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential clang cmake libclang-dev libdbus-1-dev
 
       - name: Verify requested tag
         run: |
@@ -57,10 +57,15 @@ jobs:
           cargo fmt --all --check
           cargo test --manifest-path Blockchain-prototype/Cargo.toml --workspace --locked
           cargo clippy --manifest-path Blockchain-prototype/Cargo.toml --workspace --all-targets --locked -- -D warnings
+          cargo test --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --locked --features storage-rocksdb --lib
+          cargo clippy --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --all-targets --locked --features storage-rocksdb -- -D warnings
 
       - name: Validate Docker control plane
         working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
         run: ./scripts/validate-stack.sh --require-docker
+
+      - name: Build RocksDB runtime image
+        run: docker build --file Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile --tag alvenqis-runtime:release-gate .
 
       - name: Build VPS control-plane bundle
         run: bash Blockchain-scripts/release/build-vps-control-plane-bundle.sh

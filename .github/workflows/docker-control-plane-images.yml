@@ -31,6 +31,9 @@ jobs:
         working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
         run: ./scripts/validate-stack.sh --require-docker
 
+      - name: Smoke-build RocksDB runtime image
+        run: docker build --file Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile --tag alvenqis-runtime:smoke .
+
   build:
     needs: validate
     runs-on: ubuntu-24.04
