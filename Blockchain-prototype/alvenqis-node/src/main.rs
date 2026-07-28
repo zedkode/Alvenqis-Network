@@ -1,3 +1,5 @@
+#[cfg(feature = "storage-rocksdb")]
+use alvenqis_core::Chain;
 use alvenqis_core::{Network, Transaction};
 use alvenqis_node::{
     approve_genesis, backup_chain_database, balance, default_data_dir, default_mempool_dir,
@@ -8,7 +10,14 @@ use alvenqis_node::{
     submit_transaction, validate_chain, verify_database_integrity, write_genesis_review_manifest,
     NetworkConfig, DEFAULT_CONFIG_PATH,
 };
+#[cfg(feature = "storage-rocksdb")]
+use alvenqis_node::{
+    backup_state_database, load_blocks, persist_chain_state, restore_latest_state_database,
+    state_database_path, verify_state_database, NodeError, NodeResult,
+};
 use clap::{Parser, Subcommand};
+#[cfg(feature = "storage-rocksdb")]
+use std::path::Path;
 use std::path::PathBuf;
 
 const NODE_EXAMPLES: &str = "\
@@ -102,6 +111,31 @@ enum Command {
     },
     /// Run SQLite integrity_check against the canonical chain database.
     VerifyChainDatabase,
+    /// Replay canonical SQLite blocks and rebuild or migrate RocksDB state.
+    #[cfg(feature = "storage-rocksdb")]
+    #[command(name = "rebuild-rocksdb", visible_alias = "migrate-rocksdb")]
+    RebuildRocksDb,
+    /// Verify RocksDB state against a complete canonical SQLite replay.
+    #[cfg(feature = "storage-rocksdb")]
+    #[command(name = "verify-rocksdb")]
+    VerifyRocksDb,
+    /// Create and verify an incremental RocksDB backup.
+    #[cfg(feature = "storage-rocksdb")]
+    #[command(name = "backup-rocksdb")]
+    BackupRocksDb {
+        #[arg(long, value_name = "DIR")]
+        backup_repository: PathBuf,
+        /// Number of newest backups to retain; 0 retains all backups.
+        #[arg(long, default_value_t = 7, value_name = "COUNT")]
+        backups_to_keep: usize,
+    },
+    /// Restore the latest verified RocksDB backup into the empty --data-dir.
+    #[cfg(feature = "storage-rocksdb")]
+    #[command(name = "restore-latest-rocksdb")]
+    RestoreLatestRocksDb {
+        #[arg(long, value_name = "DIR")]
+        backup_repository: PathBuf,
+    },
     MempoolStatus,
     Balance {
         address: String,
@@ -260,6 +294,19 @@ fn main() {
                 data_dir.display()
             )
         }),
+        #[cfg(feature = "storage-rocksdb")]
+        Command::RebuildRocksDb => rebuild_rocksdb(&config_path, &data_dir),
+        #[cfg(feature = "storage-rocksdb")]
+        Command::VerifyRocksDb => verify_rocksdb(&config_path, &data_dir),
+        #[cfg(feature = "storage-rocksdb")]
+        Command::BackupRocksDb {
+            backup_repository,
+            backups_to_keep,
+        } => backup_rocksdb(&data_dir, &backup_repository, backups_to_keep),
+        #[cfg(feature = "storage-rocksdb")]
+        Command::RestoreLatestRocksDb { backup_repository } => {
+            restore_latest_rocksdb(&data_dir, &backup_repository)
+        }
         Command::Balance { address } => {
             balance(&config_path, &data_dir, &address).and_then(|summary| {
                 serde_json::to_string_pretty(&summary).map_err(alvenqis_node::NodeError::from)
@@ -296,4 +343,82 @@ fn main() {
             std::process::exit(1);
         }
     }
+}
+
+#[cfg(feature = "storage-rocksdb")]
+fn rebuild_rocksdb(config_path: &Path, data_dir: &Path) -> NodeResult<String> {
+    let network = NetworkConfig::load_from_path(config_path)?.network;
+    let blocks = load_blocks(data_dir)?;
+    let chain = Chain::from_blocks(network, blocks.iter().cloned())?;
+    persist_chain_state(data_dir, &blocks, &chain)?;
+    let status = verify_state_database(data_dir, network, &blocks)?;
+    let status_json = serde_json::to_string_pretty(&status)?;
+    Ok(format!(
+        "rebuilt RocksDB state from full SQLite replay database={}\n{status_json}",
+        state_database_path(data_dir).display()
+    ))
+}
+
+#[cfg(feature = "storage-rocksdb")]
+fn verify_rocksdb(config_path: &Path, data_dir: &Path) -> NodeResult<String> {
+    let network = NetworkConfig::load_from_path(config_path)?.network;
+    let blocks = load_blocks(data_dir)?;
+    let status = verify_state_database(data_dir, network, &blocks)?;
+    let status_json = serde_json::to_string_pretty(&status)?;
+    Ok(format!(
+        "verified RocksDB state against full SQLite replay database={}\n{status_json}",
+        state_database_path(data_dir).display()
+    ))
+}
+
+#[cfg(feature = "storage-rocksdb")]
+fn backup_rocksdb(
+    data_dir: &Path,
+    backup_repository: &Path,
+    backups_to_keep: usize,
+) -> NodeResult<String> {
+    let info = backup_state_database(data_dir, backup_repository, backups_to_keep)?;
+    let info_json = serde_json::to_string_pretty(&info)?;
+    Ok(format!(
+        "created and verified incremental RocksDB backup repository={}\n{info_json}",
+        backup_repository.display()
+    ))
+}
+
+#[cfg(feature = "storage-rocksdb")]
+fn restore_latest_rocksdb(data_dir: &Path, backup_repository: &Path) -> NodeResult<String> {
+    ensure_empty_restore_destination(data_dir)?;
+    let status = restore_latest_state_database(data_dir, backup_repository)?;
+    let status_json = serde_json::to_string_pretty(&status)?;
+    Ok(format!(
+        "restored latest verified RocksDB backup database={}\n{status_json}",
+        state_database_path(data_dir).display()
+    ))
+}
+
+#[cfg(feature = "storage-rocksdb")]
+fn ensure_empty_restore_destination(destination: &Path) -> NodeResult<()> {
+    if !destination.exists() {
+        return Ok(());
+    }
+
+    let metadata = std::fs::symlink_metadata(destination)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(NodeError::Input(format!(
+            "RocksDB restore destination must be an empty directory: {}",
+            destination.display()
+        )));
+    }
+
+    if std::fs::read_dir(destination)?
+        .next()
+        .transpose()?
+        .is_some()
+    {
+        return Err(NodeError::Input(format!(
+            "RocksDB restore destination is not empty: {}",
+            destination.display()
+        )));
+    }
+    Ok(())
 }

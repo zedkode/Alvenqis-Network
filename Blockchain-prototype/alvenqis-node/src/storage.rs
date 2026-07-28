@@ -179,12 +179,31 @@ impl SqliteBlockStore {
         Ok(connection)
     }
 
+    pub fn load_tip_block(&self) -> NodeResult<Option<Block>> {
+        let connection = self.open_read_connection()?;
+        load_tip_block_from_connection(&connection, &chain_database_path(&self.data_dir))
+    }
+
+    pub fn load_blocks_from_height(&self, start_height: u64) -> NodeResult<Vec<Block>> {
+        let connection = self.open_read_connection()?;
+        load_blocks_from_height_from_connection(
+            &connection,
+            &chain_database_path(&self.data_dir),
+            start_height,
+        )
+    }
+
+    pub fn canonical_block_count(&self) -> NodeResult<u64> {
+        let connection = self.open_read_connection()?;
+        canonical_block_count_from_connection(&connection, &chain_database_path(&self.data_dir))
+    }
+
     fn append_with_tip_link(&self, block: &Block) -> NodeResult<()> {
         let mut connection = self.open_write_connection()?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let blocks =
-            load_blocks_from_connection(&transaction, &chain_database_path(&self.data_dir), true)?;
-        verify_tip_extension(&blocks, block)?;
+        let tip =
+            load_tip_block_from_connection(&transaction, &chain_database_path(&self.data_dir))?;
+        verify_tip_extension(tip.as_ref(), block)?;
         insert_canonical_block(&transaction, block)?;
         transaction.commit()?;
         Ok(())
@@ -215,7 +234,7 @@ impl BlockStore for SqliteBlockStore {
         let blocks =
             load_blocks_from_connection(&transaction, &chain_database_path(&self.data_dir), false)?;
         let result = validate(&blocks, candidate)?;
-        verify_tip_extension(&blocks, candidate)?;
+        verify_tip_extension(blocks.last(), candidate)?;
         insert_canonical_block(&transaction, candidate)?;
         transaction.commit()?;
         Ok(result)
@@ -252,8 +271,8 @@ impl BlockStore for SqliteBlockStore {
     }
 }
 
-fn verify_tip_extension(blocks: &[Block], block: &Block) -> NodeResult<()> {
-    if let Some(tip) = blocks.last() {
+fn verify_tip_extension(tip: Option<&Block>, block: &Block) -> NodeResult<()> {
+    if let Some(tip) = tip {
         let expected_tip = hash_to_hex(&tip.hash()?);
         let actual_previous = hash_to_hex(&block.header.previous_hash);
         if expected_tip != actual_previous {
@@ -348,25 +367,194 @@ fn insert_orphaned_block(
     Ok(())
 }
 
+#[derive(Debug)]
+struct StoredCanonicalBlockRow {
+    height: i64,
+    hash: Vec<u8>,
+    previous_hash: Vec<u8>,
+    network_id: String,
+    block_json: Vec<u8>,
+}
+
+#[derive(Debug)]
+struct ValidatedCanonicalBlockRow {
+    height: i64,
+    hash: Vec<u8>,
+    previous_hash: Vec<u8>,
+    block: Block,
+}
+
+fn stored_canonical_block_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<StoredCanonicalBlockRow> {
+    Ok(StoredCanonicalBlockRow {
+        height: row.get(0)?,
+        hash: row.get(1)?,
+        previous_hash: row.get(2)?,
+        network_id: row.get(3)?,
+        block_json: row.get(4)?,
+    })
+}
+
+fn validate_stored_canonical_block_row(
+    stored: StoredCanonicalBlockRow,
+    database_path: &Path,
+    hash_was_validated: bool,
+) -> NodeResult<ValidatedCanonicalBlockRow> {
+    let StoredCanonicalBlockRow {
+        height,
+        hash,
+        previous_hash,
+        network_id,
+        block_json,
+    } = stored;
+    if height < 0 || hash.len() != 32 || previous_hash.len() != 32 {
+        return Err(invalid_database(
+            database_path,
+            format!("invalid canonical block columns at height {height}"),
+        ));
+    }
+    let block: Block = serde_json::from_slice(&block_json).map_err(|error| {
+        invalid_database(
+            database_path,
+            format!("cannot decode block at height {height}: {error}"),
+        )
+    })?;
+    let block_height = height_to_i64(block.header.height)?;
+    let hash_matches = hash_was_validated || hash.as_slice() == block.hash()?.as_bytes();
+    if block_height != height
+        || !hash_matches
+        || previous_hash.as_slice() != block.header.previous_hash.as_bytes()
+        || network_id != block.header.network_id
+    {
+        return Err(invalid_database(
+            database_path,
+            format!("stored columns do not match serialized block at height {height}"),
+        ));
+    }
+    Ok(ValidatedCanonicalBlockRow {
+        height,
+        hash,
+        previous_hash,
+        block,
+    })
+}
+
+fn load_validated_canonical_rows_from_height(
+    connection: &Connection,
+    database_path: &Path,
+    start_height: i64,
+    cached_hashes: &BTreeMap<i64, Vec<u8>>,
+) -> NodeResult<Vec<ValidatedCanonicalBlockRow>> {
+    let mut statement = connection.prepare(
+        "SELECT height, hash, previous_hash, network_id, block_json
+         FROM canonical_blocks
+         WHERE height >= ?1
+         ORDER BY height ASC",
+    )?;
+    let rows = statement.query_map(params![start_height], stored_canonical_block_row)?;
+    let mut previous_stored_hash: Option<Vec<u8>> = None;
+    let mut expected_height = start_height;
+    let mut validated_rows = Vec::new();
+    for row in rows {
+        let stored = row?;
+        let hash_was_validated = cached_hashes
+            .get(&stored.height)
+            .is_some_and(|cached| cached == &stored.hash);
+        let validated =
+            validate_stored_canonical_block_row(stored, database_path, hash_was_validated)?;
+        if validated.height != expected_height {
+            return Err(invalid_database(
+                database_path,
+                format!(
+                    "non-contiguous canonical height: expected {expected_height}, found {}",
+                    validated.height
+                ),
+            ));
+        }
+        if previous_stored_hash
+            .as_deref()
+            .is_some_and(|previous| previous != validated.previous_hash.as_slice())
+        {
+            return Err(NodeError::InvalidChainFile {
+                path: database_path.to_path_buf(),
+                line: validated.height as usize + 1,
+                message: format!("broken previous_hash link at height {}", validated.height),
+            });
+        }
+        expected_height = expected_height.saturating_add(1);
+        previous_stored_hash = Some(validated.hash.clone());
+        validated_rows.push(validated);
+    }
+    Ok(validated_rows)
+}
+
+fn load_tip_block_from_connection(
+    connection: &Connection,
+    database_path: &Path,
+) -> NodeResult<Option<Block>> {
+    let stored = connection
+        .query_row(
+            "SELECT height, hash, previous_hash, network_id, block_json
+             FROM canonical_blocks
+             ORDER BY height DESC
+             LIMIT 1",
+            [],
+            stored_canonical_block_row,
+        )
+        .optional()?;
+    stored
+        .map(|stored| {
+            validate_stored_canonical_block_row(stored, database_path, false)
+                .map(|validated| validated.block)
+        })
+        .transpose()
+}
+
+fn load_blocks_from_height_from_connection(
+    connection: &Connection,
+    database_path: &Path,
+    start_height: u64,
+) -> NodeResult<Vec<Block>> {
+    let start_height = height_to_i64(start_height)?;
+    let query_start_height = if start_height == 0 {
+        0
+    } else {
+        start_height - 1
+    };
+    let rows = load_validated_canonical_rows_from_height(
+        connection,
+        database_path,
+        query_start_height,
+        &BTreeMap::new(),
+    )?;
+    Ok(rows
+        .into_iter()
+        .filter(|row| row.height >= start_height)
+        .map(|row| row.block)
+        .collect())
+}
+
+fn canonical_block_count_from_connection(
+    connection: &Connection,
+    database_path: &Path,
+) -> NodeResult<u64> {
+    let count: i64 = connection.query_row("SELECT COUNT(*) FROM canonical_blocks", [], |row| {
+        row.get(0)
+    })?;
+    u64::try_from(count).map_err(|_| {
+        invalid_database(
+            database_path,
+            format!("invalid canonical block count {count}"),
+        )
+    })
+}
+
 fn load_blocks_from_connection(
     connection: &Connection,
     database_path: &Path,
     allow_empty: bool,
 ) -> NodeResult<Vec<Block>> {
-    let mut statement = connection.prepare(
-        "SELECT height, hash, previous_hash, network_id, block_json
-         FROM canonical_blocks ORDER BY height ASC",
-    )?;
-    let rows = statement.query_map([], |row| {
-        Ok((
-            row.get::<_, i64>(0)?,
-            row.get::<_, Vec<u8>>(1)?,
-            row.get::<_, Vec<u8>>(2)?,
-            row.get::<_, String>(3)?,
-            row.get::<_, Vec<u8>>(4)?,
-        ))
-    })?;
-
     let validation_cache = VALIDATED_BLOCK_HASH_CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
     let cached_hashes = validation_cache
         .lock()
@@ -374,48 +562,13 @@ fn load_blocks_from_connection(
         .get(database_path)
         .cloned()
         .unwrap_or_default();
+    let rows =
+        load_validated_canonical_rows_from_height(connection, database_path, 0, &cached_hashes)?;
     let mut validated_hashes = BTreeMap::new();
-    let mut previous_stored_hash: Option<Vec<u8>> = None;
-    let mut expected_height = 0_i64;
-    let mut blocks = Vec::new();
+    let mut blocks = Vec::with_capacity(rows.len());
     for row in rows {
-        let (height, stored_hash, stored_previous, stored_network, block_json) = row?;
-        let block: Block = serde_json::from_slice(&block_json).map_err(|error| {
-            invalid_database(
-                database_path,
-                format!("cannot decode block at height {height}: {error}"),
-            )
-        })?;
-        let block_height = height_to_i64(block.header.height)?;
-        let hash_was_validated = cached_hashes
-            .get(&height)
-            .is_some_and(|cached| cached == &stored_hash);
-        let hash_matches = hash_was_validated || stored_hash.as_slice() == block.hash()?.as_bytes();
-        if height != expected_height
-            || block_height != height
-            || !hash_matches
-            || stored_previous.as_slice() != block.header.previous_hash.as_bytes()
-            || stored_network != block.header.network_id
-        {
-            return Err(invalid_database(
-                database_path,
-                format!("stored columns do not match serialized block at height {height}"),
-            ));
-        }
-        if previous_stored_hash
-            .as_deref()
-            .is_some_and(|previous| previous != stored_previous.as_slice())
-        {
-            return Err(NodeError::InvalidChainFile {
-                path: database_path.to_path_buf(),
-                line: height as usize + 1,
-                message: format!("broken previous_hash link at height {height}"),
-            });
-        }
-        expected_height = expected_height.saturating_add(1);
-        previous_stored_hash = Some(stored_hash.clone());
-        validated_hashes.insert(height, stored_hash);
-        blocks.push(block);
+        validated_hashes.insert(row.height, row.hash);
+        blocks.push(row.block);
     }
 
     if blocks.is_empty() && !allow_empty {
@@ -830,8 +983,8 @@ mod tests {
 
     fn linked_child(genesis: &Block) -> Block {
         let mut child = genesis.clone();
-        child.header.height = 1;
-        child.header.previous_hash = genesis.hash().expect("genesis hash");
+        child.header.height = genesis.header.height.saturating_add(1);
+        child.header.previous_hash = genesis.hash().expect("parent hash");
         child
     }
 
@@ -868,6 +1021,87 @@ mod tests {
             cumulative_work(&loaded).expect("work").to_string()
         );
         verify_database_integrity(dir.path()).expect("integrity");
+    }
+
+    #[test]
+    fn point_queries_return_validated_tip_and_count() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        let child = linked_child(&genesis);
+        store.append_with_tip_link(&genesis).expect("genesis");
+        store.append_with_tip_link(&child).expect("child");
+
+        assert_eq!(store.canonical_block_count().expect("count"), 2);
+        assert_eq!(store.load_tip_block().expect("tip"), Some(child.clone()));
+
+        let connection = store.open_write_connection().expect("open");
+        connection
+            .execute(
+                "UPDATE canonical_blocks
+                 SET network_id = 'tampered-network'
+                 WHERE height = 1",
+                [],
+            )
+            .expect("tamper tip");
+        let error = store.load_tip_block().expect_err("tip must be validated");
+        assert!(matches!(error, NodeError::InvalidChainDatabase { .. }));
+    }
+
+    #[test]
+    fn range_query_returns_validated_suffix() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        let child = linked_child(&genesis);
+        let grandchild = linked_child(&child);
+        store.append_with_tip_link(&genesis).expect("genesis");
+        store.append_with_tip_link(&child).expect("child");
+        store.append_with_tip_link(&grandchild).expect("grandchild");
+
+        assert_eq!(
+            store.load_blocks_from_height(1).expect("suffix"),
+            vec![child.clone(), grandchild.clone()]
+        );
+        assert_eq!(
+            store.load_blocks_from_height(2).expect("tail"),
+            vec![grandchild]
+        );
+        assert!(store
+            .load_blocks_from_height(3)
+            .expect("empty suffix")
+            .is_empty());
+
+        let connection = store.open_write_connection().expect("open");
+        connection
+            .execute(
+                "UPDATE canonical_blocks
+                 SET previous_hash = zeroblob(32)
+                 WHERE height = 2",
+                [],
+            )
+            .expect("tamper range");
+        let error = store
+            .load_blocks_from_height(1)
+            .expect_err("range must be validated");
+        assert!(matches!(error, NodeError::InvalidChainDatabase { .. }));
+    }
+
+    #[test]
+    fn tip_append_rejects_stale_parent_without_mutation() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        store.append_with_tip_link(&genesis).expect("genesis");
+        let mut stale_child = linked_child(&genesis);
+        stale_child.header.previous_hash = alvenqis_core::Hash::zero();
+
+        let error = store
+            .append_with_tip_link(&stale_child)
+            .expect_err("stale parent must fail");
+        assert!(matches!(error, NodeError::StaleChainTip { .. }));
+        assert_eq!(store.canonical_block_count().expect("count"), 1);
+        assert_eq!(store.load_tip_block().expect("tip"), Some(genesis));
     }
 
     #[test]

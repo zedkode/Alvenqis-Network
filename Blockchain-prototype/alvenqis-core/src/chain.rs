@@ -2,7 +2,7 @@ use crate::amount::Amount;
 use crate::block::Block;
 use crate::consensus::validate_next_block;
 use crate::crypto::Hash;
-use crate::errors::Result;
+use crate::errors::{AlvenqisError, Result};
 use crate::network::Network;
 use crate::state::{apply_block, LedgerState};
 
@@ -86,6 +86,75 @@ impl Chain {
         Ok(chain)
     }
 
+    pub fn from_persisted_state<I>(
+        network: Network,
+        blocks: I,
+        state: LedgerState,
+    ) -> Result<Self>
+    where
+        I: IntoIterator<Item = Block>,
+    {
+        let blocks: Vec<Block> = blocks.into_iter().collect();
+        for block in &blocks {
+            let block_network = block.network()?;
+            if block_network != network {
+                return Err(AlvenqisError::InvalidNetwork {
+                    expected: network.network_id().to_owned(),
+                    actual: block.header.network_id.clone(),
+                });
+            }
+        }
+
+        let Some(tip) = blocks.last() else {
+            if state != LedgerState::new() {
+                return Err(invalid_persisted_state(
+                    "non-empty ledger state cannot restore an empty chain",
+                ));
+            }
+            return Ok(Self {
+                network,
+                blocks,
+                state,
+            });
+        };
+
+        let applied_height = state
+            .applied_block_height()
+            .ok_or_else(|| invalid_persisted_state("applied block height is missing"))?;
+        if applied_height != tip.header.height {
+            return Err(invalid_persisted_state(format!(
+                "applied height {applied_height} does not match tip height {}",
+                tip.header.height
+            )));
+        }
+
+        let persisted_tip_hash = state
+            .tip_hash()
+            .ok_or_else(|| invalid_persisted_state("tip hash is missing"))?;
+        let actual_tip_hash = tip.hash()?;
+        if persisted_tip_hash != actual_tip_hash {
+            return Err(invalid_persisted_state(
+                "persisted tip hash does not match the block tip",
+            ));
+        }
+
+        let persisted_tip_timestamp = state
+            .tip_timestamp()
+            .ok_or_else(|| invalid_persisted_state("tip timestamp is missing"))?;
+        if persisted_tip_timestamp != tip.header.timestamp {
+            return Err(invalid_persisted_state(format!(
+                "tip timestamp {persisted_tip_timestamp} does not match block timestamp {}",
+                tip.header.timestamp
+            )));
+        }
+
+        Ok(Self {
+            network,
+            blocks,
+            state,
+        })
+    }
+
     pub fn append_block(&mut self, block: Block) -> Result<()> {
         validate_next_block(
             self.network,
@@ -126,6 +195,13 @@ impl Chain {
     pub const fn network(&self) -> Network {
         self.network
     }
+}
+
+fn invalid_persisted_state(message: impl Into<String>) -> AlvenqisError {
+    AlvenqisError::InvalidGenesis(format!(
+        "persisted ledger state mismatch: {}",
+        message.into()
+    ))
 }
 
 #[cfg(test)]

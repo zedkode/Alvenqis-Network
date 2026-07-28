@@ -6,6 +6,7 @@ use crate::crypto::Hash;
 use crate::errors::{AlvenqisError, Result};
 use crate::hash_to_hex;
 use crate::transaction::Transaction;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -40,7 +41,7 @@ pub const FIRST_ACCOUNT_NONCE: u64 = 1;
 pub const TX_HASH_RETENTION_BLOCKS: u64 = 1024;
 pub const BLOCK_METRICS_RETENTION_BLOCKS: u64 = 2048;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LedgerState {
     balances: BTreeMap<String, Amount>,
     /// Next expected sequential nonce per address (absent ⇒ [`FIRST_ACCOUNT_NONCE`]).
@@ -747,6 +748,80 @@ mod tests {
         assert_eq!(
             state.block_fees().len() as u64,
             BLOCK_METRICS_RETENTION_BLOCKS
+        );
+    }
+
+    fn persisted_state_fixture() -> (Block, LedgerState) {
+        let miner = PrivateKey::generate();
+        let miner_address =
+            Address::from_public_key_for_network(&miner.public_key(), Network::Devnet).to_string();
+        let genesis = devnet_genesis_with_difficulty(&miner_address, 4).expect("genesis");
+        let chain = Chain::from_blocks(Network::Devnet, [genesis.clone()]).expect("replay");
+        (genesis, chain.state().clone())
+    }
+
+    #[test]
+    fn persisted_state_serde_contract_is_available() {
+        fn assert_serde<T>()
+        where
+            T: serde::Serialize + for<'de> serde::Deserialize<'de>,
+        {
+        }
+
+        assert_serde::<LedgerState>();
+    }
+
+    #[test]
+    fn persisted_state_constructor_accepts_matching_state_without_replay() {
+        let (genesis, state) = persisted_state_fixture();
+        let expected_hash = genesis.hash().expect("tip hash");
+        let restored =
+            Chain::from_persisted_state(Network::Devnet, [genesis], state.clone()).expect("restore");
+
+        assert_eq!(restored.height(), Some(0));
+        assert_eq!(restored.tip_hash().expect("tip"), Some(expected_hash));
+        assert_eq!(restored.state(), &state);
+    }
+
+    #[test]
+    fn persisted_state_constructor_rejects_state_and_tip_mismatches() {
+        let (genesis, state) = persisted_state_fixture();
+
+        let mut wrong_height = state.clone();
+        wrong_height.applied_block_height = Some(1);
+        assert!(Chain::from_persisted_state(
+            Network::Devnet,
+            [genesis.clone()],
+            wrong_height
+        )
+        .is_err());
+
+        let mut wrong_hash = state.clone();
+        wrong_hash.tip_hash = Some(Hash::zero());
+        assert!(
+            Chain::from_persisted_state(Network::Devnet, [genesis.clone()], wrong_hash).is_err()
+        );
+
+        let mut wrong_timestamp = state.clone();
+        wrong_timestamp.tip_timestamp = Some(genesis.header.timestamp.saturating_add(1));
+        assert!(Chain::from_persisted_state(
+            Network::Devnet,
+            [genesis.clone()],
+            wrong_timestamp
+        )
+        .is_err());
+
+        assert!(Chain::from_persisted_state(
+            Network::Testnet,
+            [genesis.clone()],
+            state.clone()
+        )
+        .is_err());
+        assert!(
+            Chain::from_persisted_state(Network::Devnet, Vec::<Block>::new(), state).is_err()
+        );
+        assert!(
+            Chain::from_persisted_state(Network::Devnet, [genesis], LedgerState::new()).is_err()
         );
     }
 }

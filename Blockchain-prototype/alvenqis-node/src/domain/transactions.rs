@@ -1,14 +1,16 @@
-use crate::domain::chain::{load_validated_chain, prototype_mode};
+use crate::domain::chain::{
+    load_validated_chain, persist_validated_chain_state, prototype_mode,
+};
 use crate::error::{NodeError, NodeResult};
 use crate::mempool::{
-    current_unix_seconds, load_pending_transactions, lowest_fee_sender_package,
+    current_unix_seconds, load_pending_transactions_for_chain, lowest_fee_sender_package,
     sanitize_pending_transactions, tx_hash_string, validate_pending_transaction,
     PendingTransactionRecord, MAX_PENDING_TXS_PER_SENDER,
 };
 use crate::storage;
 use alvenqis_core::{
     apply_transaction, child_block_with_consensus_difficulty, hash_to_hex, next_base_fee, Address,
-    Amount, Block, Chain, PrivateKey, Transaction,
+    Amount, Chain, PrivateKey, Transaction,
 };
 use serde::Serialize;
 use std::path::Path;
@@ -69,7 +71,7 @@ pub fn send_dev_tx(
     let private_key = PrivateKey::from_hex(from_private_key_hex)
         .map_err(|error| NodeError::Input(error.to_string()))?;
     Address::parse(to).map_err(|error| NodeError::Input(error.to_string()))?;
-    let (config, blocks, mut chain) = load_validated_chain(config_path, data_dir)?;
+    let (config, mut blocks, mut chain) = load_validated_chain(config_path, data_dir)?;
     let last_block = blocks
         .last()
         .cloned()
@@ -77,7 +79,7 @@ pub fn send_dev_tx(
 
     let from =
         Address::from_public_key_for_network(&private_key.public_key(), config.network).to_string();
-    let nonce = next_account_nonce(&blocks, &from);
+    let nonce = chain.state().next_nonce_of(&from);
     let anticipated_base_fee = next_base_fee(Some(&last_block));
     let transaction = Transaction::new_signed(
         1,
@@ -100,6 +102,8 @@ pub fn send_dev_tx(
 
     chain.append_block(next_block.clone())?;
     storage::append_block(data_dir, &next_block)?;
+    blocks.push(next_block.clone());
+    persist_validated_chain_state(data_dir, &blocks, &chain)?;
     let effective_fee_atomic = transaction.effective_fee(anticipated_base_fee)?.as_atomic();
 
     Ok(SendTransactionSummary {
@@ -148,7 +152,7 @@ pub fn submit_transaction(
     }
 
     crate::mempool::with_mempool_lock(mempool_dir, || {
-        let existing_records = load_pending_transactions(mempool_dir)?;
+        let existing_records = load_pending_transactions_for_chain(data_dir, mempool_dir)?;
         let (mut valid_records, _invalid_hashes, mut pending_state) =
             sanitize_pending_transactions(&chain, existing_records)?;
         if valid_records.iter().any(|record| record.tx_hash == tx_hash) {
@@ -238,7 +242,11 @@ pub fn submit_transaction(
             transaction: transaction.clone(),
         });
         // Already holding the exclusive mempool lock; write without re-locking.
-        crate::mempool::write_pending_transactions_in_lock(mempool_dir, &valid_records)?;
+        crate::mempool::write_pending_transactions_for_chain_in_lock(
+            data_dir,
+            mempool_dir,
+            &valid_records,
+        )?;
 
         Ok(SubmitTransactionSummary {
             status: prototype_mode(chain.network()),
@@ -253,10 +261,15 @@ pub fn mempool_status(data_dir: &Path, mempool_dir: &Path) -> NodeResult<Mempool
     let chain = load_chain_only(data_dir)?;
     let (valid_records, anticipated_base_fee) =
         crate::mempool::with_mempool_lock(mempool_dir, || {
-            let pending_records = load_pending_transactions(mempool_dir)?;
+            let pending_records =
+                load_pending_transactions_for_chain(data_dir, mempool_dir)?;
             let (valid_records, _invalid_hashes, _state) =
                 sanitize_pending_transactions(&chain, pending_records)?;
-            crate::mempool::write_pending_transactions_in_lock(mempool_dir, &valid_records)?;
+            crate::mempool::write_pending_transactions_for_chain_in_lock(
+                data_dir,
+                mempool_dir,
+                &valid_records,
+            )?;
             let anticipated_base_fee = next_base_fee(chain.blocks().last());
             Ok((valid_records, anticipated_base_fee))
         })?;
@@ -327,15 +340,22 @@ fn load_chain_only(data_dir: &Path) -> NodeResult<Chain> {
     let first_block = blocks
         .first()
         .ok_or_else(|| NodeError::ChainNotInitialized(storage::chain_file_path(data_dir)))?;
-    Chain::from_blocks(first_block.network()?, blocks).map_err(NodeError::from)
-}
+    let network = first_block.network()?;
 
-fn next_account_nonce(blocks: &[Block], address: &str) -> u64 {
-    blocks
-        .iter()
-        .flat_map(|block| block.transactions.iter())
-        .filter(|transaction| transaction.from.as_deref() == Some(address))
-        .map(|transaction| transaction.nonce)
-        .max()
-        .map_or(1, |nonce| nonce + 1)
+    #[cfg(feature = "storage-rocksdb")]
+    if let Some(tip) = blocks.last() {
+        let tip_hash = hash_to_hex(&tip.hash()?);
+        if let Some(state) = crate::state_store::load_persisted_chain_state(
+            data_dir,
+            network,
+            tip.header.height,
+            &tip_hash,
+        )? {
+            return Chain::from_persisted_state(network, blocks, state).map_err(NodeError::from);
+        }
+    }
+
+    let chain = Chain::from_blocks(network, blocks.clone()).map_err(NodeError::from)?;
+    persist_validated_chain_state(data_dir, &blocks, &chain)?;
+    Ok(chain)
 }

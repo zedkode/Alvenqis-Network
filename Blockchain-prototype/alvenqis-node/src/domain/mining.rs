@@ -1,11 +1,13 @@
 use crate::config::NetworkConfig;
 use crate::domain::chain::{
-    build_validated_chain, ensure_network_storage_path, load_validated_chain, prototype_mode,
-    summarize_validated_blocks, ChainSummary,
+    build_validated_chain, ensure_network_storage_path, load_validated_chain,
+    persist_validated_chain_state, prototype_mode, summarize_validated_blocks, ChainSummary,
 };
 use crate::domain::transactions::mempool_status;
 use crate::error::{NodeError, NodeResult};
-use crate::mempool::{current_unix_seconds, load_pending_transactions, tx_hash_string};
+use crate::mempool::{
+    current_unix_seconds, load_pending_transactions_for_chain, tx_hash_string,
+};
 use crate::storage::{self, BlockStore, SqliteBlockStore};
 use alvenqis_core::{
     block_reward, child_block_with_consensus_difficulty, hash_to_hex, median_time_past,
@@ -63,7 +65,7 @@ pub fn mine_dev_blocks(
     miner_address: &str,
     count: u64,
 ) -> NodeResult<ChainSummary> {
-    let (config, mut blocks, _) = load_validated_chain(config_path, data_dir)?;
+    let (config, mut blocks, mut chain) = load_validated_chain(config_path, data_dir)?;
     let mut last_block = blocks
         .last()
         .cloned()
@@ -77,11 +79,13 @@ pub fn mine_dev_blocks(
             vec![],
             config.difficulty_leading_zero_bits,
         )?;
+        chain.append_block(next_block.clone())?;
         storage::append_block(data_dir, &next_block)?;
         last_block = next_block.clone();
         blocks.push(next_block);
     }
 
+    persist_validated_chain_state(data_dir, &blocks, &chain)?;
     summarize_validated_blocks(config_path, &config, data_dir, &blocks)
 }
 
@@ -140,7 +144,7 @@ pub fn create_block_template(
     let _ = alvenqis_core::firopow::firopow_prewarm(0);
 
     let (config, blocks, chain) = load_validated_chain(config_path, data_dir)?;
-    let pending_records = load_pending_transactions(mempool_dir)?;
+    let pending_records = load_pending_transactions_for_chain(data_dir, mempool_dir)?;
     // Leave room for the coinbase under the consensus hard cap.
     let consensus_user_tx_cap = MAX_TRANSACTIONS_PER_BLOCK.saturating_sub(1);
     let limit = max_transactions
@@ -211,11 +215,14 @@ pub fn submit_mined_block(
     let config = NetworkConfig::load_from_path(config_path)?;
     ensure_network_storage_path(config.network, data_dir)?;
     let store = SqliteBlockStore::new(data_dir);
-    store.append_validated(candidate, |blocks, candidate| {
+    let (canonical_blocks, validated_chain) = store.append_validated(candidate, |blocks, candidate| {
         let mut chain = build_validated_chain(config_path, &config, blocks)?;
         chain.append_block(candidate.clone())?;
-        Ok(())
+        let mut canonical_blocks = blocks.to_vec();
+        canonical_blocks.push(candidate.clone());
+        Ok((canonical_blocks, chain))
     })?;
+    persist_validated_chain_state(data_dir, &canonical_blocks, &validated_chain)?;
 
     let accepted_tx_hashes: Vec<String> = candidate
         .transactions
@@ -226,12 +233,17 @@ pub fn submit_mined_block(
     let accepted: std::collections::BTreeSet<&str> =
         accepted_tx_hashes.iter().map(String::as_str).collect();
     let cleanup = crate::mempool::with_mempool_lock(mempool_dir, || {
-        let records = load_pending_transactions(mempool_dir)?;
+        let records =
+            load_pending_transactions_for_chain(data_dir, mempool_dir)?;
         let remaining: Vec<_> = records
             .into_iter()
             .filter(|record| !accepted.contains(record.tx_hash.as_str()))
             .collect();
-        crate::mempool::write_pending_transactions_in_lock(mempool_dir, &remaining)?;
+        crate::mempool::write_pending_transactions_for_chain_in_lock(
+            data_dir,
+            mempool_dir,
+            &remaining,
+        )?;
         Ok(remaining.len())
     });
 

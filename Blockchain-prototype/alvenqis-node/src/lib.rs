@@ -5,6 +5,8 @@ pub mod error;
 pub mod mempool;
 pub mod p2p;
 pub mod peer_reputation;
+#[cfg(feature = "storage-rocksdb")]
+pub mod state_store;
 pub mod storage;
 
 pub use config::NetworkConfig;
@@ -41,7 +43,9 @@ pub use domain::transactions::{
 pub use error::{NodeError, NodeResult};
 pub use mempool::{
     clear_mempool, default_mempool_dir, default_network_root, load_pending_transactions,
-    lowest_fee_sender_package, reconcile_after_reorg, select_pending_for_template,
+    load_pending_transactions_for_chain, lowest_fee_sender_package, mempool_runtime_fingerprint,
+    reconcile_after_reorg, reconcile_after_reorg_for_chain, select_pending_for_template,
+    write_pending_transactions_for_chain, write_pending_transactions_for_chain_in_lock,
     PendingTransactionRecord, DEFAULT_MEMPOOL_MAX_AGE_SECONDS, MAX_PENDING_TXS_PER_SENDER,
     MEMPOOL_FILE_NAME,
 };
@@ -53,6 +57,13 @@ pub use p2p::{
 pub use peer_reputation::{
     PeerAdminAction, PeerAdminRequest, ReputationStore, DEFAULT_BAN_SECONDS, DEFAULT_SCORE,
     PEER_ADMIN_QUEUE_FILE_NAME, REPUTATION_FILE_NAME, SEVERE_BAN_SECONDS,
+};
+#[cfg(feature = "storage-rocksdb")]
+pub use state_store::{
+    backup_state_database, load_persisted_chain_state, load_persisted_mempool,
+    persist_chain_state, replace_persisted_mempool, restore_latest_state_database,
+    state_database_path, verify_state_database, PersistedChainState, RocksBackupInfo,
+    RocksStateStatus, STATE_DATABASE_DIR_NAME, STATE_DATABASE_LOCK_FILE_NAME,
 };
 pub use storage::{
     append_block, append_block_unchecked, backup_chain_database, chain_database_path,

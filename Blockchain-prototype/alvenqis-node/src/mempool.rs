@@ -75,6 +75,22 @@ pub fn load_pending_transactions(mempool_dir: &Path) -> NodeResult<Vec<PendingTr
     load_pending_transactions_unlocked(mempool_dir)
 }
 
+pub fn load_pending_transactions_for_chain(
+    data_dir: &Path,
+    mempool_dir: &Path,
+) -> NodeResult<Vec<PendingTransactionRecord>> {
+    #[cfg(feature = "storage-rocksdb")]
+    {
+        return crate::state_store::load_persisted_mempool(data_dir, mempool_dir);
+    }
+
+    #[cfg(not(feature = "storage-rocksdb"))]
+    {
+        let _ = data_dir;
+        load_pending_transactions_unlocked(mempool_dir)
+    }
+}
+
 fn load_pending_transactions_unlocked(
     mempool_dir: &Path,
 ) -> NodeResult<Vec<PendingTransactionRecord>> {
@@ -99,12 +115,40 @@ pub fn write_pending_transactions(
     })
 }
 
+pub fn write_pending_transactions_for_chain(
+    data_dir: &Path,
+    mempool_dir: &Path,
+    records: &[PendingTransactionRecord],
+) -> NodeResult<()> {
+    with_mempool_lock(mempool_dir, || {
+        write_pending_transactions_for_chain_in_lock(data_dir, mempool_dir, records)
+    })
+}
+
 /// Write while the caller already holds [`with_mempool_lock`].
 pub fn write_pending_transactions_in_lock(
     mempool_dir: &Path,
     records: &[PendingTransactionRecord],
 ) -> NodeResult<()> {
     write_pending_transactions_unlocked(mempool_dir, records)
+}
+
+pub fn write_pending_transactions_for_chain_in_lock(
+    data_dir: &Path,
+    mempool_dir: &Path,
+    records: &[PendingTransactionRecord],
+) -> NodeResult<()> {
+    #[cfg(feature = "storage-rocksdb")]
+    {
+        let _ = mempool_dir;
+        return crate::state_store::replace_persisted_mempool(data_dir, records);
+    }
+
+    #[cfg(not(feature = "storage-rocksdb"))]
+    {
+        let _ = data_dir;
+        write_pending_transactions_unlocked(mempool_dir, records)
+    }
 }
 
 fn write_pending_transactions_unlocked(
@@ -156,6 +200,42 @@ pub fn reconcile_after_reorg(
     })
 }
 
+pub fn reconcile_after_reorg_for_chain(
+    data_dir: &Path,
+    mempool_dir: &Path,
+    chain: &Chain,
+    detached_blocks: &[alvenqis_core::Block],
+    max_transactions: usize,
+) -> NodeResult<Vec<String>> {
+    with_mempool_lock(mempool_dir, || {
+        let mut records = load_pending_transactions_for_chain(data_dir, mempool_dir)?;
+        let mut known: BTreeSet<String> = records
+            .iter()
+            .map(|record| record.tx_hash.clone())
+            .collect();
+        let now = current_unix_seconds();
+
+        for transaction in detached_blocks
+            .iter()
+            .flat_map(|block| block.transactions.iter().skip(1))
+        {
+            let tx_hash = tx_hash_string(transaction);
+            if known.insert(tx_hash.clone()) {
+                records.push(PendingTransactionRecord {
+                    tx_hash,
+                    received_at_unix_seconds: now,
+                    transaction: transaction.clone(),
+                });
+            }
+        }
+
+        let (mut valid, dropped, _) = sanitize_pending_transactions(chain, records)?;
+        valid.truncate(max_transactions);
+        write_pending_transactions_for_chain_in_lock(data_dir, mempool_dir, &valid)?;
+        Ok(dropped)
+    })
+}
+
 pub fn clear_mempool(mempool_dir: &Path) -> NodeResult<()> {
     with_mempool_lock(mempool_dir, || {
         // Drop pending data but keep the directory so the lock file handle stays valid.
@@ -180,6 +260,40 @@ pub fn clear_mempool(mempool_dir: &Path) -> NodeResult<()> {
         }
         Ok(())
     })
+}
+
+pub fn mempool_runtime_fingerprint(
+    data_dir: &Path,
+    mempool_dir: &Path,
+) -> (u64, Option<SystemTime>) {
+    #[cfg(feature = "storage-rocksdb")]
+    {
+        let _ = mempool_dir;
+        let database_path = crate::state_store::state_database_path(data_dir);
+        let Ok(entries) = fs::read_dir(database_path) else {
+            return (0, None);
+        };
+        return entries
+            .filter_map(Result::ok)
+            .filter_map(|entry| entry.metadata().ok())
+            .fold((0_u64, None), |(total_size, latest), metadata| {
+                let modified = metadata.modified().ok();
+                let latest = match (latest, modified) {
+                    (Some(current), Some(candidate)) => Some(current.max(candidate)),
+                    (None, candidate) => candidate,
+                    (current, None) => current,
+                };
+                (total_size.saturating_add(metadata.len()), latest)
+            });
+    }
+
+    #[cfg(not(feature = "storage-rocksdb"))]
+    {
+        let _ = data_dir;
+        fs::metadata(mempool_file_path(mempool_dir))
+            .map(|metadata| (metadata.len(), metadata.modified().ok()))
+            .unwrap_or((0, None))
+    }
 }
 
 pub fn sanitize_pending_transactions(

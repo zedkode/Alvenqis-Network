@@ -1,7 +1,7 @@
 use crate::config::NetworkConfig;
 use crate::domain::genesis::verify_existing_genesis;
 use crate::error::{NodeError, NodeResult};
-use crate::mempool::reconcile_after_reorg;
+use crate::mempool::reconcile_after_reorg_for_chain;
 use crate::storage::{self, BlockStore, SqliteBlockStore};
 use alvenqis_core::{
     block_fee_summary, common_ancestor_height, hash_to_hex, select_fork, Block, Chain, ForkChoice,
@@ -187,7 +187,9 @@ pub fn adopt_candidate_chain(
         },
     )?;
 
-    summary.dropped_mempool_transactions = reconcile_after_reorg(
+    persist_validated_chain_state(data_dir, candidate_blocks, &validated_candidate)?;
+    summary.dropped_mempool_transactions = reconcile_after_reorg_for_chain(
+        data_dir,
         mempool_dir,
         &validated_candidate,
         &detached,
@@ -286,11 +288,7 @@ pub(crate) fn build_validated_chain(
     config: &NetworkConfig,
     blocks: &[Block],
 ) -> NodeResult<Chain> {
-    if config.network.requires_explicit_allow() {
-        // Approval file check only — never re-mine genesis on the hot path
-        // (create_block_template / RPC template would hang at difficulty 16).
-        verify_existing_genesis(config_path, blocks)?;
-    }
+    verify_genesis_access(config_path, config, blocks)?;
     Chain::from_blocks(config.network, blocks.iter().cloned()).map_err(NodeError::from)
 }
 
@@ -306,7 +304,7 @@ pub(crate) fn summarize_validated_blocks(
         )));
     }
 
-    let chain = build_validated_chain(config_path, config, blocks)?;
+    let chain = restore_or_replay_validated_chain(config_path, config, data_dir, blocks)?;
 
     summarize_chain(config, blocks, &chain)
 }
@@ -342,12 +340,13 @@ pub(crate) fn load_validated_chain(
             for block in &blocks[cached.blocks.len()..] {
                 chain.append_block(block.clone())?;
             }
+            persist_validated_chain_state(data_dir, &blocks, &chain)?;
             chain
         } else {
-            build_validated_chain(config_path, &config, &blocks)?
+            restore_or_replay_validated_chain(config_path, &config, data_dir, &blocks)?
         }
     } else {
-        build_validated_chain(config_path, &config, &blocks)?
+        restore_or_replay_validated_chain(config_path, &config, data_dir, &blocks)?
     };
     cache
         .lock()
@@ -361,6 +360,63 @@ pub(crate) fn load_validated_chain(
             },
         );
     Ok((config, blocks, chain))
+}
+
+pub(crate) fn persist_validated_chain_state(
+    data_dir: &Path,
+    blocks: &[Block],
+    chain: &Chain,
+) -> NodeResult<()> {
+    #[cfg(feature = "storage-rocksdb")]
+    {
+        return crate::state_store::persist_chain_state(data_dir, blocks, chain);
+    }
+
+    #[cfg(not(feature = "storage-rocksdb"))]
+    {
+        let _ = (data_dir, blocks, chain);
+        Ok(())
+    }
+}
+
+fn restore_or_replay_validated_chain(
+    config_path: &Path,
+    config: &NetworkConfig,
+    data_dir: &Path,
+    blocks: &[Block],
+) -> NodeResult<Chain> {
+    verify_genesis_access(config_path, config, blocks)?;
+
+    #[cfg(feature = "storage-rocksdb")]
+    if let Some(tip) = blocks.last() {
+        let tip_hash = hash_to_hex(&tip.hash()?);
+        if let Some(state) = crate::state_store::load_persisted_chain_state(
+            data_dir,
+            config.network,
+            tip.header.height,
+            &tip_hash,
+        )? {
+            return Chain::from_persisted_state(config.network, blocks.iter().cloned(), state)
+                .map_err(NodeError::from);
+        }
+    }
+
+    let chain =
+        Chain::from_blocks(config.network, blocks.iter().cloned()).map_err(NodeError::from)?;
+    persist_validated_chain_state(data_dir, blocks, &chain)?;
+    Ok(chain)
+}
+
+fn verify_genesis_access(
+    config_path: &Path,
+    config: &NetworkConfig,
+    blocks: &[Block],
+) -> NodeResult<()> {
+    if config.network.requires_explicit_allow() {
+        // Approval file check only; never re-mine genesis on the hot path.
+        verify_existing_genesis(config_path, blocks)?;
+    }
+    Ok(())
 }
 
 fn summarize_chain(

@@ -11,6 +11,9 @@ pub enum NodeError {
     Toml(#[from] toml::de::Error),
     #[error("SQLite storage error: {0}")]
     Sqlite(#[from] rusqlite::Error),
+    #[cfg(feature = "storage-rocksdb")]
+    #[error("RocksDB state storage error: {0}")]
+    RocksDb(#[from] rocksdb::Error),
     #[error("core validation error: {0}")]
     Core(#[from] alvenqis_core::AlvenqisError),
     #[error("network config mismatch: {0}")]

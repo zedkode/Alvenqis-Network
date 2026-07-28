@@ -681,7 +681,10 @@ async fn run_p2p_service_async(
                 if tick_count.is_multiple_of(10) {
                     reputation.persist(&runtime_dir)?;
                 }
-                if let Ok(records) = crate::mempool::load_pending_transactions(&mempool_dir) {
+                if let Ok(records) = crate::mempool::load_pending_transactions_for_chain(
+                    &data_dir,
+                    &mempool_dir,
+                ) {
                     for record in records {
                         if published_transactions.insert(record.tx_hash.clone()) {
                             match serde_json::to_vec(&record.transaction) {
@@ -2432,7 +2435,7 @@ allow_mainnet_candidate = false
         submit_transaction(&first_data, &first_mempool, 32, &transaction)
             .expect("submit to first mempool");
         wait_until(|| {
-            crate::mempool::load_pending_transactions(&second_mempool)
+            crate::mempool::load_pending_transactions_for_chain(&second_data, &second_mempool)
                 .is_ok_and(|records| records.len() == 1)
         });
 
@@ -2444,7 +2447,7 @@ allow_mainnet_candidate = false
         });
         // Mempool clear can lag block apply slightly under async P2P.
         wait_until(|| {
-            crate::mempool::load_pending_transactions(&second_mempool)
+            crate::mempool::load_pending_transactions_for_chain(&second_data, &second_mempool)
                 .is_ok_and(|records| records.is_empty())
         });
 

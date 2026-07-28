@@ -7,8 +7,8 @@ use crate::domain::genesis::{
 };
 use crate::error::{NodeError, NodeResult};
 use crate::mempool::{
-    clear_mempool, current_unix_seconds, default_network_root, load_pending_transactions,
-    mempool_file_path,
+    clear_mempool, current_unix_seconds, default_network_root,
+    load_pending_transactions_for_chain, mempool_runtime_fingerprint,
 };
 use crate::p2p::{load_p2p_status, run_p2p_service};
 use crate::storage;
@@ -202,7 +202,8 @@ pub fn start_node(
             chain_fingerprint = next_chain_fingerprint;
             mempool_fingerprint = next_mempool_fingerprint;
         } else if next_mempool_fingerprint != mempool_fingerprint {
-            runtime.pending_count = load_pending_transactions(mempool_dir)?.len();
+            runtime.pending_count =
+                load_pending_transactions_for_chain(data_dir, mempool_dir)?.len();
             write_runtime_status_file(&runtime_dir, &runtime)?;
             mempool_fingerprint = next_mempool_fingerprint;
         }
@@ -337,7 +338,7 @@ fn build_runtime_status(
         }
         Err(error) => return Err(error),
     };
-    let pending = load_pending_transactions(mempool_dir)?;
+    let pending = load_pending_transactions_for_chain(data_dir, mempool_dir)?;
     let genesis_hash = load_genesis_marker(data_dir)
         .ok()
         .map(|marker| marker.genesis_hash);
@@ -388,19 +389,13 @@ fn write_runtime_status_file(runtime_dir: &Path, status: &NodeRuntimeStatus) -> 
     Ok(())
 }
 
-fn file_runtime_fingerprint(path: &Path) -> (u64, Option<SystemTime>) {
-    fs::metadata(path)
-        .map(|metadata| (metadata.len(), metadata.modified().ok()))
-        .unwrap_or((0, None))
-}
-
 fn runtime_data_fingerprint(
     data_dir: &Path,
     mempool_dir: &Path,
 ) -> (storage::ChainStorageFingerprint, (u64, Option<SystemTime>)) {
     (
         storage::chain_storage_fingerprint(data_dir),
-        file_runtime_fingerprint(&mempool_file_path(mempool_dir)),
+        mempool_runtime_fingerprint(data_dir, mempool_dir),
     )
 }
 
