@@ -157,6 +157,8 @@ preflight=(root/'scripts/runtime-preflight.sh').read_text()
 assert 'ALVENQIS_REQUIRE_STORAGE_ENCRYPTION=true is mandatory.' in preflight
 assert 'assert_owner_mode "$STATE_ROOT" "0:0" "750"' in preflight
 assert 'alvenqis_storage_key' in preflight
+assert 'VPS_MIN_FREE_DISK_BYTES:-34359738368' in preflight
+assert 'VPS_MIN_FREE_DISK_BYTES=34359738368' in (root/'.env.example').read_text()
 assert not any(token in '\n'.join((root/path).read_text() for path in ('scripts/prepare-state.sh','scripts/runtime-preflight.sh','scripts/install-docker-stack.sh')) for token in ('chmod 777','chmod 0777'))
 pool_app=(root/'../../alvenqis-mining-pool/src/app.rs').resolve().read_text()
 assert '.route(\"/api/v1/work\"' not in pool_app

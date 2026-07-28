@@ -64,7 +64,7 @@ read -r host_cpus host_memory < <(docker info --format '{{.NCPU}} {{.MemTotal}}'
 free_bytes="$(df -PB1 "$(dirname "$STATE_ROOT")" | awk 'NR==2 {print $4}')"
 minimum_cpus="${VPS_MIN_CPU_COUNT:-6}"
 minimum_memory="${VPS_MIN_MEMORY_BYTES:-11811160064}"
-minimum_free_disk="${VPS_MIN_FREE_DISK_BYTES:-64424509440}"
+minimum_free_disk="${VPS_MIN_FREE_DISK_BYTES:-34359738368}"
 
 ((host_cpus >= minimum_cpus)) || {
   echo "Host has ${host_cpus} CPUs; at least ${minimum_cpus} are required for the full stack." >&2

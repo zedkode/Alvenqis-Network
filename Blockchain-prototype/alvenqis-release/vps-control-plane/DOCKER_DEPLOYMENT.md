@@ -51,7 +51,7 @@ Use the SSH tunnel printed by the installer. The installer builds from the check
 Before compose starts, `scripts/runtime-preflight.sh` verifies actual Docker
 host CPU/RAM/free disk, TCP port ranges, seed multiaddresses and pool TLS
 requirements. The full stack defaults require 6 CPUs, at least 11 GiB visible
-RAM and 60 GiB free disk.
+RAM and 32 GiB free disk.
 
 `state/secrets/alvenqis_storage_key` is generated only for a fresh state root
 and mounted read-only into runtime containers. Existing RocksDB data without

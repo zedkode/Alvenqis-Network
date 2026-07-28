@@ -32,7 +32,9 @@ remain a separate offline or HSM-backed operator responsibility.
 The default limits are designed for one 6 vCPU, 12 GB RAM, 100 GB NVMe host.
 The maximum active container limits stay below 10.5 GiB even with pool,
 Cloudflare and backup profiles enabled. Docker logs are rotated, Prometheus is
-bounded to 8 GB/15 days and Loki defaults to seven days.
+bounded to 8 GB/15 days and Loki defaults to seven days. Runtime preflight
+retains at least 32 GiB free by default; operators may raise, but must not
+silently lower, `VPS_MIN_FREE_DISK_BYTES` after capacity planning.
 
 This single-host deployment cannot truthfully guarantee zero downtime. It uses
 healthchecks, readiness gates, restart policies, bounded retries, TLS
