@@ -6,6 +6,7 @@ cd "$workspace"
 source scripts/lib.sh
 load_dotenv .env
 resolve_state_root "$workspace"
+compose_args
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 out="$STATE_ROOT/backups/$stamp"
@@ -33,8 +34,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+mkdir -p "$snapshot/state/data"
+rsync -aHAX --delete \
+  --exclude '/chain/state.rocksdb/' \
+  --exclude '/chain/state.rocksdb.lock' \
+  --exclude '/chain/.alvenqis-state-restore-*/' \
+  "$STATE_ROOT/data/" "$snapshot/state/data/"
 for relative in \
-  data control pool config/generated stratum \
+  control pool config/generated stratum \
   prometheus grafana loki alloy alertmanager; do
   source="$STATE_ROOT/$relative"
   if [[ -e "$source" ]]; then
@@ -44,7 +51,26 @@ for relative in \
 done
 [[ -f .env ]] && cp -a .env "$snapshot/.env"
 
-python3 - "$STATE_ROOT" "$snapshot" <<'PY'
+attempt=1
+while :; do
+  rocks_output="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-node \
+    alvenqis-node \
+      --config /config/node.toml \
+      --data-dir /data/.alvenqis-mainnet/chain \
+      backup-rocksdb \
+      --backup-repository /backups/rocksdb-repository \
+      --backups-to-keep "${ROCKSDB_BACKUPS_TO_KEEP:-30}")"
+  rocks_json="$(printf '%s\n' "$rocks_output" | sed -n '/^{/,$p')"
+  read -r rocks_backup_id rocks_height rocks_hash rocks_encryption rocks_key_id < <(
+    python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["backup_id"], d["tip_height"], d["tip_hash"], d["encryption"], d["key_id"])' \
+      <<<"$rocks_json"
+  )
+  [[ "$rocks_encryption" == xchacha20poly1305 && "$rocks_key_id" != none ]] || {
+    echo "RocksDB backup is not authenticated encrypted storage." >&2
+    exit 74
+  }
+
+  python3 - "$STATE_ROOT" "$snapshot" <<'PY'
 from __future__ import annotations
 
 import sqlite3
@@ -74,8 +100,32 @@ for source in sorted(state_root.rglob("*.sqlite3")):
                 raise SystemExit(f"SQLite integrity check failed for {relative}: {result}")
     database_count += 1
 
+chain_database = snapshot / "state" / "data" / "chain" / "chain.sqlite3"
+if not chain_database.is_file():
+    raise SystemExit(f"canonical SQLite snapshot is missing: {chain_database}")
+with sqlite3.connect(chain_database, timeout=30) as chain_db:
+    tip = chain_db.execute(
+        "SELECT height, hash FROM canonical_blocks ORDER BY height DESC LIMIT 1"
+    ).fetchone()
+if tip is None:
+    raise SystemExit("canonical SQLite snapshot has no tip")
+(snapshot / "sqlite-chain-tip").write_text(f"{tip[0]} {tip[1]}\n", encoding="utf-8")
 print(f"online SQLite snapshots verified: {database_count}")
 PY
+  read -r sqlite_height sqlite_hash < "$snapshot/sqlite-chain-tip"
+  if [[ "$sqlite_height" == "$rocks_height" && "$sqlite_hash" == "$rocks_hash" ]]; then
+    break
+  fi
+  if ((attempt >= 5)); then
+    echo "Could not obtain matching RocksDB/SQLite backup tips after $attempt attempts." >&2
+    exit 74
+  fi
+  attempt=$((attempt + 1))
+  sleep 2
+done
+
+tar -C "$STATE_ROOT/backups" -czf "$out/alvenqis-rocksdb-backup.tar.gz" \
+  rocksdb-repository
 
 archive_items=(state)
 [[ -f "$snapshot/.env" ]] && archive_items+=(.env)
@@ -93,12 +143,20 @@ rm -rf -- "$snapshot/state/secrets"
 
 (
   cd "$out"
-  sha256sum alvenqis-secrets.tar.gz.enc alvenqis-state.tar.gz > SHA256SUMS
+  sha256sum \
+    alvenqis-rocksdb-backup.tar.gz \
+    alvenqis-secrets.tar.gz.enc \
+    alvenqis-state.tar.gz > SHA256SUMS
 )
 cat > "$out/BACKUP_COMPLETE" <<EOF
 created_utc=$stamp
 state_root=$STATE_ROOT
 sqlite_integrity=ok
+rocksdb_backup_id=$rocks_backup_id
+rocksdb_tip_height=$rocks_height
+rocksdb_tip_hash=$rocks_hash
+rocksdb_encryption=$rocks_encryption
+rocksdb_key_id=$rocks_key_id
 EOF
 
 if [[ "${BACKUP_REMOTE_ENABLED:-false}" == true ]]; then
