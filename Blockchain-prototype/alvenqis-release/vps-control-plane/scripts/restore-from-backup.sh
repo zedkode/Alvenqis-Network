@@ -65,14 +65,20 @@ PY
   exit 66
 }
 state_archive="$backup_dir/alvenqis-state.tar.gz"
+rocks_archive="$backup_dir/alvenqis-rocksdb-backup.tar.gz"
 secrets_archive="$backup_dir/alvenqis-secrets.tar.gz.enc"
 sums_file="$backup_dir/SHA256SUMS"
+completion_marker="$backup_dir/BACKUP_COMPLETE"
 [[ -f "$state_archive" ]] || {
   echo "Missing state archive: $state_archive" >&2
   exit 66
 }
 [[ -f "$sums_file" ]] || {
   echo "Refusing restore without SHA256SUMS: $backup_dir" >&2
+  exit 74
+}
+[[ -f "$rocks_archive" && -f "$completion_marker" ]] || {
+  echo "Refusing restore without RocksDB backup archive and completion marker." >&2
   exit 74
 }
 (
@@ -96,6 +102,45 @@ with tarfile.open(sys.argv[1], "r:gz") as archive:
             raise SystemExit(f"links are not allowed in restore archives: {member.name}")
 print("Backup archive path validation: ok")
 PY
+
+python3 - "$rocks_archive" <<'PY'
+import sys
+import tarfile
+from pathlib import PurePosixPath
+
+with tarfile.open(sys.argv[1], "r:gz") as archive:
+    for member in archive.getmembers():
+        path = PurePosixPath(member.name)
+        if path.is_absolute() or ".." in path.parts:
+            raise SystemExit(f"unsafe RocksDB archive member: {member.name}")
+        if member.name != "rocksdb-repository" and not member.name.startswith(
+            "rocksdb-repository/"
+        ):
+            raise SystemExit(f"unexpected RocksDB archive member: {member.name}")
+        if member.issym() or member.islnk():
+            raise SystemExit(f"links are not allowed in RocksDB archive: {member.name}")
+print("RocksDB backup archive path validation: ok")
+PY
+
+marker_value() {
+  local key="$1"
+  awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$completion_marker"
+}
+rocks_backup_id="$(marker_value rocksdb_backup_id)"
+rocks_tip_height="$(marker_value rocksdb_tip_height)"
+rocks_tip_hash="$(marker_value rocksdb_tip_hash)"
+rocks_encryption="$(marker_value rocksdb_encryption)"
+rocks_key_id="$(marker_value rocksdb_key_id)"
+[[ "$rocks_backup_id" =~ ^[0-9]+$ && "$rocks_tip_height" =~ ^[0-9]+$ ]] || {
+  echo "RocksDB backup marker has invalid numeric fields." >&2
+  exit 74
+}
+[[ "$rocks_tip_hash" =~ ^[0-9a-f]{64}$ \
+  && "$rocks_key_id" =~ ^[0-9a-f]{16}$ \
+  && "$rocks_encryption" == xchacha20poly1305 ]] || {
+  echo "RocksDB backup marker has invalid authentication metadata." >&2
+  exit 74
+}
 
 mapfile -t project_containers < <(
   docker ps -aq --filter "label=com.docker.compose.project=$project"
