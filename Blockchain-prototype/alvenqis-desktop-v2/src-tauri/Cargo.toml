@@ -4,6 +4,7 @@ version = "2.0.1"
 description = "Alvenqis Control Center - Tauri desktop shell"
 authors = ["Alvenqis Network <admin@alvenqis.network>"]
 edition = "2021"
+license = "Apache-2.0"
 publish = false
 
 # Keep this crate outside the monorepo Cargo workspace (Tauri manages its own graph).
