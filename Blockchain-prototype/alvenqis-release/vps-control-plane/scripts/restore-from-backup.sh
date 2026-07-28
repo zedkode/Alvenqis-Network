@@ -215,6 +215,9 @@ sha256sum "$pre_dir/pre-restore-live.tar.gz" > "$pre_dir/SHA256SUMS"
 
 echo "Extracting verified backup into an isolated stage..."
 tar -xzf "$state_archive" -C "$stage"
+rocks_stage="$stage/rocks"
+install -d -m 0700 "$rocks_stage"
+tar -xzf "$rocks_archive" -C "$rocks_stage"
 [[ -d "$stage/state" ]] || {
   echo "Backup archive does not contain state/." >&2
   exit 74
@@ -250,6 +253,38 @@ if [[ "${RESTORE_SECRETS:-true}" == true && -f "$secrets_archive" ]]; then
     "$secrets_stage/state/secrets/" "$STATE_ROOT/secrets/"
 fi
 
+storage_key="$STATE_ROOT/secrets/alvenqis_storage_key"
+[[ -f "$storage_key" && ! -L "$storage_key" ]] || {
+  echo "Restored RocksDB storage key is missing or unsafe." >&2
+  exit 74
+}
+grep -Eq '^[0-9A-Fa-f]{64}$' "$storage_key" || {
+  echo "Restored RocksDB storage key is invalid." >&2
+  exit 74
+}
+actual_key_id="$(
+  python3 - "$storage_key" <<'PY'
+import hashlib
+import sys
+from pathlib import Path
+
+raw = Path(sys.argv[1]).read_text(encoding="utf-8").strip()
+print(hashlib.sha256(bytes.fromhex(raw)).hexdigest()[:16])
+PY
+)"
+[[ "$actual_key_id" == "$rocks_key_id" ]] || {
+  echo "RocksDB backup key-id does not match the selected restore key." >&2
+  exit 74
+}
+[[ -d "$rocks_stage/rocksdb-repository" ]] || {
+  echo "RocksDB backup repository is missing from the archive." >&2
+  exit 74
+}
+install -d -m 0750 -o 10001 -g 10001 "$STATE_ROOT/backups/rocksdb-repository"
+rsync -aHAX --numeric-ids --delete \
+  "$rocks_stage/rocksdb-repository/" "$STATE_ROOT/backups/rocksdb-repository/"
+chown -R 10001:10001 "$STATE_ROOT/backups/rocksdb-repository"
+
 if [[ -f "$stage/.env" ]]; then
   cp -a "$stage/.env" .env
 fi
@@ -262,11 +297,18 @@ from pathlib import Path
 
 path = Path(".env")
 content = path.read_text(encoding="utf-8")
-line = f"ALVENQIS_STATE_ROOT={json.dumps(sys.argv[1])}"
-if re.search(r"^ALVENQIS_STATE_ROOT=", content, flags=re.MULTILINE):
-    content = re.sub(r"^ALVENQIS_STATE_ROOT=.*$", line, content, flags=re.MULTILINE)
-else:
-    content = content.rstrip() + "\n" + line + "\n"
+updates = {
+    "ALVENQIS_STATE_ROOT": sys.argv[1],
+    "ALVENQIS_STORAGE_KEY_FILE": "/run/secrets/alvenqis_storage_key",
+    "ALVENQIS_REQUIRE_STORAGE_ENCRYPTION": "true",
+    "ALVENQIS_ALLOW_PLAINTEXT_STORAGE_MIGRATION": "false",
+}
+for key, value in updates.items():
+    line = f"{key}={json.dumps(value)}"
+    if re.search(rf"^{key}=", content, flags=re.MULTILINE):
+        content = re.sub(rf"^{key}=.*$", line, content, flags=re.MULTILINE)
+    else:
+        content = content.rstrip() + "\n" + line + "\n"
 temporary = path.with_name(f".env.restore-{os.getpid()}")
 temporary.write_text(content, encoding="utf-8")
 os.chmod(temporary, 0o600)
