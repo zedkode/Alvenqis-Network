@@ -15,7 +15,11 @@ Implemented corrections:
 - `alvenqis-metrics-exporter` scrapes live RPC/pool JSON status into Prometheus (chain height, indexer lag, peers, pool workers/hashrate);
 - one bounded RPC gateway serves the public read/submit API and the pool's
   Docker-internal mining API, avoiding a second chain-loading gateway;
-- Caddy isolates RPC availability from Grafana, Loki and ops readiness;
+- the hardened Nginx gateway isolates RPC availability from Grafana, Loki and
+  ops readiness;
+- SQLite remains the canonical block oracle while RocksDB stores authenticated
+  canonical state, block metadata and the persistent mempool in dedicated
+  LZ4-compressed column families;
 - every service has memory, CPU, PID, restart, health and bounded log settings;
 - P2P and Stratum remain direct TCP listeners; Cloudflare records for both are
   DNS-only and never use the HTTP proxy;
@@ -26,7 +30,9 @@ Implemented corrections:
 - Grafana dashboards under `monitoring/grafana/dashboards/` use real PromQL against Prometheus (`uid=alvenqis-prometheus`);
 - Tini exists once, in the runtime image;
 - fleet enrollment generates a Docker-native installation command;
-- backups archive real filesystem state and encrypt the secrets archive;
+- backups use RocksDB BackupEngine incrementally, take online SQLite snapshots,
+  require matching tips, encrypt the secrets archive and checksum the exact
+  restore set;
 - automatic updates are removed completely.
 
 The package has no Watchtower, updater container, update script, update/rollback API, scheduled image pull, mutable `latest` default, or update buttons. The included GitHub workflow is manual-dispatch only and requires an explicit tag. Cloudflared runs with `--no-autoupdate`. See `MANUAL_UPGRADE.md` for the only supported upgrade flow.
@@ -37,7 +43,7 @@ Apply this overlay over the full repository, then:
 
 ```bash
 cd alvenqis-release/vps-control-plane
-chmod +x scripts/*.sh docker/*.sh docker/caddy/*.sh docker/backup-scheduler/*.sh
+chmod +x scripts/*.sh docker/*.sh docker/backup-scheduler/*.sh
 ./scripts/install-docker-stack.sh
 ```
 
@@ -46,6 +52,11 @@ Before compose starts, `scripts/runtime-preflight.sh` verifies actual Docker
 host CPU/RAM/free disk, TCP port ranges, seed multiaddresses and pool TLS
 requirements. The full stack defaults require 6 CPUs, at least 11 GiB visible
 RAM and 60 GiB free disk.
+
+`state/secrets/alvenqis_storage_key` is generated only for a fresh state root
+and mounted read-only into runtime containers. Existing RocksDB data without
+that exact key is a fatal preflight error; the installer never silently creates
+a replacement key.
 
 ## Repair an earlier installation
 

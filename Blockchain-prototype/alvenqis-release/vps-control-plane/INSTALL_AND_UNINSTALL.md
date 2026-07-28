@@ -6,7 +6,7 @@ Status: Mainnet Candidate / Prototype
 
 - Ubuntu 24.04 or another supported Docker Engine host;
 - Docker Engine with Compose v2;
-- `bash`, `curl`, `openssl`, `python3`, `jq` and `tar`;
+- `bash`, `curl`, `openssl`, `python3`, `jq`, `rsync`, `flock` and `tar`;
 - inbound TCP 20787 for P2P;
 - inbound TCP 3333 when the Stratum pool is enabled;
 - inbound 80/443 only for direct-DNS mode;
@@ -67,7 +67,8 @@ docker compose --env-file .env -f compose.yaml ps
 
 The health script requires every enabled container to be healthy and bounded,
 then checks the real chain tip, index lag, configured/validated P2P peers,
-private mining template, pool upstream and Stratum certificate. Set
+authenticated RocksDB parity, private mining template, pool upstream and
+Stratum certificate. Set
 `P2P_MIN_VALIDATED_PEERS=1` on non-bootstrap nodes. A controller bootstrap may
 use `0` while waiting for its first inbound peer; monitoring still alerts on
 zero validated peers.
@@ -86,3 +87,7 @@ The default uninstall stops the Alvenqis Docker stack and preserves `state/`,
 `.env`, secrets and legacy data. Data destruction is not part of the normal
 uninstall or repair flow. Archive and remove retained data only through a
 separate, explicit operator-approved procedure.
+
+The retained `state/secrets/alvenqis_storage_key` must stay with
+`state/data/chain/state.rocksdb` and every incremental RocksDB backup. Removing
+only the key is irreversible data loss, not an uninstall.

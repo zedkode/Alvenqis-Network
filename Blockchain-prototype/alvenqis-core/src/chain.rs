@@ -86,11 +86,7 @@ impl Chain {
         Ok(chain)
     }
 
-    pub fn from_persisted_state<I>(
-        network: Network,
-        blocks: I,
-        state: LedgerState,
-    ) -> Result<Self>
+    pub fn from_persisted_state<I>(network: Network, blocks: I, state: LedgerState) -> Result<Self>
     where
         I: IntoIterator<Item = Block>,
     {

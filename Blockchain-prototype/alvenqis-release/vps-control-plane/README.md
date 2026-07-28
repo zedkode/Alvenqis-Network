@@ -17,7 +17,11 @@ not delete legacy units, containers or data.
 - authenticated controller or fleet agent;
 - hardened Nginx gateway with optional Cloudflare Tunnel or direct DNS;
 - Prometheus, Alertmanager, Grafana, Loki, Alloy, node exporter and alvenqis-metrics-exporter (chain/RPC/indexer/pool gauges);
-- encrypted local and optional R2/S3 backups;
+- SQLite canonical blocks plus RocksDB canonical state, block metadata and
+  persistent mempool, with LZ4 column families and authenticated
+  XChaCha20-Poly1305 value envelopes;
+- verified incremental RocksDB backups, online SQLite snapshots, an encrypted
+  secrets archive and optional R2/S3 replication;
 - one token-authenticated Docker broker with the only Docker socket mount.
 
 The VPS image does not contain the CUDA miner or wallet keys. Pool payouts
@@ -61,6 +65,12 @@ out immutable release bundle and never pulls a newer Alvenqis source tree.
 The `validator` bootstrap role is a PoW full-validation node that verifies
 blocks and transactions. Alvenqis does not expose a staking-validator role.
 
+The installer creates `state/secrets/alvenqis_storage_key` once. That key is
+part of the storage identity: deleting, regenerating or rotating it without an
+explicit data migration makes the current RocksDB state and its backups
+unreadable. Never copy a RocksDB backup without its matching encrypted secrets
+archive.
+
 ## Repair or migrate an existing host
 
 ```bash
@@ -92,6 +102,12 @@ from the monorepo root.
 # on VPS after backup-now.sh:
 # RESTORE_CONFIRM=yes ./scripts/restore-from-backup.sh state/backups/<UTC-stamp>
 ```
+
+The restore command verifies the exact checksum manifest, archive member types,
+storage key ID, incremental RocksDB backup, and full SQLite replay in an
+isolated stage before it stops the live project. After installation it repeats
+the parity check; any failure after mutation restores the pre-restore snapshot
+before restarting the owned Alvenqis services.
 
 ## Secured pool mining ops
 

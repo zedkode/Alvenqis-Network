@@ -75,7 +75,8 @@ pub async fn serve(state: PoolState, config: StratumConfig) -> Result<()> {
             {
                 consecutive_failures = consecutive_failures.saturating_add(1);
                 let message = error.to_string();
-                let periodic_log = consecutive_failures % (60 / refresh_seconds).max(1) == 0;
+                let periodic_log =
+                    consecutive_failures.is_multiple_of((60 / refresh_seconds).max(1));
                 if message != last_error || consecutive_failures == 1 || periodic_log {
                     eprintln!(
                         "stratum upstream refresh failed (attempt {consecutive_failures}): {message}"

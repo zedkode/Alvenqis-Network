@@ -9,8 +9,8 @@ use fs2::FileExt;
 use rand::{rngs::OsRng, RngCore};
 use rocksdb::{
     backup::{BackupEngine, BackupEngineOptions, RestoreOptions},
-    BlockBasedOptions, ColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBRecoveryMode, Env,
-    IteratorMode, Options, ReadOptions, WriteBatch, WriteOptions, DB,
+    BlockBasedOptions, ColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBRecoveryMode,
+    Env, IteratorMode, Options, ReadOptions, WriteBatch, WriteOptions, DB,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -245,9 +245,7 @@ impl ValueCipher {
 
     fn open(&self, column_family: &str, key: &[u8], value: &[u8]) -> NodeResult<Vec<u8>> {
         if let Some(plaintext) = value.strip_prefix(PLAINTEXT_VALUE_MAGIC) {
-            if matches!(self, Self::XChaCha20Poly1305 { .. })
-                && !self.allow_plaintext_migration()
-            {
+            if matches!(self, Self::XChaCha20Poly1305 { .. }) && !self.allow_plaintext_migration() {
                 return Err(NodeError::Input(format!(
                     "plaintext RocksDB value rejected in encrypted mode for column family {column_family}"
                 )));
@@ -255,13 +253,11 @@ impl ValueCipher {
             return Ok(plaintext.to_vec());
         }
 
-        let encrypted = value
-            .strip_prefix(ENCRYPTED_VALUE_MAGIC)
-            .ok_or_else(|| {
-                NodeError::Input(format!(
-                    "unknown RocksDB value envelope in column family {column_family}"
-                ))
-            })?;
+        let encrypted = value.strip_prefix(ENCRYPTED_VALUE_MAGIC).ok_or_else(|| {
+            NodeError::Input(format!(
+                "unknown RocksDB value envelope in column family {column_family}"
+            ))
+        })?;
         let (nonce_bytes, ciphertext) = encrypted
             .split_at_checked(XCHACHA_NONCE_BYTES)
             .ok_or_else(|| NodeError::Input("truncated encrypted RocksDB value".to_owned()))?;
@@ -419,11 +415,9 @@ impl RocksStateStore {
                     .ok_or_else(|| {
                         invalid_state_database(&self.database_path, "missing encryption metadata")
                     })?;
-                let key_id = self
-                    .get_decoded(CF_METADATA, META_KEY_ID)?
-                    .ok_or_else(|| {
-                        invalid_state_database(&self.database_path, "missing encryption key id")
-                    })?;
+                let key_id = self.get_decoded(CF_METADATA, META_KEY_ID)?.ok_or_else(|| {
+                    invalid_state_database(&self.database_path, "missing encryption key id")
+                })?;
                 if stored_encryption == self.cipher.mode().as_bytes()
                     && key_id == self.cipher.key_id().as_bytes()
                 {
@@ -506,11 +500,10 @@ impl RocksStateStore {
             let handle = self.column_family(column_family)?;
             let mut batch = WriteBatch::default();
             let mut pending = 0_usize;
-            for item in self.database.iterator_cf_opt(
-                handle,
-                checked_read_options(),
-                IteratorMode::Start,
-            ) {
+            for item in
+                self.database
+                    .iterator_cf_opt(handle, checked_read_options(), IteratorMode::Start)
+            {
                 let (key, value) = item?;
                 if let Some(plaintext) = value.strip_prefix(PLAINTEXT_VALUE_MAGIC) {
                     let encrypted = self.cipher.seal(column_family, &key, plaintext)?;
@@ -566,17 +559,12 @@ impl RocksStateStore {
         Ok(())
     }
 
-    fn clear_column_family(
-        &self,
-        batch: &mut WriteBatch,
-        column_family: &str,
-    ) -> NodeResult<()> {
+    fn clear_column_family(&self, batch: &mut WriteBatch, column_family: &str) -> NodeResult<()> {
         let handle = self.column_family(column_family)?;
-        for item in self.database.iterator_cf_opt(
-            handle,
-            checked_read_options(),
-            IteratorMode::Start,
-        ) {
+        for item in
+            self.database
+                .iterator_cf_opt(handle, checked_read_options(), IteratorMode::Start)
+        {
             let (key, _) = item?;
             batch.delete_cf(handle, key);
         }
@@ -688,12 +676,7 @@ impl RocksStateStore {
         key: &[u8],
         value: &T,
     ) -> NodeResult<()> {
-        self.put_encoded(
-            batch,
-            column_family,
-            key,
-            &serde_json::to_vec(value)?,
-        )
+        self.put_encoded(batch, column_family, key, &serde_json::to_vec(value)?)
     }
 
     fn decode_json<T: for<'de> Deserialize<'de>>(
@@ -751,19 +734,9 @@ impl RocksStateStore {
         let mut batch = WriteBatch::default();
         self.clear_column_family(&mut batch, CF_MEMPOOL)?;
         for record in records {
-            self.put_json(
-                &mut batch,
-                CF_MEMPOOL,
-                record.tx_hash.as_bytes(),
-                record,
-            )?;
+            self.put_json(&mut batch, CF_MEMPOOL, record.tx_hash.as_bytes(), record)?;
         }
-        self.put_encoded(
-            &mut batch,
-            CF_METADATA,
-            META_MEMPOOL_INITIALIZED,
-            b"true",
-        )?;
+        self.put_encoded(&mut batch, CF_METADATA, META_MEMPOOL_INITIALIZED, b"true")?;
         self.write_sync(batch)
     }
 
@@ -882,11 +855,10 @@ impl RocksStateStore {
     fn load_accounts(&self) -> NodeResult<BTreeMap<String, PersistedAccountState>> {
         let handle = self.column_family(CF_ACCOUNTS)?;
         let mut accounts = BTreeMap::new();
-        for item in self.database.iterator_cf_opt(
-            handle,
-            checked_read_options(),
-            IteratorMode::Start,
-        ) {
+        for item in
+            self.database
+                .iterator_cf_opt(handle, checked_read_options(), IteratorMode::Start)
+        {
             let (key, value) = item?;
             let address = String::from_utf8(key.to_vec()).map_err(|_| {
                 invalid_state_database(&self.database_path, "account key is not valid UTF-8")
@@ -906,11 +878,10 @@ impl RocksStateStore {
     fn load_block_metadata(&self) -> NodeResult<BTreeMap<u64, PersistedBlockMetadata>> {
         let handle = self.column_family(CF_BLOCK_METADATA)?;
         let mut entries = BTreeMap::new();
-        for item in self.database.iterator_cf_opt(
-            handle,
-            checked_read_options(),
-            IteratorMode::Start,
-        ) {
+        for item in
+            self.database
+                .iterator_cf_opt(handle, checked_read_options(), IteratorMode::Start)
+        {
             let (key, value) = item?;
             let key_bytes: [u8; 8] = key.as_ref().try_into().map_err(|_| {
                 invalid_state_database(
@@ -934,11 +905,10 @@ impl RocksStateStore {
     fn load_recent_transactions(&self) -> NodeResult<BTreeSet<String>> {
         let handle = self.column_family(CF_RECENT_TRANSACTIONS)?;
         let mut transactions = BTreeSet::new();
-        for item in self.database.iterator_cf_opt(
-            handle,
-            checked_read_options(),
-            IteratorMode::Start,
-        ) {
+        for item in
+            self.database
+                .iterator_cf_opt(handle, checked_read_options(), IteratorMode::Start)
+        {
             let (key, value) = item?;
             let transaction_hash = String::from_utf8(key.to_vec()).map_err(|_| {
                 invalid_state_database(
@@ -952,15 +922,11 @@ impl RocksStateStore {
                     format!("invalid recent transaction hash key: {transaction_hash}"),
                 ));
             }
-            let decoded = self
-                .cipher
-                .open(CF_RECENT_TRANSACTIONS, &key, &value)?;
+            let decoded = self.cipher.open(CF_RECENT_TRANSACTIONS, &key, &value)?;
             if decoded != b"confirmed" {
                 return Err(invalid_state_database(
                     &self.database_path,
-                    format!(
-                        "unexpected recent transaction marker for hash {transaction_hash}"
-                    ),
+                    format!("unexpected recent transaction marker for hash {transaction_hash}"),
                 ));
             }
             transactions.insert(transaction_hash);
@@ -971,20 +937,21 @@ impl RocksStateStore {
     fn load_mempool_records(&self) -> NodeResult<Vec<PendingTransactionRecord>> {
         let handle = self.column_family(CF_MEMPOOL)?;
         let mut records = Vec::new();
-        for item in self.database.iterator_cf_opt(
-            handle,
-            checked_read_options(),
-            IteratorMode::Start,
-        ) {
+        for item in
+            self.database
+                .iterator_cf_opt(handle, checked_read_options(), IteratorMode::Start)
+        {
             let (key, value) = item?;
             let stored_hash = String::from_utf8(key.to_vec()).map_err(|_| {
                 invalid_state_database(&self.database_path, "mempool key is not valid UTF-8")
             })?;
             let decoded = self.cipher.open(CF_MEMPOOL, &key, &value)?;
-            let record: PendingTransactionRecord =
-                self.decode_json(CF_MEMPOOL, &key, &decoded)?;
+            let record: PendingTransactionRecord = self.decode_json(CF_MEMPOOL, &key, &decoded)?;
             validate_mempool_record(&record).map_err(|message| {
-                invalid_state_database(&self.database_path, format!("invalid mempool record: {message}"))
+                invalid_state_database(
+                    &self.database_path,
+                    format!("invalid mempool record: {message}"),
+                )
             })?;
             if stored_hash != record.tx_hash {
                 return Err(invalid_state_database(
@@ -1003,11 +970,10 @@ impl RocksStateStore {
     fn count_and_authenticate(&self, column_family: &str) -> NodeResult<usize> {
         let handle = self.column_family(column_family)?;
         let mut count = 0_usize;
-        for item in self.database.iterator_cf_opt(
-            handle,
-            checked_read_options(),
-            IteratorMode::Start,
-        ) {
+        for item in
+            self.database
+                .iterator_cf_opt(handle, checked_read_options(), IteratorMode::Start)
+        {
             let (key, value) = item?;
             self.cipher.open(column_family, &key, &value)?;
             count = count.saturating_add(1);
@@ -1311,10 +1277,7 @@ fn validate_path_components(path: &Path, label: &str) -> NodeResult<()> {
     Ok(())
 }
 
-fn validate_database_location(
-    database_path: &Path,
-    create_if_missing: bool,
-) -> NodeResult<bool> {
+fn validate_database_location(database_path: &Path, create_if_missing: bool) -> NodeResult<bool> {
     validate_path_components(database_path, "RocksDB state database")?;
     match fs::symlink_metadata(database_path) {
         Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
@@ -1471,9 +1434,7 @@ fn persisted_block_metadata(
     })
 }
 
-fn expected_block_metadata(
-    blocks: &[Block],
-) -> NodeResult<BTreeMap<u64, PersistedBlockMetadata>> {
+fn expected_block_metadata(blocks: &[Block]) -> NodeResult<BTreeMap<u64, PersistedBlockMetadata>> {
     let mut entries = BTreeMap::new();
     let mut cumulative_work = 0_u128;
     for block in blocks {
@@ -1507,11 +1468,13 @@ fn validate_restored_snapshot(
     if Network::from_network_id(&snapshot.network_id).is_none() {
         return Err(invalid_state_database(
             database_path,
-            format!("restored snapshot network is invalid: {}", snapshot.network_id),
+            format!(
+                "restored snapshot network is invalid: {}",
+                snapshot.network_id
+            ),
         ));
     }
-    if snapshot.block_count == 0
-        || snapshot.tip_height.checked_add(1) != Some(snapshot.block_count)
+    if snapshot.block_count == 0 || snapshot.tip_height.checked_add(1) != Some(snapshot.block_count)
     {
         return Err(invalid_state_database(
             database_path,
@@ -1684,9 +1647,7 @@ fn reject_unknown_column_families(database_path: &Path) -> NodeResult<()> {
     if !database_path.join("CURRENT").exists() {
         return Ok(());
     }
-    let known: BTreeSet<&str> = std::iter::once("default")
-        .chain(COLUMN_FAMILIES)
-        .collect();
+    let known: BTreeSet<&str> = std::iter::once("default").chain(COLUMN_FAMILIES).collect();
     let actual = DB::list_cf(&Options::default(), database_path)?;
     let unknown: Vec<String> = actual
         .into_iter()
@@ -1746,9 +1707,7 @@ fn environment_flag(name: &str) -> NodeResult<bool> {
         Ok(value) => match value.trim().to_ascii_lowercase().as_str() {
             "1" | "true" | "yes" | "on" => Ok(true),
             "0" | "false" | "no" | "off" | "" => Ok(false),
-            _ => Err(NodeError::Input(format!(
-                "{name} must be true or false"
-            ))),
+            _ => Err(NodeError::Input(format!("{name} must be true or false"))),
         },
         Err(std::env::VarError::NotPresent) => Ok(false),
         Err(std::env::VarError::NotUnicode(_)) => {
@@ -1777,16 +1736,11 @@ fn invalid_state_database(path: &Path, message: impl Into<String>) -> NodeError 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alvenqis_core::{
-        devnet_genesis, Address, Amount, PrivateKey, FIRST_ACCOUNT_NONCE,
-    };
+    use alvenqis_core::{devnet_genesis, Address, Amount, PrivateKey, FIRST_ACCOUNT_NONCE};
 
     fn miner_address() -> String {
-        Address::from_public_key_for_network(
-            &PrivateKey::generate().public_key(),
-            Network::Devnet,
-        )
-        .to_string()
+        Address::from_public_key_for_network(&PrivateKey::generate().public_key(), Network::Devnet)
+            .to_string()
     }
 
     #[test]

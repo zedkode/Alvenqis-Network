@@ -81,7 +81,7 @@ pub fn load_pending_transactions_for_chain(
 ) -> NodeResult<Vec<PendingTransactionRecord>> {
     #[cfg(feature = "storage-rocksdb")]
     {
-        return crate::state_store::load_persisted_mempool(data_dir, mempool_dir);
+        crate::state_store::load_persisted_mempool(data_dir, mempool_dir)
     }
 
     #[cfg(not(feature = "storage-rocksdb"))]
@@ -141,7 +141,7 @@ pub fn write_pending_transactions_for_chain_in_lock(
     #[cfg(feature = "storage-rocksdb")]
     {
         let _ = mempool_dir;
-        return crate::state_store::replace_persisted_mempool(data_dir, records);
+        crate::state_store::replace_persisted_mempool(data_dir, records)
     }
 
     #[cfg(not(feature = "storage-rocksdb"))]
@@ -273,7 +273,7 @@ pub fn mempool_runtime_fingerprint(
         let Ok(entries) = fs::read_dir(database_path) else {
             return (0, None);
         };
-        return entries
+        entries
             .filter_map(Result::ok)
             .filter_map(|entry| entry.metadata().ok())
             .fold((0_u64, None), |(total_size, latest), metadata| {
@@ -284,7 +284,7 @@ pub fn mempool_runtime_fingerprint(
                     (current, None) => current,
                 };
                 (total_size.saturating_add(metadata.len()), latest)
-            });
+            })
     }
 
     #[cfg(not(feature = "storage-rocksdb"))]

@@ -71,6 +71,7 @@ fn headless_mode() -> bool {
 /// If acknowledgement fails, the caller must not persist the keystore and must drop the
 /// mnemonic immediately.
 pub fn confirm_recovery_backup(mnemonic: &str) -> Result<(), String> {
+    #[cfg(windows)]
     let summary = format!(
         "CRITICAL: write down this recovery phrase NOW.\n\
 It will NOT be shown again and is NEVER returned to the browser extension.\n\n\

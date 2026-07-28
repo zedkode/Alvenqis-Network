@@ -369,7 +369,7 @@ pub(crate) fn persist_validated_chain_state(
 ) -> NodeResult<()> {
     #[cfg(feature = "storage-rocksdb")]
     {
-        return crate::state_store::persist_chain_state(data_dir, blocks, chain);
+        crate::state_store::persist_chain_state(data_dir, blocks, chain)
     }
 
     #[cfg(not(feature = "storage-rocksdb"))]

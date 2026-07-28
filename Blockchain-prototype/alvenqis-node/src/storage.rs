@@ -22,8 +22,10 @@ const STORAGE_APPLICATION_ID: i64 = 0x5649_5245; // "ALVE"
 const MINIMUM_SAFE_SQLITE_VERSION: i32 = 3_051_003;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
-static VALIDATED_BLOCK_HASH_CACHE: OnceLock<Mutex<BTreeMap<PathBuf, BTreeMap<i64, Vec<u8>>>>> =
-    OnceLock::new();
+type ValidatedBlockHashes = BTreeMap<i64, Vec<u8>>;
+type ValidatedBlockHashCache = BTreeMap<PathBuf, ValidatedBlockHashes>;
+
+static VALIDATED_BLOCK_HASH_CACHE: OnceLock<Mutex<ValidatedBlockHashCache>> = OnceLock::new();
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FileFingerprint {

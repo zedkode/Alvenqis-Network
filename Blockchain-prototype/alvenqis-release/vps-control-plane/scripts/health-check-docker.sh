@@ -51,9 +51,15 @@ printf 'Container memory-limit budget: %s / %s bytes\n' "$memory_limit_total" "$
 "${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS --max-time 45 http://127.0.0.1:10787/health >/dev/null
 status_json="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS --max-time 45 http://127.0.0.1:10787/status)"
 p2p_json="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS --max-time 45 http://127.0.0.1:10787/p2p/status)"
-read -r initialized height index_lag < <(python3 -c 'import json,sys; d=json.load(sys.stdin); print(str(bool(d.get("initialized"))).lower(), d.get("height", -1), d.get("index_lag_blocks", -1))' <<<"$status_json")
+read -r initialized network_id block_count height tip_hash index_lag < <(
+  python3 -c 'import json,sys; d=json.load(sys.stdin); print(str(bool(d.get("initialized"))).lower(), d.get("network_id", "none"), d.get("block_count", -1), d.get("height", -1), d.get("tip_hash", "none"), d.get("index_lag_blocks", -1))' \
+    <<<"$status_json"
+)
 read -r configured connected validated < <(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("configured_seed_count", -1), d.get("connected_peer_count", -1), d.get("validated_peer_count", -1))' <<<"$p2p_json")
-[[ "$initialized" == true && "$height" -ge 0 ]] || {
+[[ "$initialized" == true \
+  && "$block_count" -ge 1 \
+  && "$height" -ge 0 \
+  && "$tip_hash" =~ ^[0-9a-f]{64}$ ]] || {
   echo "RPC readiness failed: chain is not initialized." >&2
   exit 1
 }
@@ -74,8 +80,31 @@ minimum_peers="${P2P_MIN_VALIDATED_PEERS:-0}"
   echo "P2P readiness failed: validated peers ${validated} < required ${minimum_peers}." >&2
   exit 1
 }
-printf 'Live chain/P2P: height=%s index_lag=%s seeds=%s connected=%s validated=%s\n' \
-  "$height" "$index_lag" "$configured" "$connected" "$validated"
+
+rocks_output="$(
+  "${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-node \
+    alvenqis-node \
+      --config /config/node.toml \
+      --data-dir /data/.alvenqis-mainnet/chain \
+      verify-rocksdb
+)"
+rocks_json="$(printf '%s\n' "$rocks_output" | sed -n '/^{/,$p')"
+read -r rocks_network rocks_blocks rocks_height rocks_hash rocks_encryption rocks_key_id < <(
+  python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["network_id"], d["block_count"], d["tip_height"], d["tip_hash"], d["encryption"], d["key_id"])' \
+    <<<"$rocks_json"
+)
+[[ "$rocks_network" == "$network_id" \
+  && "$rocks_blocks" == "$block_count" \
+  && "$rocks_height" == "$height" \
+  && "$rocks_hash" == "$tip_hash" \
+  && "$rocks_encryption" == xchacha20poly1305 \
+  && "$rocks_key_id" =~ ^[0-9a-f]{16}$ ]] || {
+  echo "RocksDB readiness failed: storage does not match the live canonical SQLite tip." >&2
+  exit 1
+}
+printf 'Live chain/P2P/RocksDB: height=%s index_lag=%s seeds=%s connected=%s validated=%s encryption=%s key_id=%s\n' \
+  "$height" "$index_lag" "$configured" "$connected" "$validated" \
+  "$rocks_encryption" "$rocks_key_id"
 
 if command -v ss >/dev/null 2>&1; then
   ss -ltn | grep -Eq "[:.]${P2P_PORT:-20787}[[:space:]]" || {

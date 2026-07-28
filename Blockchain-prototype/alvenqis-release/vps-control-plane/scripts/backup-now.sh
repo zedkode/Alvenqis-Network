@@ -8,6 +8,13 @@ load_dotenv .env
 resolve_state_root "$workspace"
 compose_args
 
+install -d -m 0750 "$STATE_ROOT/backups"
+exec 9>"$STATE_ROOT/backups/.backup-restore.lock"
+flock -n 9 || {
+  echo "Another Alvenqis backup or restore operation is already running." >&2
+  exit 75
+}
+
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 out="$STATE_ROOT/backups/$stamp"
 snapshot="$STATE_ROOT/backups/.snapshot-$stamp"
@@ -61,8 +68,8 @@ while :; do
       --backup-repository /backups/rocksdb-repository \
       --backups-to-keep "${ROCKSDB_BACKUPS_TO_KEEP:-30}")"
   rocks_json="$(printf '%s\n' "$rocks_output" | sed -n '/^{/,$p')"
-  read -r rocks_backup_id rocks_height rocks_hash rocks_encryption rocks_key_id < <(
-    python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["backup_id"], d["tip_height"], d["tip_hash"], d["encryption"], d["key_id"])' \
+  read -r rocks_backup_id rocks_network_id rocks_block_count rocks_height rocks_hash rocks_encryption rocks_key_id < <(
+    python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["backup_id"], d["network_id"], d["block_count"], d["tip_height"], d["tip_hash"], d["encryption"], d["key_id"])' \
       <<<"$rocks_json"
   )
   [[ "$rocks_encryption" == xchacha20poly1305 && "$rocks_key_id" != none ]] || {
@@ -141,23 +148,26 @@ tar -C "$snapshot" -czf - state/secrets |
     -out "$out/alvenqis-secrets.tar.gz.enc"
 rm -rf -- "$snapshot/state/secrets"
 
-(
-  cd "$out"
-  sha256sum \
-    alvenqis-rocksdb-backup.tar.gz \
-    alvenqis-secrets.tar.gz.enc \
-    alvenqis-state.tar.gz > SHA256SUMS
-)
 cat > "$out/BACKUP_COMPLETE" <<EOF
 created_utc=$stamp
 state_root=$STATE_ROOT
 sqlite_integrity=ok
 rocksdb_backup_id=$rocks_backup_id
+rocksdb_network_id=$rocks_network_id
+rocksdb_block_count=$rocks_block_count
 rocksdb_tip_height=$rocks_height
 rocksdb_tip_hash=$rocks_hash
 rocksdb_encryption=$rocks_encryption
 rocksdb_key_id=$rocks_key_id
 EOF
+(
+  cd "$out"
+  sha256sum \
+    BACKUP_COMPLETE \
+    alvenqis-rocksdb-backup.tar.gz \
+    alvenqis-secrets.tar.gz.enc \
+    alvenqis-state.tar.gz > SHA256SUMS
+)
 
 if [[ "${BACKUP_REMOTE_ENABLED:-false}" == true ]]; then
   secret=/run/secrets/r2_secret_access_key

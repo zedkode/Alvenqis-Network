@@ -94,7 +94,19 @@ assert 'chmod 0750 "$STATE_ROOT"' in (root/'scripts/prepare-state.sh').read_text
 assert 'create_owned 10001 10001 "$STATE_ROOT/backups/rocksdb-repository"' in (root/'scripts/prepare-state.sh').read_text()
 assert (root/'scripts/migrate-release-state.sh').is_file()
 assert "run(['bash',str(WORKSPACE/'scripts/backup-now.sh')])" in (root/'docker/ops/broker.py').read_text()
-assert 'BACKUP_COMPLETE' in (root/'scripts/backup-now.sh').read_text()
+backup_script=(root/'scripts/backup-now.sh').read_text()
+restore_script=(root/'scripts/restore-from-backup.sh').read_text()
+assert 'BACKUP_COMPLETE' in backup_script
+assert 'backup-rocksdb' in backup_script
+assert "rocksdb_network_id=$rocks_network_id" in backup_script
+assert "rocksdb_block_count=$rocks_block_count" in backup_script
+assert "--exclude '/chain/state.rocksdb/'" in backup_script
+assert '.backup-restore.lock' in backup_script
+assert 'restore-latest-rocksdb' in restore_script
+assert 'verify-rocksdb' in restore_script
+assert 'Staged RocksDB restore and full SQLite replay verification: ok' in restore_script
+assert 'rolling back the pre-restore snapshot' in restore_script
+assert '.backup-restore.lock' in restore_script
 assert 'http://alvenqis-rpc:10787' in (root/'docker/templates/pool.toml.template').read_text()
 assert 'exec /usr/local/bin/alvenqis-indexer-loop' in (root/'docker/entrypoint.sh').read_text()
 assert 'exec /usr/local/bin/alvenqis-pool-supervisor' in (root/'docker/entrypoint.sh').read_text()
@@ -107,6 +119,8 @@ assert 'Public solo mining template is unavailable or invalid.' in health
 assert 'alvenqis-mining-rpc' not in health
 assert 'P2P_MIN_VALIDATED_PEERS' in health
 assert 'Private mining RPC did not return a valid live template.' in health
+assert 'verify-rocksdb' in health
+assert 'RocksDB readiness failed' in health
 proxy=(root/'docker/gateway/nginx.conf.template').read_text()
 assert 'location /pool/' in proxy
 assert 'alvenqis-pool:30787' in proxy

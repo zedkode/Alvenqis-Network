@@ -775,8 +775,8 @@ mod tests {
     fn persisted_state_constructor_accepts_matching_state_without_replay() {
         let (genesis, state) = persisted_state_fixture();
         let expected_hash = genesis.hash().expect("tip hash");
-        let restored =
-            Chain::from_persisted_state(Network::Devnet, [genesis], state.clone()).expect("restore");
+        let restored = Chain::from_persisted_state(Network::Devnet, [genesis], state.clone())
+            .expect("restore");
 
         assert_eq!(restored.height(), Some(0));
         assert_eq!(restored.tip_hash().expect("tip"), Some(expected_hash));
@@ -789,12 +789,9 @@ mod tests {
 
         let mut wrong_height = state.clone();
         wrong_height.applied_block_height = Some(1);
-        assert!(Chain::from_persisted_state(
-            Network::Devnet,
-            [genesis.clone()],
-            wrong_height
-        )
-        .is_err());
+        assert!(
+            Chain::from_persisted_state(Network::Devnet, [genesis.clone()], wrong_height).is_err()
+        );
 
         let mut wrong_hash = state.clone();
         wrong_hash.tip_hash = Some(Hash::zero());
@@ -804,22 +801,16 @@ mod tests {
 
         let mut wrong_timestamp = state.clone();
         wrong_timestamp.tip_timestamp = Some(genesis.header.timestamp.saturating_add(1));
-        assert!(Chain::from_persisted_state(
-            Network::Devnet,
-            [genesis.clone()],
-            wrong_timestamp
-        )
-        .is_err());
-
-        assert!(Chain::from_persisted_state(
-            Network::Testnet,
-            [genesis.clone()],
-            state.clone()
-        )
-        .is_err());
         assert!(
-            Chain::from_persisted_state(Network::Devnet, Vec::<Block>::new(), state).is_err()
+            Chain::from_persisted_state(Network::Devnet, [genesis.clone()], wrong_timestamp)
+                .is_err()
         );
+
+        assert!(
+            Chain::from_persisted_state(Network::Testnet, [genesis.clone()], state.clone())
+                .is_err()
+        );
+        assert!(Chain::from_persisted_state(Network::Devnet, Vec::<Block>::new(), state).is_err());
         assert!(
             Chain::from_persisted_state(Network::Devnet, [genesis], LedgerState::new()).is_err()
         );
