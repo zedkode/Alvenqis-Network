@@ -14,7 +14,7 @@ umask 077
 printf '%s' "$token" > "$STATE_ROOT/control/enrollment.token"
 chmod 0600 "$STATE_ROOT/control/enrollment.token"
 unset token
-for n in admin_password grafana_password setup_token broker_token cloudflare_tunnel_token pool_admin_token backup_passphrase; do openssl rand -hex 32 > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
+for n in admin_password grafana_password setup_token broker_token cloudflare_tunnel_token pool_admin_token backup_passphrase alvenqis_storage_key; do openssl rand -hex 32 > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
 for n in cloudflare_api_token r2_secret_access_key discord_webhook telegram_bot_token smtp_password; do : > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
 python3 - "$root" "$repo" "$STATE_ROOT" "$base" "$node" "$email" "$controller" "$bundle" "$host" "${seeds[@]}" <<'PY'
 import json
@@ -28,6 +28,9 @@ values = {
     "ALVENQIS_HOST_WORKSPACE": root,
     "ALVENQIS_HOST_REPO": repo,
     "ALVENQIS_STATE_ROOT": state_root,
+    "ALVENQIS_STORAGE_KEY_FILE": "/run/secrets/alvenqis_storage_key",
+    "ALVENQIS_REQUIRE_STORAGE_ENCRYPTION": "true",
+    "ALVENQIS_ALLOW_PLAINTEXT_STORAGE_MIGRATION": "false",
     "ALVENQIS_VERSION": "2.1.0-no-autoupdate",
     "BASE_DOMAIN": base,
     "NODE_NAME": node,

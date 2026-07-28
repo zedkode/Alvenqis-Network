@@ -74,6 +74,17 @@ def read_or_create_secret(path: Path, length: int = 32) -> str:
     os.chmod(path, 0o600)
     return value
 
+def read_or_create_hex_secret(path: Path, byte_length: int = 32) -> str:
+    if path.exists() and path.stat().st_size:
+        value = path.read_text(encoding="utf-8").strip()
+        if len(value) != byte_length * 2 or re.fullmatch(r"[0-9a-fA-F]+", value) is None:
+            raise ValueError(f"invalid hexadecimal secret: {path}")
+        return value
+    value = secrets.token_hex(byte_length)
+    path.write_text(value + "\n", encoding="utf-8")
+    os.chmod(path, 0o600)
+    return value
+
 def setup_token() -> str:
     ensure_layout()
     return read_or_create_secret(SETUP_TOKEN_FILE, 24)
@@ -337,6 +348,7 @@ def configure(data: dict[str, Any]) -> None:
     write_secret("telegram_bot_token", str(data.get("telegram_bot_token", "")), keep_existing=False)
     write_secret("smtp_password", str(data.get("alert_smtp_password", "")), keep_existing=False)
     read_or_create_secret(SECRETS_DIR / "cloudflare_tunnel_token", 48)
+    read_or_create_hex_secret(SECRETS_DIR / "alvenqis_storage_key", 32)
 
     env_values = {
         "COMPOSE_PROJECT_NAME": "alvenqis-control-plane",
@@ -344,6 +356,9 @@ def configure(data: dict[str, Any]) -> None:
         "ALVENQIS_HOST_WORKSPACE": os.environ.get("ALVENQIS_HOST_WORKSPACE", str(WORKSPACE)),
         "ALVENQIS_HOST_REPO": os.environ.get("ALVENQIS_HOST_REPO", str(WORKSPACE)),
         "ALVENQIS_STATE_ROOT": os.environ.get("ALVENQIS_STATE_ROOT", str(STATE_DIR)),
+        "ALVENQIS_STORAGE_KEY_FILE": "/run/secrets/alvenqis_storage_key",
+        "ALVENQIS_REQUIRE_STORAGE_ENCRYPTION": "true",
+        "ALVENQIS_ALLOW_PLAINTEXT_STORAGE_MIGRATION": "false",
         "TZ": data.get("timezone", "Europe/Bucharest"),
         "ALVENQIS_VERSION": data.get("ALVENQIS_version", "2.1.0-no-autoupdate"),
         "ALVENQIS_RUNTIME_IMAGE": data.get("alvenqis_runtime_image", "ghcr.io/zedkode/alvenqis-runtime"),

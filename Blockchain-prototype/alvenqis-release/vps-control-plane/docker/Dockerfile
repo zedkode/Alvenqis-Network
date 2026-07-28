@@ -2,12 +2,13 @@
 FROM rust:1.88-bookworm AS builder
 ENV CARGO_BUILD_JOBS=2
 WORKDIR /src
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential ca-certificates clang cmake libssl-dev pkg-config python3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential ca-certificates clang cmake libclang-dev libssl-dev pkg-config python3 && rm -rf /var/lib/apt/lists/*
 COPY Blockchain-prototype .
 RUN --mount=type=cache,id=alvenqis-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=alvenqis-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=alvenqis-cargo-target,target=/src/target,sharing=locked \
     cargo build --locked --release \
+      --features alvenqis-node/storage-rocksdb \
       -p alvenqis-node \
       -p alvenqis-rpc-gateway \
       -p alvenqis-indexer \

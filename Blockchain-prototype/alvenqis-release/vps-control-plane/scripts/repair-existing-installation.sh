@@ -11,6 +11,21 @@ if [[ -d "$STATE_ROOT/rollback" ]]; then
   mkdir -p "$STATE_ROOT/legacy-disabled"
   mv "$STATE_ROOT/rollback" "$STATE_ROOT/legacy-disabled/rollback-$stamp"
 fi
+storage_key="$STATE_ROOT/secrets/alvenqis_storage_key"
+rocks_current="$STATE_ROOT/data/chain/state.rocksdb/CURRENT"
+if [[ -f "$rocks_current" && ! -s "$storage_key" ]]; then
+  echo "Encrypted RocksDB exists but its storage key is missing; refusing repair." >&2
+  exit 78
+fi
+if [[ -s "$storage_key" ]]; then
+  grep -Eq '^[0-9A-Fa-f]{64}$' "$storage_key" || {
+    echo "Invalid Alvenqis storage key; refusing to replace it." >&2
+    exit 78
+  }
+else
+  openssl rand -hex 32 > "$storage_key"
+fi
+chmod 0444 "$storage_key"
 for n in broker_token setup_token admin_password grafana_password pool_admin_token backup_passphrase cloudflare_tunnel_token; do [[ -s "$STATE_ROOT/secrets/$n" && "$(cat "$STATE_ROOT/secrets/$n")" != validation-placeholder ]] || openssl rand -hex 32 > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
 for n in cloudflare_api_token r2_secret_access_key discord_webhook telegram_bot_token smtp_password; do [[ -e "$STATE_ROOT/secrets/$n" ]] || : > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
 python3 - "$root" "$repo" "$STATE_ROOT" <<'P'
@@ -39,6 +54,8 @@ for key,(old,new) in legacy_defaults.items():
 for key,value in [('INDEXER_FAILURE_BACKOFF_MAX_SECONDS','60'),('PROMETHEUS_RETENTION_SIZE','8GB'),('P2P_MIN_VALIDATED_PEERS','0'),('MAX_P2P_PEERS','64'),('CONTAINER_LOG_MAX_SIZE','20m'),('CONTAINER_LOG_MAX_FILES','3')]:
  if not re.search(rf'^{key}=',s,flags=re.M):
   set_value(key,value)
+for key,value in [('ALVENQIS_STORAGE_KEY_FILE','/run/secrets/alvenqis_storage_key'),('ALVENQIS_REQUIRE_STORAGE_ENCRYPTION','true'),('ALVENQIS_ALLOW_PLAINTEXT_STORAGE_MIGRATION','false')]:
+ set_value(key,value)
 for k in ['POSTGRES_DB','POSTGRES_USER','POSTGRES_MEMORY_LIMIT']: s=re.sub(rf'^{k}=.*\n?','',s,flags=re.M)
 p.write_text(s)
 P

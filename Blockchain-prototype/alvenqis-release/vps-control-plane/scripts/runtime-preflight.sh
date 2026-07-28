@@ -7,6 +7,50 @@ source scripts/lib.sh
 load_dotenv .env
 resolve_state_root "$root"
 
+assert_owner_mode() {
+  local path="$1" expected_owner="$2" expected_mode="$3" label="$4"
+  [[ -e "$path" && ! -L "$path" ]] || {
+    echo "$label is missing or is a symlink: $path" >&2
+    exit 78
+  }
+  local actual_owner actual_mode
+  actual_owner="$(stat -c '%u:%g' "$path")"
+  actual_mode="$(stat -c '%a' "$path")"
+  [[ "$actual_owner" == "$expected_owner" && "$actual_mode" == "$expected_mode" ]] || {
+    echo "$label must be owner=$expected_owner mode=$expected_mode; got owner=$actual_owner mode=$actual_mode" >&2
+    exit 78
+  }
+}
+
+assert_owner_mode "$STATE_ROOT" "0:0" "750" "Alvenqis state root"
+assert_owner_mode "$STATE_ROOT/secrets" "0:0" "700" "Alvenqis secrets directory"
+assert_owner_mode "$STATE_ROOT/data" "10001:10001" "750" "Alvenqis runtime data directory"
+assert_owner_mode "$STATE_ROOT/data/chain" "10001:10001" "750" "Alvenqis chain directory"
+storage_key="$STATE_ROOT/secrets/alvenqis_storage_key"
+assert_owner_mode "$storage_key" "0:0" "444" "Alvenqis RocksDB storage key"
+grep -Eq '^[0-9A-Fa-f]{64}$' "$storage_key" || {
+  echo "Alvenqis RocksDB storage key must contain exactly 64 hexadecimal characters." >&2
+  exit 78
+}
+[[ "${ALVENQIS_STORAGE_KEY_FILE:-}" == /run/secrets/alvenqis_storage_key ]] || {
+  echo "ALVENQIS_STORAGE_KEY_FILE must be /run/secrets/alvenqis_storage_key." >&2
+  exit 64
+}
+[[ "${ALVENQIS_REQUIRE_STORAGE_ENCRYPTION:-}" == true ]] || {
+  echo "ALVENQIS_REQUIRE_STORAGE_ENCRYPTION=true is mandatory." >&2
+  exit 64
+}
+[[ "${ALVENQIS_ALLOW_PLAINTEXT_STORAGE_MIGRATION:-}" == false ]] || {
+  echo "Plaintext storage migration must remain disabled during normal runtime." >&2
+  exit 64
+}
+if [[ -d "$STATE_ROOT/data/chain/state.rocksdb" ]]; then
+  [[ -s "$STATE_ROOT/data/chain/state.rocksdb/CURRENT" ]] || {
+    echo "Existing RocksDB state is incomplete; CURRENT is missing." >&2
+    exit 78
+  }
+fi
+
 command -v docker >/dev/null 2>&1 || {
   echo "Docker Engine is required." >&2
   exit 69

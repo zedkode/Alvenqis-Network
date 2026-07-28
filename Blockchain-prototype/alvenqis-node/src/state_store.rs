@@ -14,10 +14,9 @@ use rocksdb::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
@@ -108,6 +107,12 @@ pub struct RocksBackupInfo {
     pub timestamp: i64,
     pub size: u64,
     pub files: u32,
+    pub network_id: String,
+    pub block_count: u64,
+    pub tip_height: u64,
+    pub tip_hash: String,
+    pub encryption: String,
+    pub key_id: String,
 }
 
 #[derive(Debug)]
@@ -318,19 +323,16 @@ impl RocksStateStore {
         create_if_missing: bool,
     ) -> NodeResult<Self> {
         ensure_directory(data_dir, create_if_missing, "RocksDB data directory")?;
+        let database_path = state_database_path(data_dir);
+        validate_database_location(&database_path, create_if_missing)?;
         let lock = acquire_exclusive_lock(
             &data_dir.join(STATE_DATABASE_LOCK_FILE_NAME),
             "RocksDB state database",
         )?;
-        let database_path = state_database_path(data_dir);
-        let database_existed = database_path.join("CURRENT").is_file();
-        if !create_if_missing && !database_existed {
-            return Err(NodeError::Input(format!(
-                "RocksDB state database does not exist: {}",
-                database_path.display()
-            )));
+        let database_existed = validate_database_location(&database_path, create_if_missing)?;
+        if database_existed {
+            reject_unknown_column_families(&database_path)?;
         }
-        reject_unknown_column_families(&database_path)?;
         let options = database_options(create_if_missing);
         let database = DB::open_cf_descriptors(
             &options,
@@ -427,6 +429,7 @@ impl RocksStateStore {
                 {
                     // The configured cipher matches the persisted storage envelope.
                 } else if stored_encryption == b"plaintext"
+                    && key_id == b"none"
                     && matches!(self.cipher, ValueCipher::XChaCha20Poly1305 { .. })
                     && self.cipher.allow_plaintext_migration()
                 {
@@ -591,7 +594,7 @@ impl RocksStateStore {
 
     fn load_chain_state(&self) -> NodeResult<Option<PersistedChainState>> {
         self.get_decoded(CF_CANONICAL_STATE, STATE_SNAPSHOT_KEY)?
-            .map(|value| serde_json::from_slice(&value).map_err(NodeError::from))
+            .map(|value| self.decode_json(CF_CANONICAL_STATE, STATE_SNAPSHOT_KEY, &value))
             .transpose()
     }
 
@@ -669,16 +672,7 @@ impl RocksStateStore {
         block: &Block,
         cumulative_work: u128,
     ) -> NodeResult<()> {
-        let metadata = PersistedBlockMetadata {
-            height: block.header.height,
-            hash: hash_to_hex(&block.hash()?),
-            previous_hash: hash_to_hex(&block.header.previous_hash),
-            network_id: block.header.network_id.clone(),
-            timestamp: block.header.timestamp,
-            difficulty_leading_zero_bits: block.header.difficulty_leading_zero_bits,
-            transaction_count: block.transactions.len(),
-            cumulative_work: cumulative_work.to_string(),
-        };
+        let metadata = persisted_block_metadata(block, cumulative_work)?;
         self.put_json(
             batch,
             CF_BLOCK_METADATA,
@@ -702,15 +696,26 @@ impl RocksStateStore {
         )
     }
 
+    fn decode_json<T: for<'de> Deserialize<'de>>(
+        &self,
+        column_family: &str,
+        key: &[u8],
+        value: &[u8],
+    ) -> NodeResult<T> {
+        serde_json::from_slice(value).map_err(|error| {
+            invalid_state_database(
+                &self.database_path,
+                format!(
+                    "invalid JSON in column family {column_family} at key {}: {error}",
+                    display_database_key(key)
+                ),
+            )
+        })
+    }
+
     fn load_mempool(&self, legacy_mempool_dir: &Path) -> NodeResult<Vec<PendingTransactionRecord>> {
         self.migrate_legacy_mempool_if_needed(legacy_mempool_dir)?;
-        let handle = self.column_family(CF_MEMPOOL)?;
-        let mut records = Vec::new();
-        for item in self.database.iterator_cf(handle, IteratorMode::Start) {
-            let (key, value) = item?;
-            let decoded = self.cipher.open(CF_MEMPOOL, &key, &value)?;
-            records.push(serde_json::from_slice::<PendingTransactionRecord>(&decoded)?);
-        }
+        let mut records = self.load_mempool_records()?;
         records.sort_by(|left, right| {
             left.received_at_unix_seconds
                 .cmp(&right.received_at_unix_seconds)
@@ -742,6 +747,7 @@ impl RocksStateStore {
     }
 
     fn replace_mempool(&self, records: &[PendingTransactionRecord]) -> NodeResult<()> {
+        validate_mempool_records(records)?;
         let mut batch = WriteBatch::default();
         self.clear_column_family(&mut batch, CF_MEMPOOL)?;
         for record in records {
@@ -762,6 +768,14 @@ impl RocksStateStore {
     }
 
     fn verify(&self, expected_network: Network, blocks: &[Block]) -> NodeResult<RocksStateStatus> {
+        self.ensure_default_column_family_empty()?;
+        self.count_and_authenticate(CF_METADATA)?;
+        if self.count_and_authenticate(CF_CANONICAL_STATE)? != 1 {
+            return Err(invalid_state_database(
+                &self.database_path,
+                "canonical state column family must contain exactly one snapshot",
+            ));
+        }
         let persisted = self.load_chain_state()?.ok_or_else(|| {
             invalid_state_database(&self.database_path, "canonical state snapshot is missing")
         })?;
@@ -783,20 +797,22 @@ impl RocksStateStore {
             ));
         }
 
-        let block_metadata = self.decode_column_family::<PersistedBlockMetadata>(CF_BLOCK_METADATA)?;
-        if block_metadata.len() != blocks.len() {
+        let actual_block_metadata = self.load_block_metadata()?;
+        let expected_block_metadata = expected_block_metadata(blocks)?;
+        if actual_block_metadata != expected_block_metadata {
             return Err(invalid_state_database(
                 &self.database_path,
-                format!(
-                    "block metadata count {} does not match canonical block count {}",
-                    block_metadata.len(),
-                    blocks.len()
-                ),
+                "block metadata does not match the fully replayed canonical chain",
             ));
         }
-        let recent_transactions = self.count_and_authenticate(CF_RECENT_TRANSACTIONS)?;
-        let mempool_transactions =
-            self.decode_column_family::<PendingTransactionRecord>(CF_MEMPOOL)?;
+        let recent_transactions = self.load_recent_transactions()?;
+        if recent_transactions != *replayed.state().applied_transaction_hashes() {
+            return Err(invalid_state_database(
+                &self.database_path,
+                "recent transaction index does not match replayed ledger state",
+            ));
+        }
+        let mempool_transactions = self.load_mempool_records()?;
 
         Ok(RocksStateStatus {
             schema_version: ROCKS_SCHEMA_VERSION,
@@ -805,7 +821,58 @@ impl RocksStateStore {
             tip_height: persisted.tip_height,
             tip_hash: persisted.tip_hash,
             accounts: actual_accounts.len(),
-            recent_transactions,
+            recent_transactions: recent_transactions.len(),
+            mempool_transactions: mempool_transactions.len(),
+            encryption: self.cipher.mode().to_owned(),
+            key_id: self.cipher.key_id().to_owned(),
+        })
+    }
+
+    fn restored_status(&self) -> NodeResult<RocksStateStatus> {
+        self.ensure_default_column_family_empty()?;
+        self.count_and_authenticate(CF_METADATA)?;
+        if self.count_and_authenticate(CF_CANONICAL_STATE)? != 1 {
+            return Err(invalid_state_database(
+                &self.database_path,
+                "restored canonical state column family must contain exactly one snapshot",
+            ));
+        }
+        let snapshot = self.load_chain_state()?.ok_or_else(|| {
+            invalid_state_database(
+                &self.database_path,
+                "restored canonical state snapshot is missing",
+            )
+        })?;
+        validate_restored_snapshot(&self.database_path, &snapshot)?;
+
+        let accounts = self.load_accounts()?;
+        if accounts != expected_account_map(&snapshot.state) {
+            return Err(invalid_state_database(
+                &self.database_path,
+                "restored account column family does not match its canonical state snapshot",
+            ));
+        }
+
+        let block_metadata = self.load_block_metadata()?;
+        validate_restored_block_metadata(&self.database_path, &snapshot, &block_metadata)?;
+
+        let recent_transactions = self.load_recent_transactions()?;
+        if recent_transactions != *snapshot.state.applied_transaction_hashes() {
+            return Err(invalid_state_database(
+                &self.database_path,
+                "restored recent transaction index does not match its canonical state snapshot",
+            ));
+        }
+        let mempool_transactions = self.load_mempool_records()?;
+
+        Ok(RocksStateStatus {
+            schema_version: ROCKS_SCHEMA_VERSION,
+            network_id: snapshot.network_id,
+            block_count: snapshot.block_count,
+            tip_height: snapshot.tip_height,
+            tip_hash: snapshot.tip_hash,
+            accounts: accounts.len(),
+            recent_transactions: recent_transactions.len(),
             mempool_transactions: mempool_transactions.len(),
             encryption: self.cipher.mode().to_owned(),
             key_id: self.cipher.key_id().to_owned(),
@@ -815,35 +882,132 @@ impl RocksStateStore {
     fn load_accounts(&self) -> NodeResult<BTreeMap<String, PersistedAccountState>> {
         let handle = self.column_family(CF_ACCOUNTS)?;
         let mut accounts = BTreeMap::new();
-        for item in self.database.iterator_cf(handle, IteratorMode::Start) {
+        for item in self.database.iterator_cf_opt(
+            handle,
+            checked_read_options(),
+            IteratorMode::Start,
+        ) {
             let (key, value) = item?;
             let address = String::from_utf8(key.to_vec()).map_err(|_| {
                 invalid_state_database(&self.database_path, "account key is not valid UTF-8")
             })?;
             let decoded = self.cipher.open(CF_ACCOUNTS, &key, &value)?;
-            accounts.insert(address, serde_json::from_slice(&decoded)?);
+            let account = self.decode_json(CF_ACCOUNTS, &key, &decoded)?;
+            if accounts.insert(address, account).is_some() {
+                return Err(invalid_state_database(
+                    &self.database_path,
+                    "duplicate account key",
+                ));
+            }
         }
         Ok(accounts)
     }
 
-    fn decode_column_family<T: for<'de> Deserialize<'de>>(
-        &self,
-        column_family: &str,
-    ) -> NodeResult<Vec<T>> {
-        let handle = self.column_family(column_family)?;
-        let mut values = Vec::new();
-        for item in self.database.iterator_cf(handle, IteratorMode::Start) {
+    fn load_block_metadata(&self) -> NodeResult<BTreeMap<u64, PersistedBlockMetadata>> {
+        let handle = self.column_family(CF_BLOCK_METADATA)?;
+        let mut entries = BTreeMap::new();
+        for item in self.database.iterator_cf_opt(
+            handle,
+            checked_read_options(),
+            IteratorMode::Start,
+        ) {
             let (key, value) = item?;
-            let decoded = self.cipher.open(column_family, &key, &value)?;
-            values.push(serde_json::from_slice(&decoded)?);
+            let key_bytes: [u8; 8] = key.as_ref().try_into().map_err(|_| {
+                invalid_state_database(
+                    &self.database_path,
+                    "block metadata key is not an eight-byte height",
+                )
+            })?;
+            let height = u64::from_be_bytes(key_bytes);
+            let decoded = self.cipher.open(CF_BLOCK_METADATA, &key, &value)?;
+            let metadata = self.decode_json(CF_BLOCK_METADATA, &key, &decoded)?;
+            if entries.insert(height, metadata).is_some() {
+                return Err(invalid_state_database(
+                    &self.database_path,
+                    format!("duplicate block metadata height {height}"),
+                ));
+            }
         }
-        Ok(values)
+        Ok(entries)
+    }
+
+    fn load_recent_transactions(&self) -> NodeResult<BTreeSet<String>> {
+        let handle = self.column_family(CF_RECENT_TRANSACTIONS)?;
+        let mut transactions = BTreeSet::new();
+        for item in self.database.iterator_cf_opt(
+            handle,
+            checked_read_options(),
+            IteratorMode::Start,
+        ) {
+            let (key, value) = item?;
+            let transaction_hash = String::from_utf8(key.to_vec()).map_err(|_| {
+                invalid_state_database(
+                    &self.database_path,
+                    "recent transaction key is not valid UTF-8",
+                )
+            })?;
+            if !is_canonical_hash(&transaction_hash) {
+                return Err(invalid_state_database(
+                    &self.database_path,
+                    format!("invalid recent transaction hash key: {transaction_hash}"),
+                ));
+            }
+            let decoded = self
+                .cipher
+                .open(CF_RECENT_TRANSACTIONS, &key, &value)?;
+            if decoded != b"confirmed" {
+                return Err(invalid_state_database(
+                    &self.database_path,
+                    format!(
+                        "unexpected recent transaction marker for hash {transaction_hash}"
+                    ),
+                ));
+            }
+            transactions.insert(transaction_hash);
+        }
+        Ok(transactions)
+    }
+
+    fn load_mempool_records(&self) -> NodeResult<Vec<PendingTransactionRecord>> {
+        let handle = self.column_family(CF_MEMPOOL)?;
+        let mut records = Vec::new();
+        for item in self.database.iterator_cf_opt(
+            handle,
+            checked_read_options(),
+            IteratorMode::Start,
+        ) {
+            let (key, value) = item?;
+            let stored_hash = String::from_utf8(key.to_vec()).map_err(|_| {
+                invalid_state_database(&self.database_path, "mempool key is not valid UTF-8")
+            })?;
+            let decoded = self.cipher.open(CF_MEMPOOL, &key, &value)?;
+            let record: PendingTransactionRecord =
+                self.decode_json(CF_MEMPOOL, &key, &decoded)?;
+            validate_mempool_record(&record).map_err(|message| {
+                invalid_state_database(&self.database_path, format!("invalid mempool record: {message}"))
+            })?;
+            if stored_hash != record.tx_hash {
+                return Err(invalid_state_database(
+                    &self.database_path,
+                    format!(
+                        "mempool key {stored_hash} does not match record hash {}",
+                        record.tx_hash
+                    ),
+                ));
+            }
+            records.push(record);
+        }
+        Ok(records)
     }
 
     fn count_and_authenticate(&self, column_family: &str) -> NodeResult<usize> {
         let handle = self.column_family(column_family)?;
         let mut count = 0_usize;
-        for item in self.database.iterator_cf(handle, IteratorMode::Start) {
+        for item in self.database.iterator_cf_opt(
+            handle,
+            checked_read_options(),
+            IteratorMode::Start,
+        ) {
             let (key, value) = item?;
             self.cipher.open(column_family, &key, &value)?;
             count = count.saturating_add(1);
@@ -862,10 +1026,19 @@ pub fn load_persisted_chain_state(
     expected_height: u64,
     expected_hash: &str,
 ) -> NodeResult<Option<LedgerState>> {
-    if !state_database_path(data_dir).exists() {
-        return Ok(None);
+    let database_path = state_database_path(data_dir);
+    match fs::symlink_metadata(&database_path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            return Err(NodeError::Input(format!(
+                "RocksDB state database is not a safe directory: {}",
+                database_path.display()
+            )))
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
     }
-    let store = RocksStateStore::open(data_dir)?;
+    let store = RocksStateStore::open_existing(data_dir)?;
     let Some(snapshot) = store.load_chain_state()? else {
         return Ok(None);
     };
@@ -902,7 +1075,7 @@ pub fn verify_state_database(
     network: Network,
     blocks: &[Block],
 ) -> NodeResult<RocksStateStatus> {
-    RocksStateStore::open(data_dir)?.verify(network, blocks)
+    RocksStateStore::open_existing(data_dir)?.verify(network, blocks)
 }
 
 pub fn backup_state_database(
@@ -910,14 +1083,15 @@ pub fn backup_state_database(
     backup_repository: &Path,
     backups_to_keep: usize,
 ) -> NodeResult<RocksBackupInfo> {
-    if backup_repository.starts_with(data_dir) {
-        return Err(NodeError::Input(format!(
-            "RocksDB backup repository must be outside data_dir: {}",
-            backup_repository.display()
-        )));
-    }
-    fs::create_dir_all(backup_repository)?;
-    let store = RocksStateStore::open(data_dir)?;
+    ensure_directory(data_dir, false, "RocksDB data directory")?;
+    ensure_directory(
+        backup_repository,
+        true,
+        "RocksDB incremental backup repository",
+    )?;
+    ensure_separate_storage_paths(data_dir, backup_repository)?;
+    let store = RocksStateStore::open_existing(data_dir)?;
+    let status = store.restored_status()?;
     store.database.flush_wal(true)?;
     let mut options = BackupEngineOptions::new(backup_repository)?;
     options.set_sync(true);
@@ -939,6 +1113,12 @@ pub fn backup_state_database(
         timestamp: info.timestamp,
         size: info.size,
         files: info.num_files,
+        network_id: status.network_id,
+        block_count: status.block_count,
+        tip_height: status.tip_height,
+        tip_hash: status.tip_hash,
+        encryption: status.encryption,
+        key_id: status.key_id,
     })
 }
 
@@ -946,24 +1126,33 @@ pub fn restore_latest_state_database(
     data_dir: &Path,
     backup_repository: &Path,
 ) -> NodeResult<RocksStateStatus> {
-    fs::create_dir_all(data_dir)?;
+    ensure_directory(data_dir, true, "RocksDB restore data directory")?;
+    ensure_directory(
+        backup_repository,
+        false,
+        "RocksDB incremental backup repository",
+    )?;
+    ensure_separate_storage_paths(data_dir, backup_repository)?;
     let database_path = state_database_path(data_dir);
-    if database_path.exists() {
-        return Err(NodeError::Input(format!(
-            "restore destination already contains RocksDB state: {}",
-            database_path.display()
-        )));
+    match fs::symlink_metadata(&database_path) {
+        Ok(_) => {
+            return Err(NodeError::Input(format!(
+                "restore destination already contains RocksDB state: {}",
+                database_path.display()
+            )))
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
     }
-    let lock_path = data_dir.join(STATE_DATABASE_LOCK_FILE_NAME);
-    let lock = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .truncate(false)
-        .open(lock_path)?;
-    FileExt::lock_exclusive(&lock)?;
+    let lock = acquire_exclusive_lock(
+        &data_dir.join(STATE_DATABASE_LOCK_FILE_NAME),
+        "RocksDB restore destination",
+    )?;
+    let stage_root = unique_restore_stage_root(data_dir)?;
+    fs::create_dir(&stage_root)?;
+    let stage_database = state_database_path(&stage_root);
 
-    let restore_result = (|| -> NodeResult<()> {
+    let restore_result = (|| -> NodeResult<RocksStateStatus> {
         let mut options = BackupEngineOptions::new(backup_repository)?;
         options.set_sync(true);
         let environment = Env::new()?;
@@ -976,40 +1165,27 @@ pub fn restore_latest_state_database(
         engine.verify_backup(latest.backup_id)?;
         let restore_options = RestoreOptions::default();
         engine.restore_from_backup(
-            &database_path,
-            &database_path,
+            &stage_database,
+            &stage_database,
             &restore_options,
             latest.backup_id,
         )?;
-        Ok(())
+        let stage_store = RocksStateStore::open_existing(&stage_root)?;
+        let status = stage_store.restored_status()?;
+        drop(stage_store);
+        let stage_lock = stage_root.join(STATE_DATABASE_LOCK_FILE_NAME);
+        if stage_lock.exists() {
+            fs::remove_file(stage_lock)?;
+        }
+        fs::rename(&stage_database, &database_path)?;
+        let _ = fs::remove_dir(&stage_root);
+        Ok(status)
     })();
     drop(lock);
-    if let Err(error) = restore_result {
-        if database_path.exists() {
-            fs::remove_dir_all(&database_path)?;
-        }
-        return Err(error);
+    if restore_result.is_err() && stage_root.exists() {
+        fs::remove_dir_all(&stage_root)?;
     }
-
-    let store = RocksStateStore::open(data_dir)?;
-    let snapshot = store.load_chain_state()?.ok_or_else(|| {
-        invalid_state_database(&database_path, "restored canonical state snapshot is missing")
-    })?;
-    let accounts = store.load_accounts()?.len();
-    let recent_transactions = store.count_and_authenticate(CF_RECENT_TRANSACTIONS)?;
-    let mempool_transactions = store.count_and_authenticate(CF_MEMPOOL)?;
-    Ok(RocksStateStatus {
-        schema_version: ROCKS_SCHEMA_VERSION,
-        network_id: snapshot.network_id,
-        block_count: snapshot.block_count,
-        tip_height: snapshot.tip_height,
-        tip_hash: snapshot.tip_hash,
-        accounts,
-        recent_transactions,
-        mempool_transactions,
-        encryption: store.cipher.mode().to_owned(),
-        key_id: store.cipher.key_id().to_owned(),
-    })
+    restore_result
 }
 
 fn persisted_chain_state(blocks: &[Block], chain: &Chain) -> NodeResult<PersistedChainState> {
@@ -1069,16 +1245,422 @@ fn touched_addresses(block: &Block) -> BTreeSet<String> {
         .collect()
 }
 
-fn database_options() -> Options {
+fn ensure_directory(path: &Path, create_if_missing: bool, label: &str) -> NodeResult<()> {
+    validate_path_components(path, label)?;
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => Err(NodeError::Input(format!(
+            "{label} must not be a symlink: {}",
+            path.display()
+        ))),
+        Ok(metadata) if !metadata.is_dir() => Err(NodeError::Input(format!(
+            "{label} is not a directory: {}",
+            path.display()
+        ))),
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound && create_if_missing => {
+            fs::create_dir_all(path)?;
+            validate_path_components(path, label)?;
+            let metadata = fs::symlink_metadata(path)?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return Err(NodeError::Input(format!(
+                    "{label} is not a safe directory: {}",
+                    path.display()
+                )));
+            }
+            Ok(())
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => Err(NodeError::Input(format!(
+            "{label} does not exist: {}",
+            path.display()
+        ))),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn validate_path_components(path: &Path, label: &str) -> NodeResult<()> {
+    if path.as_os_str().is_empty() {
+        return Err(NodeError::Input(format!("{label} path must not be empty")));
+    }
+
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                return Err(NodeError::Input(format!(
+                    "{label} path must not contain parent traversal: {}",
+                    path.display()
+                )))
+            }
+            Component::CurDir => continue,
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_) => {
+                current.push(component.as_os_str());
+            }
+        }
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(NodeError::Input(format!(
+                    "{label} path contains a symlink component: {}",
+                    current.display()
+                )))
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
+}
+
+fn validate_database_location(
+    database_path: &Path,
+    create_if_missing: bool,
+) -> NodeResult<bool> {
+    validate_path_components(database_path, "RocksDB state database")?;
+    match fs::symlink_metadata(database_path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            return Err(NodeError::Input(format!(
+                "RocksDB state database must be a real directory: {}",
+                database_path.display()
+            )))
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound && create_if_missing => return Ok(false),
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            return Err(NodeError::Input(format!(
+                "RocksDB state database does not exist: {}",
+                database_path.display()
+            )))
+        }
+        Err(error) => return Err(error.into()),
+    }
+
+    let current_path = database_path.join("CURRENT");
+    match fs::symlink_metadata(&current_path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            Err(NodeError::Input(format!(
+                "RocksDB CURRENT marker is not a regular file: {}",
+                current_path.display()
+            )))
+        }
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == ErrorKind::NotFound && create_if_missing => {
+            if fs::read_dir(database_path)?.next().transpose()?.is_some() {
+                return Err(NodeError::Input(format!(
+                    "RocksDB directory exists without CURRENT and is not empty: {}",
+                    database_path.display()
+                )));
+            }
+            Ok(false)
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => Err(NodeError::Input(format!(
+            "RocksDB CURRENT marker is missing: {}",
+            current_path.display()
+        ))),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn acquire_exclusive_lock(path: &Path, label: &str) -> NodeResult<File> {
+    validate_path_components(path, label)?;
+    if let Some(parent) = path.parent() {
+        ensure_directory(parent, false, label)?;
+    }
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            return Err(NodeError::Input(format!(
+                "{label} lock is not a regular file: {}",
+                path.display()
+            )))
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+
+    let lock = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(path)?;
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(NodeError::Input(format!(
+            "{label} lock became unsafe while opening: {}",
+            path.display()
+        )));
+    }
+
+    let deadline = Instant::now() + LOCK_WAIT_TIMEOUT;
+    loop {
+        match FileExt::try_lock_exclusive(&lock) {
+            Ok(()) => return Ok(lock),
+            Err(error) if error.kind() == ErrorKind::WouldBlock && Instant::now() < deadline => {
+                thread::sleep(LOCK_RETRY_INTERVAL);
+            }
+            Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                return Err(NodeError::Input(format!(
+                    "timed out waiting for {label} lock: {}",
+                    path.display()
+                )))
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
+fn ensure_separate_storage_paths(data_dir: &Path, backup_repository: &Path) -> NodeResult<()> {
+    let canonical_data = fs::canonicalize(data_dir)?;
+    let canonical_backup = fs::canonicalize(backup_repository)?;
+    if canonical_backup.starts_with(&canonical_data)
+        || canonical_data.starts_with(&canonical_backup)
+    {
+        return Err(NodeError::Input(format!(
+            "RocksDB backup repository and data directory must be disjoint: data={} backup={}",
+            canonical_data.display(),
+            canonical_backup.display()
+        )));
+    }
+    Ok(())
+}
+
+fn unique_restore_stage_root(data_dir: &Path) -> NodeResult<PathBuf> {
+    for _ in 0..32 {
+        let mut random = [0_u8; 8];
+        OsRng.try_fill_bytes(&mut random).map_err(|error| {
+            NodeError::Input(format!(
+                "operating-system randomness failed while creating restore stage: {error}"
+            ))
+        })?;
+        let suffix: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
+        let candidate = data_dir.join(format!(
+            "{RESTORE_STAGE_PREFIX}{}-{suffix}",
+            std::process::id()
+        ));
+        match fs::symlink_metadata(&candidate) {
+            Ok(_) => continue,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(candidate),
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Err(NodeError::Input(
+        "could not allocate a unique RocksDB restore stage".to_owned(),
+    ))
+}
+
+fn checked_read_options() -> ReadOptions {
+    let mut options = ReadOptions::default();
+    options.set_verify_checksums(true);
+    options.fill_cache(false);
+    options
+}
+
+fn persisted_block_metadata(
+    block: &Block,
+    cumulative_work: u128,
+) -> NodeResult<PersistedBlockMetadata> {
+    Ok(PersistedBlockMetadata {
+        height: block.header.height,
+        hash: hash_to_hex(&block.hash()?),
+        previous_hash: hash_to_hex(&block.header.previous_hash),
+        network_id: block.header.network_id.clone(),
+        timestamp: block.header.timestamp,
+        difficulty_leading_zero_bits: block.header.difficulty_leading_zero_bits,
+        transaction_count: block.transactions.len(),
+        cumulative_work: cumulative_work.to_string(),
+    })
+}
+
+fn expected_block_metadata(
+    blocks: &[Block],
+) -> NodeResult<BTreeMap<u64, PersistedBlockMetadata>> {
+    let mut entries = BTreeMap::new();
+    let mut cumulative_work = 0_u128;
+    for block in blocks {
+        cumulative_work = cumulative_work
+            .checked_add(block_work(block)?)
+            .ok_or_else(|| NodeError::Input("chain work overflow".to_owned()))?;
+        let metadata = persisted_block_metadata(block, cumulative_work)?;
+        if entries.insert(block.header.height, metadata).is_some() {
+            return Err(NodeError::Input(format!(
+                "duplicate canonical block height {}",
+                block.header.height
+            )));
+        }
+    }
+    Ok(entries)
+}
+
+fn validate_restored_snapshot(
+    database_path: &Path,
+    snapshot: &PersistedChainState,
+) -> NodeResult<()> {
+    if snapshot.schema_version != ROCKS_SCHEMA_VERSION {
+        return Err(invalid_state_database(
+            database_path,
+            format!(
+                "restored snapshot schema version {} is unsupported",
+                snapshot.schema_version
+            ),
+        ));
+    }
+    if Network::from_network_id(&snapshot.network_id).is_none() {
+        return Err(invalid_state_database(
+            database_path,
+            format!("restored snapshot network is invalid: {}", snapshot.network_id),
+        ));
+    }
+    if snapshot.block_count == 0
+        || snapshot.tip_height.checked_add(1) != Some(snapshot.block_count)
+    {
+        return Err(invalid_state_database(
+            database_path,
+            "restored snapshot block count and tip height are inconsistent",
+        ));
+    }
+    if !is_canonical_hash(&snapshot.tip_hash) {
+        return Err(invalid_state_database(
+            database_path,
+            "restored snapshot tip hash is not canonical",
+        ));
+    }
+    if snapshot.state.applied_block_height() != Some(snapshot.tip_height)
+        || snapshot
+            .state
+            .tip_hash()
+            .is_none_or(|hash| hash_to_hex(&hash) != snapshot.tip_hash)
+        || snapshot.state.tip_timestamp() != Some(snapshot.tip_timestamp)
+    {
+        return Err(invalid_state_database(
+            database_path,
+            "restored ledger state does not match snapshot tip metadata",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_restored_block_metadata(
+    database_path: &Path,
+    snapshot: &PersistedChainState,
+    entries: &BTreeMap<u64, PersistedBlockMetadata>,
+) -> NodeResult<()> {
+    if u64::try_from(entries.len()).ok() != Some(snapshot.block_count) {
+        return Err(invalid_state_database(
+            database_path,
+            "restored block metadata count does not match snapshot",
+        ));
+    }
+
+    let mut previous_hash = "0".repeat(64);
+    let mut cumulative_work = 0_u128;
+    for height in 0..snapshot.block_count {
+        let metadata = entries.get(&height).ok_or_else(|| {
+            invalid_state_database(
+                database_path,
+                format!("restored block metadata is missing height {height}"),
+            )
+        })?;
+        if metadata.height != height
+            || metadata.network_id != snapshot.network_id
+            || metadata.previous_hash != previous_hash
+            || !is_canonical_hash(&metadata.hash)
+            || !is_canonical_hash(&metadata.previous_hash)
+            || metadata.transaction_count == 0
+        {
+            return Err(invalid_state_database(
+                database_path,
+                format!("restored block metadata is invalid at height {height}"),
+            ));
+        }
+        let work = 1_u128
+            .checked_shl(u32::from(metadata.difficulty_leading_zero_bits))
+            .ok_or_else(|| {
+                invalid_state_database(
+                    database_path,
+                    format!("restored difficulty overflows work at height {height}"),
+                )
+            })?;
+        cumulative_work = cumulative_work.checked_add(work).ok_or_else(|| {
+            invalid_state_database(database_path, "restored cumulative work overflow")
+        })?;
+        if metadata.cumulative_work.parse::<u128>().ok() != Some(cumulative_work) {
+            return Err(invalid_state_database(
+                database_path,
+                format!("restored cumulative work is invalid at height {height}"),
+            ));
+        }
+        previous_hash.clone_from(&metadata.hash);
+    }
+
+    let tip = entries.get(&snapshot.tip_height).ok_or_else(|| {
+        invalid_state_database(database_path, "restored tip block metadata is missing")
+    })?;
+    if tip.hash != snapshot.tip_hash || tip.timestamp != snapshot.tip_timestamp {
+        return Err(invalid_state_database(
+            database_path,
+            "restored tip block metadata does not match snapshot",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_mempool_records(records: &[PendingTransactionRecord]) -> NodeResult<()> {
+    let mut hashes = BTreeSet::new();
+    for record in records {
+        validate_mempool_record(record).map_err(NodeError::Input)?;
+        if !hashes.insert(record.tx_hash.clone()) {
+            return Err(NodeError::Input(format!(
+                "duplicate mempool transaction hash {}",
+                record.tx_hash
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_mempool_record(record: &PendingTransactionRecord) -> Result<(), String> {
+    if !is_canonical_hash(&record.tx_hash) {
+        return Err(format!(
+            "transaction hash is not canonical: {}",
+            record.tx_hash
+        ));
+    }
+    if record.transaction.is_coinbase() {
+        return Err("coinbase transaction cannot be persisted in the mempool".to_owned());
+    }
+    let actual_hash = tx_hash_string(&record.transaction);
+    if actual_hash != record.tx_hash {
+        return Err(format!(
+            "transaction hash mismatch: stored={} actual={actual_hash}",
+            record.tx_hash
+        ));
+    }
+    Ok(())
+}
+
+fn is_canonical_hash(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn display_database_key(key: &[u8]) -> String {
+    key.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn database_options(create_if_missing: bool) -> Options {
     let mut options = Options::default();
-    options.create_if_missing(true);
-    options.create_missing_column_families(true);
+    options.create_if_missing(create_if_missing);
+    options.create_missing_column_families(create_if_missing);
     options.set_atomic_flush(true);
     options.set_bytes_per_sync(1 << 20);
     options.set_max_background_jobs(2);
     options.set_max_open_files(256);
     options.set_max_subcompactions(1);
+    options.set_paranoid_checks(true);
     options.set_use_fsync(true);
+    options.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
     options
 }
 

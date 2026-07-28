@@ -13,8 +13,10 @@ mkdir -p "$STATE_ROOT/secrets" "$STATE_ROOT/config/generated"
 for secret in admin_password grafana_password setup_token broker_token cloudflare_api_token cloudflare_tunnel_token pool_admin_token backup_passphrase r2_secret_access_key discord_webhook telegram_bot_token smtp_password; do
   [[ -f "$STATE_ROOT/secrets/$secret" ]] || printf 'validation-placeholder\n' > "$STATE_ROOT/secrets/$secret"
 done
+[[ -f "$STATE_ROOT/secrets/alvenqis_storage_key" ]] || printf '%064d\n' 0 > "$STATE_ROOT/secrets/alvenqis_storage_key"
 [[ -f "$STATE_ROOT/config/generated/alertmanager.yml" ]] || cp monitoring/alertmanager/alertmanager.yml "$STATE_ROOT/config/generated/alertmanager.yml"
 python3 - <<'PY2'
+import ast
 import json
 from pathlib import Path
 import yaml
@@ -28,6 +30,12 @@ yaml_paths=[
 ]
 for path in yaml_paths:
  yaml.safe_load(path.read_text())
+for path in (
+ root/'docker/ops/app.py',
+ root/'docker/ops/broker.py',
+ root/'docker/metrics-exporter/exporter.py',
+):
+ ast.parse(path.read_text(), filename=str(path))
 for dash in (root/'monitoring/grafana/dashboards').glob('*.json'):
  json.loads(dash.read_text())
 assert (root/'docker/metrics-exporter/exporter.py').is_file()
@@ -68,14 +76,22 @@ assert 'RPC_EXPOSE_MINING: "true"' in main
 assert 'ENABLE_MINING_RPC' not in (root/'.env.example').read_text()
 assert 'working_dir: /app' in main
 assert 'ALVENQIS_STATE_ROOT=/var/lib/alvenqis-control-plane' in (root/'.env.example').read_text()
+assert 'ALVENQIS_STORAGE_KEY_FILE=/run/secrets/alvenqis_storage_key' in (root/'.env.example').read_text()
+assert 'ALVENQIS_REQUIRE_STORAGE_ENCRYPTION=true' in (root/'.env.example').read_text()
+assert 'ALVENQIS_ALLOW_PLAINTEXT_STORAGE_MIGRATION=false' in (root/'.env.example').read_text()
 assert '${ALVENQIS_STATE_ROOT:-./state}/data:/data/.alvenqis-mainnet' in main
+assert '${ALVENQIS_STATE_ROOT:-./state}/backups/rocksdb-repository:/backups/rocksdb-repository' in main
 assert '${ALVENQIS_STATE_ROOT:-./state}/grafana:/var/lib/grafana' in main
 assert '${ALVENQIS_STATE_ROOT:-./state}/secrets/admin_password' in main
+assert '${ALVENQIS_STATE_ROOT:-./state}/secrets/alvenqis_storage_key' in main
+assert 'secrets: [alvenqis_storage_key]' in main
 assert 'resolve_state_root "$root"' in (root/'scripts/prepare-state.sh').read_text()
 assert '"$STATE_ROOT/data"' in (root/'scripts/prepare-state.sh').read_text()
 assert 'create_owned 473 473 "$STATE_ROOT/alloy"' in (root/'scripts/prepare-state.sh').read_text()
 assert 'user: "473:0"' in main
 assert 'chmod 0444' in (root/'scripts/prepare-state.sh').read_text()
+assert 'chmod 0750 "$STATE_ROOT"' in (root/'scripts/prepare-state.sh').read_text()
+assert 'create_owned 10001 10001 "$STATE_ROOT/backups/rocksdb-repository"' in (root/'scripts/prepare-state.sh').read_text()
 assert (root/'scripts/migrate-release-state.sh').is_file()
 assert "run(['bash',str(WORKSPACE/'scripts/backup-now.sh')])" in (root/'docker/ops/broker.py').read_text()
 assert 'BACKUP_COMPLETE' in (root/'scripts/backup-now.sh').read_text()
@@ -117,6 +133,17 @@ assert '"ALVENQIS_HOST_REPO": str(prototype_root)' in prepare_vps_env
 runtime_dockerfile=(root/'docker/Dockerfile').read_text()
 assert '-p alvenqis-miner' not in runtime_dockerfile
 assert '/out/alvenqis-miner' not in runtime_dockerfile
+assert 'libclang-dev' in runtime_dockerfile
+assert '--features alvenqis-node/storage-rocksdb' in runtime_dockerfile
+entrypoint=(root/'docker/entrypoint.sh').read_text()
+assert 'rebuild-rocksdb' in entrypoint
+assert 'state.rocksdb/CURRENT' in entrypoint
+assert 'ALVENQIS_REQUIRE_STORAGE_ENCRYPTION' in entrypoint
+preflight=(root/'scripts/runtime-preflight.sh').read_text()
+assert 'ALVENQIS_REQUIRE_STORAGE_ENCRYPTION=true is mandatory.' in preflight
+assert 'assert_owner_mode "$STATE_ROOT" "0:0" "750"' in preflight
+assert 'alvenqis_storage_key' in preflight
+assert not any(token in '\n'.join((root/path).read_text() for path in ('scripts/prepare-state.sh','scripts/runtime-preflight.sh','scripts/install-docker-stack.sh')) for token in ('chmod 777','chmod 0777'))
 pool_app=(root/'../../alvenqis-mining-pool/src/app.rs').resolve().read_text()
 assert '.route(\"/api/v1/work\"' not in pool_app
 assert '.route(\"/api/v1/shares\"' not in pool_app
@@ -151,7 +178,6 @@ assert 'uid": "alvenqis-containers"' in (root/'monitoring/grafana/dashboards/alv
 assert 'alvenqis_chain_height' in (root/'monitoring/grafana/dashboards/alvenqis-overview.json').read_text()
 assert 'alvenqis_indexer_lag_blocks_effective' in (root/'monitoring/grafana/dashboards/alvenqis-chain.json').read_text()
 PY2
-python3 -m py_compile docker/ops/app.py docker/ops/broker.py docker/metrics-exporter/exporter.py
 find scripts docker -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 if grep -R -n --exclude=validate-stack.sh -E 'source[[:space:]]+\.env|docker[[:space:]]+rm|docker[[:space:]]+container[[:space:]]+rm|docker compose down -v' scripts docker compose.yaml installer.compose.yaml; then
   echo "Unsafe dotenv execution, container deletion, or volume deletion found." >&2

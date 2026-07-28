@@ -48,6 +48,17 @@ esac
   echo "Source state root does not exist: $source_root" >&2
   exit 66
 }
+if [[ -f "$source_root/data/chain/state.rocksdb/CURRENT" ]]; then
+  source_storage_key="$source_root/secrets/alvenqis_storage_key"
+  [[ -s "$source_storage_key" ]] || {
+    echo "Source RocksDB exists but its storage key is missing." >&2
+    exit 78
+  }
+  grep -Eq '^[0-9A-Fa-f]{64}$' "$source_storage_key" || {
+    echo "Source RocksDB storage key is invalid." >&2
+    exit 78
+  }
+fi
 if [[ -e "$target_root" && -n "$(find "$target_root" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
   echo "Migration target is not empty: $target_root" >&2
   exit 73
@@ -183,19 +194,26 @@ from pathlib import Path
 
 path = Path(".env")
 content = path.read_text(encoding="utf-8")
-line = f"ALVENQIS_STATE_ROOT={json.dumps(sys.argv[1])}"
-if re.search(r"^ALVENQIS_STATE_ROOT=", content, flags=re.MULTILINE):
-    content = re.sub(
-        r"^ALVENQIS_STATE_ROOT=.*$",
-        line,
-        content,
-        flags=re.MULTILINE,
-    )
-else:
-    content = content.rstrip() + "\n" + line + "\n"
+updates = {
+    "ALVENQIS_STATE_ROOT": sys.argv[1],
+    "ALVENQIS_STORAGE_KEY_FILE": "/run/secrets/alvenqis_storage_key",
+    "ALVENQIS_REQUIRE_STORAGE_ENCRYPTION": "true",
+    "ALVENQIS_ALLOW_PLAINTEXT_STORAGE_MIGRATION": "false",
+}
+for key, value in updates.items():
+    line = f"{key}={json.dumps(value)}"
+    if re.search(rf"^{key}=", content, flags=re.MULTILINE):
+        content = re.sub(
+            rf"^{key}=.*$",
+            line,
+            content,
+            flags=re.MULTILINE,
+        )
+    else:
+        content = content.rstrip() + "\n" + line + "\n"
 temporary = path.with_name(f".env.migration-{os.getpid()}")
 temporary.write_text(content, encoding="utf-8")
-os.chmod(temporary, path.stat().st_mode & 0o777)
+os.chmod(temporary, 0o600)
 temporary.replace(path)
 PY
 
@@ -206,6 +224,13 @@ resolve_state_root "$root"
   exit 74
 }
 bash scripts/prepare-state.sh
+if [[ -f "$target_root/data/chain/state.rocksdb/CURRENT" ]]; then
+  cmp -s "$source_root/secrets/alvenqis_storage_key" \
+    "$target_root/secrets/alvenqis_storage_key" || {
+    echo "Migrated RocksDB storage key does not match the source." >&2
+    exit 74
+  }
+fi
 compose_args
 
 echo "Starting Alvenqis with release-independent state..."

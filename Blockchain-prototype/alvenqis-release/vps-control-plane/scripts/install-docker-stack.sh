@@ -6,6 +6,21 @@ export ALVENQIS_STATE_ROOT="${ALVENQIS_STATE_ROOT:-/var/lib/alvenqis-control-pla
 bash "$root/scripts/prepare-state.sh"
 source scripts/lib.sh
 resolve_state_root "$root"
+storage_key="$STATE_ROOT/secrets/alvenqis_storage_key"
+rocks_current="$STATE_ROOT/data/chain/state.rocksdb/CURRENT"
+if [[ -f "$rocks_current" && ! -s "$storage_key" ]]; then
+  echo "Existing RocksDB state has no storage key; refusing to generate a replacement." >&2
+  exit 78
+fi
+if [[ -s "$storage_key" ]]; then
+  grep -Eq '^[0-9A-Fa-f]{64}$' "$storage_key" || {
+    echo "Existing Alvenqis storage key is invalid." >&2
+    exit 78
+  }
+else
+  openssl rand -hex 32 > "$storage_key"
+fi
+chmod 0444 "$storage_key"
 for n in setup_token broker_token admin_password grafana_password pool_admin_token backup_passphrase cloudflare_tunnel_token; do [[ -s "$STATE_ROOT/secrets/$n" && "$(cat "$STATE_ROOT/secrets/$n")" != validation-placeholder ]] || openssl rand -hex 32 > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
 for n in cloudflare_api_token r2_secret_access_key discord_webhook telegram_bot_token smtp_password; do [[ -e "$STATE_ROOT/secrets/$n" ]] || : > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
 cat > .installer.env <<EOF

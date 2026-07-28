@@ -6,8 +6,27 @@ cd "$root"
 [[ $EUID -eq 0 ]] || { echo "prepare-state.sh must run as root" >&2; exit 77; }
 source scripts/lib.sh
 [[ ! -f .env ]] || load_dotenv .env
+configured_state_root="${ALVENQIS_STATE_ROOT:-$root/state}"
+python3 - "$root" "$configured_state_root" <<'PY'
+import sys
+from pathlib import Path
+
+workspace = Path(sys.argv[1])
+configured = Path(sys.argv[2])
+if not configured.is_absolute():
+    configured = workspace / configured
+current = Path(configured.anchor)
+parts = configured.parts[1:] if configured.is_absolute() else configured.parts
+for part in parts:
+    current /= part
+    if current.is_symlink():
+        raise SystemExit(f"ALVENQIS_STATE_ROOT contains a symlink component: {current}")
+PY
 resolve_state_root "$root"
 
+install -d -m 0750 -o 0 -g 0 "$STATE_ROOT"
+chown 0:0 "$STATE_ROOT"
+chmod 0750 "$STATE_ROOT"
 install -d -m 0700 "$STATE_ROOT/secrets"
 
 create_owned() {
@@ -31,6 +50,7 @@ create_owned 472 472 "$STATE_ROOT/grafana"
 create_owned 473 473 "$STATE_ROOT/alloy"
 create_owned 0 0 \
   "$STATE_ROOT/backups" "$STATE_ROOT/ops" "$STATE_ROOT/repair-backups"
+create_owned 10001 10001 "$STATE_ROOT/backups/rocksdb-repository"
 
 install -d -m 0755 -o 0 -g 0 "$STATE_ROOT/metrics"
 chmod 0755 "$STATE_ROOT/metrics"
