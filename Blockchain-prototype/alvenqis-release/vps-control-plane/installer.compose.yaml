@@ -20,12 +20,16 @@ services:
       ALVENQIS_COMPOSE_FILE: ${ALVENQIS_HOST_WORKSPACE}/compose.yaml
       ALVENQIS_HOST_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
       ALVENQIS_HOST_REPO: ${ALVENQIS_HOST_REPO}
+      ALVENQIS_STATE_ROOT: ${ALVENQIS_STATE_ROOT:-./state}
       BROKER_TOKEN_FILE: /run/secrets/broker_token
       ALVENQIS_INSTALLER_MODE: "true"
     command: ["gunicorn", "--bind", "0.0.0.0:8090", "--workers", "1", "--threads", "2", "--timeout", "7200", "broker:app"]
     volumes:
       - ${ALVENQIS_HOST_WORKSPACE}:${ALVENQIS_HOST_WORKSPACE}
       - ${ALVENQIS_HOST_REPO}:${ALVENQIS_HOST_REPO}:ro
+      - type: bind
+        source: ${ALVENQIS_STATE_ROOT:-./state}
+        target: ${ALVENQIS_STATE_ROOT:-/workspace/state}
       - /var/run/docker.sock:/var/run/docker.sock
     secrets: [broker_token, cloudflare_api_token, backup_passphrase, r2_secret_access_key]
     networks: [installer-internal]
@@ -33,6 +37,7 @@ services:
     tmpfs: [/tmp:size=256m]
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, DAC_READ_SEARCH, FOWNER]
     pids_limit: 256
     mem_limit: 384M
     cpus: 0.35
@@ -56,8 +61,11 @@ services:
       BROKER_TOKEN_FILE: /run/secrets/broker_token
       ALVENQIS_HOST_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
       ALVENQIS_HOST_REPO: ${ALVENQIS_HOST_REPO}
+      ALVENQIS_STATE_ROOT: ${ALVENQIS_STATE_ROOT:-./state}
     ports: ["127.0.0.1:${OPS_BOOTSTRAP_PORT:-8080}:8080"]
-    volumes: ["${ALVENQIS_HOST_WORKSPACE}:/workspace"]
+    volumes:
+      - ${ALVENQIS_HOST_WORKSPACE}:/workspace
+      - ${ALVENQIS_STATE_ROOT:-./state}:/workspace/state
     secrets: [setup_token, broker_token]
     depends_on:
       docker-broker: {condition: service_healthy}
@@ -78,8 +86,8 @@ services:
 networks:
   installer-internal: {name: alvenqis-installer-internal, driver: bridge}
 secrets:
-  setup_token: {file: ./state/secrets/setup_token}
-  broker_token: {file: ./state/secrets/broker_token}
-  cloudflare_api_token: {file: ./state/secrets/cloudflare_api_token}
-  backup_passphrase: {file: ./state/secrets/backup_passphrase}
-  r2_secret_access_key: {file: ./state/secrets/r2_secret_access_key}
+  setup_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/setup_token"}
+  broker_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/broker_token"}
+  cloudflare_api_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/cloudflare_api_token"}
+  backup_passphrase: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/backup_passphrase"}
+  r2_secret_access_key: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/r2_secret_access_key"}

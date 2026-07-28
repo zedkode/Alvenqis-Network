@@ -5,6 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 source scripts/lib.sh
 load_dotenv .env
+resolve_state_root "$root"
 
 command -v docker >/dev/null 2>&1 || {
   echo "Docker Engine is required." >&2
@@ -16,7 +17,7 @@ docker compose version >/dev/null 2>&1 || {
 }
 
 read -r host_cpus host_memory < <(docker info --format '{{.NCPU}} {{.MemTotal}}')
-free_bytes="$(df -PB1 "$root" | awk 'NR==2 {print $4}')"
+free_bytes="$(df -PB1 "$(dirname "$STATE_ROOT")" | awk 'NR==2 {print $4}')"
 minimum_cpus="${VPS_MIN_CPU_COUNT:-6}"
 minimum_memory="${VPS_MIN_MEMORY_BYTES:-11811160064}"
 minimum_free_disk="${VPS_MIN_FREE_DISK_BYTES:-64424509440}"
@@ -79,7 +80,7 @@ if [[ "${ENABLE_POOL:-false}" == true ]]; then
     echo "P2P_PORT and STRATUM_PORT must be different." >&2
     exit 64
   }
-  [[ -s state/secrets/cloudflare_api_token ]] || {
+  [[ -s "$STATE_ROOT/secrets/cloudflare_api_token" ]] || {
     echo "Cloudflare DNS token is required for Stratum DNS-01 TLS." >&2
     exit 64
   }

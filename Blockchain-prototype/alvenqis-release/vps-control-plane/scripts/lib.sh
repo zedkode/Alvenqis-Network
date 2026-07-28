@@ -39,6 +39,52 @@ PY
   )
 }
 
+resolve_state_root() {
+  local workspace="${1:-$PWD}"
+  local configured="${ALVENQIS_STATE_ROOT:-$workspace/state}"
+
+  ALVENQIS_STATE_ROOT="$(
+    python3 - "$workspace" "$configured" <<'PY'
+import sys
+from pathlib import Path
+
+workspace = Path(sys.argv[1]).resolve()
+configured = Path(sys.argv[2])
+if not configured.is_absolute():
+    configured = workspace / configured
+resolved = configured.resolve(strict=False)
+
+for forbidden in (
+    Path("/"),
+    Path("/bin"),
+    Path("/boot"),
+    Path("/dev"),
+    Path("/etc"),
+    Path("/home"),
+    Path("/lib"),
+    Path("/lib64"),
+    Path("/opt"),
+    Path("/proc"),
+    Path("/root"),
+    Path("/run"),
+    Path("/sbin"),
+    Path("/srv"),
+    Path("/sys"),
+    Path("/tmp"),
+    Path("/usr"),
+    Path("/var"),
+):
+    if resolved == forbidden:
+        raise SystemExit(f"refusing unsafe ALVENQIS_STATE_ROOT: {resolved}")
+if resolved == workspace:
+    raise SystemExit("ALVENQIS_STATE_ROOT must not be the workspace itself")
+print(resolved)
+PY
+  )"
+  STATE_ROOT="$ALVENQIS_STATE_ROOT"
+  export ALVENQIS_STATE_ROOT STATE_ROOT
+}
+
 compose_args() {
   ALVENQIS_COMPOSE_ARGS=(docker compose --env-file .env -f compose.yaml)
   if [[ "${CLOUDFLARE_MODE:-disabled}" != "tunnel" ]]; then

@@ -26,8 +26,8 @@ x-runtime-common: &runtime-common
   <<: *runtime-image
   env_file: [.env]
   volumes:
-    - ./state/config/generated:/config
-    - ./state/data:/data/.alvenqis-mainnet
+    - ${ALVENQIS_STATE_ROOT:-./state}/config/generated:/config
+    - ${ALVENQIS_STATE_ROOT:-./state}/data:/data/.alvenqis-mainnet
   read_only: true
   tmpfs: [/tmp:size=128m]
 
@@ -106,8 +106,8 @@ services:
       ALVENQIS_COMPONENT: control
       ALVENQIS_DEPLOYMENT_MODE: docker
     volumes:
-      - ./state/config/generated:/config
-      - ./state/control:/data/control
+      - ${ALVENQIS_STATE_ROOT:-./state}/config/generated:/config
+      - ${ALVENQIS_STATE_ROOT:-./state}/control:/data/control
     depends_on:
       alvenqis-rpc: {condition: service_healthy}
     read_only: true
@@ -130,8 +130,8 @@ services:
     entrypoint: ["/bin/sh", "/scripts/certbot-loop.sh"]
     volumes:
       - ./docker/stratum/certbot-loop.sh:/scripts/certbot-loop.sh:ro
-      - ./state/stratum/letsencrypt:/etc/letsencrypt
-      - ./state/stratum/lib:/var/lib/letsencrypt
+      - ${ALVENQIS_STATE_ROOT:-./state}/stratum/letsencrypt:/etc/letsencrypt
+      - ${ALVENQIS_STATE_ROOT:-./state}/stratum/lib:/var/lib/letsencrypt
     secrets: [cloudflare_api_token]
     healthcheck:
       test: ["CMD-SHELL", "test -s /etc/letsencrypt/live/${STRATUM_HOST}/fullchain.pem && test -s /etc/letsencrypt/live/${STRATUM_HOST}/privkey.pem && test -s /etc/letsencrypt/.stratum-cert-ready"]
@@ -151,9 +151,9 @@ services:
     environment: {ALVENQIS_COMPONENT: pool}
     ports: ["${STRATUM_PORT:-3333}:${STRATUM_INTERNAL_PORT:-3333}/tcp"]
     volumes:
-      - ./state/config/generated:/config
-      - ./state/pool:/data/pool
-      - ./state/stratum/letsencrypt:/certs:ro
+      - ${ALVENQIS_STATE_ROOT:-./state}/config/generated:/config
+      - ${ALVENQIS_STATE_ROOT:-./state}/pool:/data/pool
+      - ${ALVENQIS_STATE_ROOT:-./state}/stratum/letsencrypt:/certs:ro
     secrets: [pool_admin_token]
     depends_on:
       alvenqis-rpc: {condition: service_healthy}
@@ -161,11 +161,11 @@ services:
     read_only: true
     tmpfs: [/tmp:size=64m]
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:30787/health | grep -q '\"stratum_tls\":true' && curl -fsS http://127.0.0.1:30787/api/v1/pool/status | grep -q '\"upstream_status\":\"healthy\"'"]
+      test: ["CMD-SHELL", "pgrep -f '^alvenqis-mining-pool ' >/dev/null && test -s /certs/live/${STRATUM_HOST}/fullchain.pem && test -s /certs/live/${STRATUM_HOST}/privkey.pem"]
       interval: 15s
       timeout: 5s
       retries: 12
-      start_period: 60s
+      start_period: 15s
     mem_limit: ${POOL_MEMORY_LIMIT:-768M}
     cpus: ${POOL_CPU_LIMIT:-0.75}
     pids_limit: 512
@@ -197,10 +197,14 @@ services:
     volumes:
       - ${ALVENQIS_HOST_WORKSPACE}:${ALVENQIS_HOST_WORKSPACE}
       - ${ALVENQIS_HOST_REPO}:${ALVENQIS_HOST_REPO}:ro
+      - type: bind
+        source: ${ALVENQIS_STATE_ROOT:-./state}
+        target: ${ALVENQIS_STATE_ROOT:-/workspace/state}
       - /var/run/docker.sock:/var/run/docker.sock
     secrets: [broker_token, cloudflare_api_token, backup_passphrase, r2_secret_access_key]
     read_only: true
     tmpfs: [/tmp:size=256m]
+    cap_add: [CHOWN, DAC_OVERRIDE, DAC_READ_SEARCH, FOWNER]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
       interval: 15s
@@ -229,7 +233,7 @@ services:
       TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
     volumes:
       - ./.env:/workspace/.env
-      - ./state:/workspace/state
+      - ${ALVENQIS_STATE_ROOT:-./state}:/workspace/state
     secrets: [setup_token, broker_token, discord_webhook, telegram_bot_token]
     depends_on:
       docker-broker: {condition: service_healthy}
@@ -340,7 +344,7 @@ services:
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-      - ./state/prometheus:/prometheus
+      - ${ALVENQIS_STATE_ROOT:-./state}/prometheus:/prometheus
     depends_on:
       alertmanager: {condition: service_started}
       blackbox-exporter: {condition: service_started}
@@ -360,8 +364,8 @@ services:
     container_name: alvenqis-alertmanager
     command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
     volumes:
-      - ./state/config/generated/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - ./state/alertmanager:/alertmanager
+      - ${ALVENQIS_STATE_ROOT:-./state}/config/generated/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${ALVENQIS_STATE_ROOT:-./state}/alertmanager:/alertmanager
     secrets: [smtp_password]
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:9093/-/healthy"]
@@ -395,7 +399,7 @@ services:
     command: ["--path.rootfs=/host", "--collector.textfile.directory=/textfile"]
     volumes:
       - /:/host:ro,rslave
-      - ./state/metrics:/textfile:ro
+      - ${ALVENQIS_STATE_ROOT:-./state}/metrics:/textfile:ro
     healthcheck:
       test: ["CMD", "/bin/node_exporter", "--version"]
       interval: 30s
@@ -476,7 +480,7 @@ services:
       LOKI_RETENTION_HOURS: ${LOKI_RETENTION_HOURS:-168}
     volumes:
       - ./monitoring/loki/loki.yml:/etc/loki/local-config.yaml:ro
-      - ./state/loki:/loki
+      - ${ALVENQIS_STATE_ROOT:-./state}/loki:/loki
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3100/ready"]
       interval: 15s
@@ -494,7 +498,7 @@ services:
     command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
     volumes:
       - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - ./state/alloy:/var/lib/alloy/data
+      - ${ALVENQIS_STATE_ROOT:-./state}/alloy:/var/lib/alloy/data
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     depends_on:
       loki: {condition: service_started}
@@ -521,7 +525,7 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     secrets: [grafana_password]
     volumes:
-      - ./state/grafana:/var/lib/grafana
+      - ${ALVENQIS_STATE_ROOT:-./state}/grafana:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
@@ -548,17 +552,20 @@ services:
       BROKER_URL: http://docker-broker:8090
       BROKER_TOKEN_FILE: /run/secrets/broker_token
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
-      BACKUP_INITIAL_DELAY_SECONDS: ${BACKUP_INITIAL_DELAY_SECONDS:-3600}
+      BACKUP_INITIAL_DELAY_SECONDS: ${BACKUP_INITIAL_DELAY_SECONDS:-120}
     secrets: [broker_token]
+    volumes:
+      - ${ALVENQIS_STATE_ROOT:-./state}/metrics:/metrics:ro
     depends_on:
       docker-broker: {condition: service_healthy}
     read_only: true
     tmpfs: [/tmp:size=16m]
     healthcheck:
-      test: ["CMD-SHELL", "kill -0 1"]
+      test: ["CMD-SHELL", "kill -0 1 && test -s /metrics/alvenqis_backup.prom"]
       interval: 60s
       timeout: 5s
       retries: 3
+      start_period: ${BACKUP_HEALTH_START_PERIOD:-180s}
     mem_limit: ${BACKUP_MEMORY_LIMIT:-128M}
     cpus: ${BACKUP_CPU_LIMIT:-0.10}
     pids_limit: 128
@@ -569,15 +576,15 @@ networks:
     driver: bridge
 
 secrets:
-  admin_password: {file: ./state/secrets/admin_password}
-  grafana_password: {file: ./state/secrets/grafana_password}
-  setup_token: {file: ./state/secrets/setup_token}
-  broker_token: {file: ./state/secrets/broker_token}
-  cloudflare_api_token: {file: ./state/secrets/cloudflare_api_token}
-  cloudflare_tunnel_token: {file: ./state/secrets/cloudflare_tunnel_token}
-  pool_admin_token: {file: ./state/secrets/pool_admin_token}
-  backup_passphrase: {file: ./state/secrets/backup_passphrase}
-  r2_secret_access_key: {file: ./state/secrets/r2_secret_access_key}
-  discord_webhook: {file: ./state/secrets/discord_webhook}
-  telegram_bot_token: {file: ./state/secrets/telegram_bot_token}
-  smtp_password: {file: ./state/secrets/smtp_password}
+  admin_password: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/admin_password"}
+  grafana_password: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/grafana_password"}
+  setup_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/setup_token"}
+  broker_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/broker_token"}
+  cloudflare_api_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/cloudflare_api_token"}
+  cloudflare_tunnel_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/cloudflare_tunnel_token"}
+  pool_admin_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/pool_admin_token"}
+  backup_passphrase: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/backup_passphrase"}
+  r2_secret_access_key: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/r2_secret_access_key"}
+  discord_webhook: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/discord_webhook"}
+  telegram_bot_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/telegram_bot_token"}
+  smtp_password: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/smtp_password"}

@@ -64,6 +64,7 @@ def ensure_layout() -> None:
         directory.mkdir(parents=True, exist_ok=True)
         os.chown(directory, uid, gid)
         os.chmod(directory, 0o750)
+    os.chmod(STATE_DIR / "metrics", 0o755)
 
 def read_or_create_secret(path: Path, length: int = 32) -> str:
     if path.exists() and path.stat().st_size:
@@ -342,6 +343,7 @@ def configure(data: dict[str, Any]) -> None:
         "STACK_VERSION": "2.1.0-no-autoupdate",
         "ALVENQIS_HOST_WORKSPACE": os.environ.get("ALVENQIS_HOST_WORKSPACE", str(WORKSPACE)),
         "ALVENQIS_HOST_REPO": os.environ.get("ALVENQIS_HOST_REPO", str(WORKSPACE)),
+        "ALVENQIS_STATE_ROOT": os.environ.get("ALVENQIS_STATE_ROOT", str(STATE_DIR)),
         "TZ": data.get("timezone", "Europe/Bucharest"),
         "ALVENQIS_VERSION": data.get("ALVENQIS_version", "2.1.0-no-autoupdate"),
         "ALVENQIS_RUNTIME_IMAGE": data.get("alvenqis_runtime_image", "ghcr.io/zedkode/alvenqis-runtime"),

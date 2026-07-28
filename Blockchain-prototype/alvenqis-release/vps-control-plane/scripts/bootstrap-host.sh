@@ -8,6 +8,7 @@ set -Eeuo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export DEBIAN_FRONTEND=noninteractive
+export ALVENQIS_STATE_ROOT="${ALVENQIS_STATE_ROOT:-/var/lib/alvenqis-control-plane}"
 
 apt-get update
 apt-get install -y ca-certificates curl gnupg jq openssl python3 tar
@@ -32,7 +33,9 @@ if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>
 fi
 
 systemctl enable --now docker
-"$root/scripts/install-docker-stack.sh"
+bash "$root/scripts/install-docker-stack.sh"
+source "$root/scripts/lib.sh"
+resolve_state_root "$root"
 
 login_file="/root/alvenqis-login.txt"
 install -m 0600 /dev/null "$login_file"
@@ -44,10 +47,10 @@ SSH tunnel:
 ssh -N -L 18080:127.0.0.1:${OPS_BOOTSTRAP_PORT:-8080} root@SERVER_IP
 
 Setup URL:
-http://127.0.0.1:18080/?token=$(cat "$root/state/secrets/setup_token")
+http://127.0.0.1:18080/?token=$(cat "$STATE_ROOT/secrets/setup_token")
 
 After deployment, final master and Grafana credentials are written to:
-$root/state/control/LOGIN.txt
+$STATE_ROOT/control/LOGIN.txt
 EOF
 chmod 0600 "$login_file"
 

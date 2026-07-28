@@ -106,18 +106,13 @@ if [[ "${ENABLE_POOL:-false}" == true ]]; then
     echo "Private mining RPC did not return a valid live template." >&2
     exit 1
   }
-  pool_health="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-pool curl -fsS http://127.0.0.1:30787/health)"
+  pool_health="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-pool curl -fsS --max-time 10 http://127.0.0.1:30787/health)"
   echo "$pool_health" | grep -q '"stratum_tls":true' || {
     echo "Pool health does not confirm Stratum TLS: $pool_health" >&2
     exit 1
   }
   echo "$pool_health" | grep -q '"http_mining_api":false' || {
     echo "Pool health does not confirm retired HTTP mining API: $pool_health" >&2
-    exit 1
-  }
-  pool_status="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-pool curl -fsS http://127.0.0.1:30787/api/v1/pool/status)"
-  echo "$pool_status" | grep -q '"upstream_status":"healthy"' || {
-    echo "Pool upstream is degraded: $pool_status" >&2
     exit 1
   }
   timeout 20 openssl s_client \

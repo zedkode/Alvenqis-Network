@@ -5,6 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 source scripts/lib.sh
 load_dotenv .env
+resolve_state_root "$root"
 
 phase="all"
 case "${1:-}" in
@@ -15,7 +16,7 @@ case "${1:-}" in
 esac
 
 workspace="${ALVENQIS_WORKSPACE:-$root}"
-secrets_dir="$workspace/state/secrets"
+secrets_dir="$STATE_ROOT/secrets"
 api_token_file="/run/secrets/cloudflare_api_token"
 [[ -s "$api_token_file" ]] || api_token_file="$secrets_dir/cloudflare_api_token"
 api="https://api.cloudflare.com/client/v4"

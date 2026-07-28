@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Restore a backup produced by scripts/backup-now.sh.
-# Destructive to live state — requires explicit RESTORE_CONFIRM=yes.
-# Restore never removes Docker volumes; chain-volume wipes are forbidden here.
 set -Eeuo pipefail
 
 workspace="${ALVENQIS_WORKSPACE:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -11,133 +8,237 @@ source scripts/lib.sh
 usage() {
   cat <<'EOF'
 Usage:
-  RESTORE_CONFIRM=yes ./scripts/restore-from-backup.sh state/backups/<UTC-stamp>
+  RESTORE_CONFIRM=yes bash scripts/restore-from-backup.sh /absolute/backup/directory
 
 Environment:
-  RESTORE_CONFIRM=yes          Required. Refuse without this exact value.
-  RESTORE_SECRETS=true|false   Default true. Decrypt alvenqis-secrets.tar.gz.enc when present.
-  CHAIN_SNAPSHOT_STOP_SERVICES Default true (same as backup-now.sh).
-  ALVENQIS_WORKSPACE           Optional package root override.
+  RESTORE_CONFIRM=yes        Required.
+  RESTORE_SECRETS=true|false Default true.
+  ALVENQIS_WORKSPACE         Optional package root override.
 
-Restores from the directory created by backup-now.sh:
-  alvenqis-state.tar.gz
-  alvenqis-secrets.tar.gz.enc  (optional decrypt)
-  SHA256SUMS                   (verified when present)
+The project is stopped for a consistent restore. Only containers positively
+owned by COMPOSE_PROJECT_NAME and this Compose working directory are touched.
 EOF
 }
 
-[[ "${1:-}" != "-h" && "${1:-}" != "--help" ]] || { usage; exit 0; }
-[[ $# -ge 1 ]] || { usage >&2; exit 64; }
+[[ "${1:-}" != "-h" && "${1:-}" != "--help" ]] || {
+  usage
+  exit 0
+}
+[[ $# -eq 1 ]] || {
+  usage >&2
+  exit 64
+}
+[[ "${RESTORE_CONFIRM:-}" == "yes" ]] || {
+  echo "Refusing restore without RESTORE_CONFIRM=yes." >&2
+  exit 64
+}
+[[ -f .env ]] || {
+  echo "A live .env is required to identify the owned Compose project safely." >&2
+  exit 66
+}
+
+load_dotenv .env
+resolve_state_root "$workspace"
+compose_args
+project="${COMPOSE_PROJECT_NAME:-alvenqis-control-plane}"
 
 backup_arg="$1"
 if [[ "$backup_arg" = /* ]]; then
   backup_dir="$backup_arg"
-else
+elif [[ -d "$workspace/$backup_arg" ]]; then
   backup_dir="$workspace/$backup_arg"
+elif [[ "$backup_arg" == state/backups/* ]]; then
+  backup_dir="$STATE_ROOT/backups/${backup_arg#state/backups/}"
+else
+  backup_dir="$STATE_ROOT/backups/$backup_arg"
 fi
-backup_dir="$(cd "$(dirname "$backup_dir")" && pwd)/$(basename "$backup_dir")"
-
-[[ "${RESTORE_CONFIRM:-}" == "yes" ]] || {
-  echo "Refusing restore without RESTORE_CONFIRM=yes" >&2
-  echo "Example: RESTORE_CONFIRM=yes $0 state/backups/<UTC-stamp>" >&2
-  exit 64
-}
+backup_dir="$(
+  python3 - "$backup_dir" <<'PY'
+import sys
+from pathlib import Path
+print(Path(sys.argv[1]).resolve(strict=False))
+PY
+)"
 
 [[ -d "$backup_dir" ]] || {
   echo "Backup directory not found: $backup_dir" >&2
   exit 66
 }
-
 state_archive="$backup_dir/alvenqis-state.tar.gz"
 secrets_archive="$backup_dir/alvenqis-secrets.tar.gz.enc"
 sums_file="$backup_dir/SHA256SUMS"
-
 [[ -f "$state_archive" ]] || {
   echo "Missing state archive: $state_archive" >&2
   exit 66
 }
+[[ -f "$sums_file" ]] || {
+  echo "Refusing restore without SHA256SUMS: $backup_dir" >&2
+  exit 74
+}
+(
+  cd "$backup_dir"
+  sha256sum -c SHA256SUMS
+)
 
-if [[ -f "$sums_file" ]]; then
-  echo "Verifying SHA256SUMS in $backup_dir"
-  (
-    cd "$backup_dir"
-    sha256sum -c SHA256SUMS
-  )
-else
-  echo "WARN: no SHA256SUMS in backup dir; continuing without checksum verification"
-fi
+python3 - "$state_archive" <<'PY'
+import sys
+import tarfile
+from pathlib import PurePosixPath
 
-# .env is required by compose_args / load_dotenv for stop+start. Prefer live .env;
-# if missing, extract only .env from the archive first.
-if [[ ! -f .env ]]; then
-  echo "No live .env — extracting .env from state archive first"
-  tar -xzf "$state_archive" .env
-fi
-load_dotenv .env
-compose_args
+with tarfile.open(sys.argv[1], "r:gz") as archive:
+    for member in archive.getmembers():
+        path = PurePosixPath(member.name)
+        if path.is_absolute() or ".." in path.parts:
+            raise SystemExit(f"unsafe archive member: {member.name}")
+        if not (member.name == ".env" or member.name == "state" or member.name.startswith("state/")):
+            raise SystemExit(f"unexpected archive member: {member.name}")
+        if member.issym() or member.islnk():
+            raise SystemExit(f"links are not allowed in restore archives: {member.name}")
+print("Backup archive path validation: ok")
+PY
 
-services=(alvenqis-indexer alvenqis-control alvenqis-rpc alvenqis-node)
-if [[ "${ENABLE_POOL:-false}" == true ]]; then
-  services=(alvenqis-pool "${services[@]}")
-fi
+mapfile -t project_containers < <(
+  docker ps -aq --filter "label=com.docker.compose.project=$project"
+)
+((${#project_containers[@]} > 0)) || {
+  echo "No containers found for Compose project $project." >&2
+  exit 69
+}
+for container_id in "${project_containers[@]}"; do
+  name="$(docker inspect -f '{{.Name}}' "$container_id")"
+  name="${name#/}"
+  working_dir="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$container_id")"
+  config_files="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$container_id")"
+  [[ "$working_dir" == "$workspace" && "$config_files" == *"$workspace/compose.yaml"* ]] || {
+    echo "Container ownership mismatch; refusing to touch $name." >&2
+    exit 73
+  }
+  case "$name" in
+    1Panel-*|n8n|n8n-db|vaultwarden|gitea|gitea-db|uptime-kuma|rustfs|vbos|vbos-*)
+      echo "Protected container unexpectedly belongs to $project: $name" >&2
+      exit 73
+      ;;
+  esac
+done
 
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+pre_dir="$STATE_ROOT/backups/pre-restore-$stamp"
+stage="$STATE_ROOT/backups/.restore-$stamp"
+install -d -m 0700 "$pre_dir" "$stage"
+completed=false
 stopped=false
+
 cleanup() {
   if [[ "$stopped" == true ]]; then
-    echo "Restarting services after restore..."
-    "${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" up -d "${services[@]}" >/dev/null 2>&1 || true
+    echo "Restore failed; attempting to restart the owned Alvenqis project." >&2
+    "${ALVENQIS_COMPOSE_ARGS[@]}" \
+      --profile cloudflare --profile pool --profile backup up -d --no-build || true
+  fi
+  if [[ -d "$stage" ]]; then
+    case "$stage" in
+      "$STATE_ROOT"/backups/.restore-*) rm -rf -- "$stage" ;;
+      *) echo "Refusing to remove unexpected restore stage: $stage" >&2 ;;
+    esac
   fi
 }
 trap cleanup EXIT
 
-if [[ "${CHAIN_SNAPSHOT_STOP_SERVICES:-true}" == true ]]; then
-  echo "Stopping chain services for consistent restore: ${services[*]}"
-  "${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" stop "${services[@]}" || true
-  stopped=true
-fi
+echo "Stopping only positively identified project $project..."
+"${ALVENQIS_COMPOSE_ARGS[@]}" \
+  --profile cloudflare --profile pool --profile backup stop
+stopped=true
 
-# Preserve a pre-restore safety copy of live paths that will be overwritten.
-pre_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-pre_dir="state/backups/pre-restore-$pre_stamp"
-mkdir -p "$pre_dir"
-pre_items=(state/data state/control state/pool state/config/generated .env)
-pre_existing=()
-for i in "${pre_items[@]}"; do
-  [[ -e $i ]] && pre_existing+=("$i")
+echo "Creating pre-restore safety snapshot..."
+pre_stage="$stage/pre-live"
+install -d -m 0700 "$pre_stage/state"
+for relative in \
+  data control pool config/generated stratum \
+  prometheus grafana loki alloy alertmanager; do
+  if [[ -e "$STATE_ROOT/$relative" ]]; then
+    mkdir -p "$pre_stage/state/$(dirname "$relative")"
+    cp -a --reflink=auto \
+      "$STATE_ROOT/$relative" "$pre_stage/state/$(dirname "$relative")/"
+  fi
 done
-if ((${#pre_existing[@]} > 0)); then
-  tar -czf "$pre_dir/pre-restore-live.tar.gz" "${pre_existing[@]}"
-  echo "Pre-restore live snapshot: $pre_dir/pre-restore-live.tar.gz"
-fi
+cp -a .env "$pre_stage/.env"
+tar -C "$pre_stage" -czf "$pre_dir/pre-restore-live.tar.gz" state .env
+sha256sum "$pre_dir/pre-restore-live.tar.gz" > "$pre_dir/SHA256SUMS"
+(
+  cd "$pre_dir"
+  sha256sum -c SHA256SUMS
+)
 
-echo "Extracting state archive into $workspace"
-tar -xzf "$state_archive" -C "$workspace"
+echo "Extracting verified backup into an isolated stage..."
+tar -xzf "$state_archive" -C "$stage"
+[[ -d "$stage/state" ]] || {
+  echo "Backup archive does not contain state/." >&2
+  exit 74
+}
+
+for relative in \
+  data control pool config/generated stratum \
+  prometheus grafana loki alloy alertmanager; do
+  if [[ -d "$stage/state/$relative" ]]; then
+    install -d "$STATE_ROOT/$relative"
+    rsync -aHAX --numeric-ids --delete \
+      "$stage/state/$relative/" "$STATE_ROOT/$relative/"
+  fi
+done
 
 if [[ "${RESTORE_SECRETS:-true}" == true && -f "$secrets_archive" ]]; then
   pass=/run/secrets/backup_passphrase
-  [[ -s $pass ]] || pass=state/secrets/backup_passphrase
-  if [[ ! -s $pass ]]; then
-    echo "WARN: passphrase not found; skipping secrets decrypt ($secrets_archive)" >&2
-  else
-    echo "Decrypting secrets archive"
-    openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 200000 -pass "file:$pass" \
-      -in "$secrets_archive" | tar -xzf - -C "$workspace"
-  fi
-elif [[ -f "$secrets_archive" ]]; then
-  echo "Skipping secrets restore (RESTORE_SECRETS=${RESTORE_SECRETS:-true})"
+  [[ -s "$pass" ]] || pass="$STATE_ROOT/secrets/backup_passphrase"
+  [[ -s "$pass" ]] || {
+    echo "Backup passphrase is unavailable; refusing secrets restore." >&2
+    exit 66
+  }
+  secrets_stage="$stage/decrypted"
+  install -d -m 0700 "$secrets_stage"
+  openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+    -pass "file:$pass" -in "$secrets_archive" |
+    tar -xzf - -C "$secrets_stage"
+  [[ -d "$secrets_stage/state/secrets" ]] || {
+    echo "Encrypted archive does not contain state/secrets." >&2
+    exit 74
+  }
+  rsync -aHAX --numeric-ids --delete \
+    "$secrets_stage/state/secrets/" "$STATE_ROOT/secrets/"
 fi
 
-# Reload dotenv after extract in case .env was restored
-if [[ -f .env ]]; then
-  load_dotenv .env
-  compose_args
+if [[ -f "$stage/.env" ]]; then
+  cp -a "$stage/.env" .env
 fi
+python3 - "$STATE_ROOT" <<'PY'
+import json
+import os
+import re
+import sys
+from pathlib import Path
 
-echo "Starting services"
-"${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" up -d "${services[@]}"
+path = Path(".env")
+content = path.read_text(encoding="utf-8")
+line = f"ALVENQIS_STATE_ROOT={json.dumps(sys.argv[1])}"
+if re.search(r"^ALVENQIS_STATE_ROOT=", content, flags=re.MULTILINE):
+    content = re.sub(r"^ALVENQIS_STATE_ROOT=.*$", line, content, flags=re.MULTILINE)
+else:
+    content = content.rstrip() + "\n" + line + "\n"
+temporary = path.with_name(f".env.restore-{os.getpid()}")
+temporary.write_text(content, encoding="utf-8")
+os.chmod(temporary, 0o600)
+temporary.replace(path)
+PY
+
+load_dotenv .env
+resolve_state_root "$workspace"
+bash scripts/prepare-state.sh
+compose_args
+"${ALVENQIS_COMPOSE_ARGS[@]}" \
+  --profile cloudflare --profile pool --profile backup up -d --no-build
+bash scripts/health-check-docker.sh
+
+completed=true
 stopped=false
+cleanup
 trap - EXIT
-
 echo "Restore completed from: $backup_dir"
-echo "Next: ./scripts/health-check-docker.sh"
-echo "Then (laptop or host): ./scripts/smoke-public-candidate.sh"
+echo "Pre-restore snapshot: $pre_dir"

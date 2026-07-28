@@ -43,13 +43,13 @@ def schedule_installer_stop():
  threading.Thread(target=stop_later,daemon=True).start()
 def deploy():
  e=cfg(); out=[run(['bash',str(WORKSPACE/'scripts/runtime-preflight.sh')],120),run(compose('config'),120)]
- if e.get('CLOUDFLARE_MODE','disabled')=='tunnel': out.append(run([str(WORKSPACE/'scripts/cloudflare-bootstrap.sh'),'--prepare'],600))
+ if e.get('CLOUDFLARE_MODE','disabled')=='tunnel': out.append(run(['bash',str(WORKSPACE/'scripts/cloudflare-bootstrap.sh'),'--prepare'],600))
  # Deliberately build from the checked-out repository. No pull, updater, mutable tag refresh or scheduled image replacement.
  args=('up','-d','--build')
- out.append(run(compose(*args,profiles=profiles()),7200)); out.append(run([str(WORKSPACE/'scripts/health-check-docker.sh')],600))
+ out.append(run(compose(*args,profiles=profiles()),7200)); out.append(run(['bash',str(WORKSPACE/'scripts/health-check-docker.sh')],600))
  if e.get('CLOUDFLARE_MODE','disabled')!='disabled':
-  out.append(run([str(WORKSPACE/'scripts/cloudflare-bootstrap.sh'),'--activate'],600))
-  out.append(run([str(WORKSPACE/'scripts/verify-public-health.sh')],300))
+  out.append(run(['bash',str(WORKSPACE/'scripts/cloudflare-bootstrap.sh'),'--activate'],600))
+  out.append(run(['bash',str(WORKSPACE/'scripts/verify-public-health.sh')],300))
  schedule_installer_stop()
  return '\n'.join(out)
 def status():
@@ -67,6 +67,6 @@ def action():
  try:
   if a=='deploy': return jsonify({'ok':True,'output':deploy()})
   if a=='status': return jsonify({'ok':True,**status()})
-  if a=='backup': return jsonify({'ok':True,'output':run([str(WORKSPACE/'scripts/backup-now.sh')])})
+  if a=='backup': return jsonify({'ok':True,'output':run(['bash',str(WORKSPACE/'scripts/backup-now.sh')])})
   return jsonify({'error':'unsupported action'}),400
- except (RuntimeError,ValueError,subprocess.TimeoutExpired) as ex: return jsonify({'error':f'{type(ex).__name__}: {ex}'}),500
+ except (OSError,RuntimeError,ValueError,subprocess.TimeoutExpired) as ex: return jsonify({'error':f'{type(ex).__name__}: {ex}'}),500

@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; repo="$(cd "$root/../.." && pwd)"; cd "$root"; [[ -f .env ]] || { echo "Missing .env" >&2; exit 66; }
-stamp="$(date -u +%Y%m%dT%H%M%SZ)"; mkdir -p "state/repair-backups/$stamp" state/secrets; cp -a .env "state/repair-backups/$stamp/"
+source scripts/lib.sh
+load_dotenv .env
+export ALVENQIS_STATE_ROOT="${ALVENQIS_STATE_ROOT:-/var/lib/alvenqis-control-plane}"
+resolve_state_root "$root"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"; mkdir -p "$STATE_ROOT/repair-backups/$stamp" "$STATE_ROOT/secrets"; cp -a .env "$STATE_ROOT/repair-backups/$stamp/"
 # Preserve disabled rollback state from the former updater design.
-if [[ -d state/rollback ]]; then
-  mkdir -p state/legacy-disabled
-  mv state/rollback "state/legacy-disabled/rollback-$stamp"
+if [[ -d "$STATE_ROOT/rollback" ]]; then
+  mkdir -p "$STATE_ROOT/legacy-disabled"
+  mv "$STATE_ROOT/rollback" "$STATE_ROOT/legacy-disabled/rollback-$stamp"
 fi
-for n in broker_token setup_token admin_password grafana_password pool_admin_token backup_passphrase cloudflare_tunnel_token; do [[ -s state/secrets/$n && "$(cat state/secrets/$n)" != validation-placeholder ]] || openssl rand -hex 32 > state/secrets/$n; chmod 0444 state/secrets/$n; done
-for n in cloudflare_api_token r2_secret_access_key discord_webhook telegram_bot_token smtp_password; do [[ -e state/secrets/$n ]] || : > state/secrets/$n; chmod 0444 state/secrets/$n; done
-python3 - "$root" "$repo" <<'P'
+for n in broker_token setup_token admin_password grafana_password pool_admin_token backup_passphrase cloudflare_tunnel_token; do [[ -s "$STATE_ROOT/secrets/$n" && "$(cat "$STATE_ROOT/secrets/$n")" != validation-placeholder ]] || openssl rand -hex 32 > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
+for n in cloudflare_api_token r2_secret_access_key discord_webhook telegram_bot_token smtp_password; do [[ -e "$STATE_ROOT/secrets/$n" ]] || : > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
+python3 - "$root" "$repo" "$STATE_ROOT" <<'P'
 from pathlib import Path
 import re,sys
-p=Path('.env'); s=p.read_text(); root,repo=sys.argv[1:]
+p=Path('.env'); s=p.read_text(); root,repo,state_root=sys.argv[1:]
 def set_value(key, value):
  global s
  line=f"{key}={__import__('json').dumps(value)}"
  s=re.sub(rf'^{key}=.*$',line,s,flags=re.M) if re.search(rf'^{key}=',s,re.M) else s+'\n'+line+'\n'
-for k,v in [('STACK_VERSION','2.1.0-no-autoupdate'),('ALVENQIS_HOST_WORKSPACE',root),('ALVENQIS_HOST_REPO',repo),('ALVENQIS_BACKUP_IMAGE','ghcr.io/zedkode/alvenqis-backup-scheduler')]:
+for k,v in [('STACK_VERSION','2.1.0-no-autoupdate'),('ALVENQIS_HOST_WORKSPACE',root),('ALVENQIS_HOST_REPO',repo),('ALVENQIS_STATE_ROOT',state_root),('ALVENQIS_BACKUP_IMAGE','ghcr.io/zedkode/alvenqis-backup-scheduler')]:
  set_value(k,v)
 legacy_defaults = {
  'NODE_MEMORY_LIMIT': ('3G', '2304M'),
@@ -38,7 +42,7 @@ for key,value in [('INDEXER_FAILURE_BACKOFF_MAX_SECONDS','60'),('PROMETHEUS_RETE
 for k in ['POSTGRES_DB','POSTGRES_USER','POSTGRES_MEMORY_LIMIT']: s=re.sub(rf'^{k}=.*\n?','',s,flags=re.M)
 p.write_text(s)
 P
-"$root/scripts/prepare-state.sh"
+bash "$root/scripts/prepare-state.sh"
 # Stop and preserve old host services. Unit files and data are not deleted.
 legacy_units=(alvenqis-indexer-refresh.timer alvenqis-auto-update.timer alvenqis-mining-pool alvenqis-vps-admin alvenqis-rpc alvenqis-node alvenqis-indexer-refresh.timer alvenqis-auto-update.timer alvenqis-mining-pool alvenqis-vps-admin alvenqis-rpc alvenqis-node)
 for unit in "${legacy_units[@]}"; do
@@ -63,12 +67,12 @@ source scripts/lib.sh
 load_dotenv .env
 compose_args
 if [[ "${CLOUDFLARE_MODE:-disabled}" == tunnel ]]; then
-  scripts/cloudflare-bootstrap.sh --prepare
+  bash scripts/cloudflare-bootstrap.sh --prepare
 fi
 COMPOSE_PARALLEL_LIMIT=1 "${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" up -d --build
-scripts/health-check-docker.sh
+bash scripts/health-check-docker.sh
 if [[ "${CLOUDFLARE_MODE:-disabled}" != disabled ]]; then
-  scripts/cloudflare-bootstrap.sh --activate
-  scripts/verify-public-health.sh
+  bash scripts/cloudflare-bootstrap.sh --activate
+  bash scripts/verify-public-health.sh
 fi
-echo "Repair complete; backup: state/repair-backups/$stamp"
+echo "Repair complete; backup: $STATE_ROOT/repair-backups/$stamp"

@@ -5,11 +5,15 @@ cd "$root"
 require_docker=false
 [[ "${1:-}" == --require-docker ]] && require_docker=true
 [[ -f .env ]] || cp .env.example .env
-mkdir -p state/secrets state/config/generated
+source scripts/lib.sh
+load_dotenv .env
+export ALVENQIS_STATE_ROOT="${ALVENQIS_VALIDATION_STATE_ROOT:-$root/state}"
+resolve_state_root "$root"
+mkdir -p "$STATE_ROOT/secrets" "$STATE_ROOT/config/generated"
 for secret in admin_password grafana_password setup_token broker_token cloudflare_api_token cloudflare_tunnel_token pool_admin_token backup_passphrase r2_secret_access_key discord_webhook telegram_bot_token smtp_password; do
-  [[ -f "state/secrets/$secret" ]] || printf 'validation-placeholder\n' > "state/secrets/$secret"
+  [[ -f "$STATE_ROOT/secrets/$secret" ]] || printf 'validation-placeholder\n' > "$STATE_ROOT/secrets/$secret"
 done
-[[ -f state/config/generated/alertmanager.yml ]] || cp monitoring/alertmanager/alertmanager.yml state/config/generated/alertmanager.yml
+[[ -f "$STATE_ROOT/config/generated/alertmanager.yml" ]] || cp monitoring/alertmanager/alertmanager.yml "$STATE_ROOT/config/generated/alertmanager.yml"
 python3 - <<'PY2'
 import json
 from pathlib import Path
@@ -63,10 +67,18 @@ assert 'RPC_ACCESS_MODE: private-mining' in main
 assert 'RPC_EXPOSE_MINING: "true"' in main
 assert 'ENABLE_MINING_RPC' not in (root/'.env.example').read_text()
 assert 'working_dir: /app' in main
-assert 'state/data \\' in (root/'scripts/prepare-state.sh').read_text()
-assert 'create_owned 473 473 state/alloy' in (root/'scripts/prepare-state.sh').read_text()
+assert 'ALVENQIS_STATE_ROOT=/var/lib/alvenqis-control-plane' in (root/'.env.example').read_text()
+assert '${ALVENQIS_STATE_ROOT:-./state}/data:/data/.alvenqis-mainnet' in main
+assert '${ALVENQIS_STATE_ROOT:-./state}/grafana:/var/lib/grafana' in main
+assert '${ALVENQIS_STATE_ROOT:-./state}/secrets/admin_password' in main
+assert 'resolve_state_root "$root"' in (root/'scripts/prepare-state.sh').read_text()
+assert '"$STATE_ROOT/data"' in (root/'scripts/prepare-state.sh').read_text()
+assert 'create_owned 473 473 "$STATE_ROOT/alloy"' in (root/'scripts/prepare-state.sh').read_text()
 assert 'user: "473:0"' in main
 assert 'chmod 0444' in (root/'scripts/prepare-state.sh').read_text()
+assert (root/'scripts/migrate-release-state.sh').is_file()
+assert "run(['bash',str(WORKSPACE/'scripts/backup-now.sh')])" in (root/'docker/ops/broker.py').read_text()
+assert 'BACKUP_COMPLETE' in (root/'scripts/backup-now.sh').read_text()
 assert 'http://alvenqis-rpc:10787' in (root/'docker/templates/pool.toml.template').read_text()
 assert 'exec /usr/local/bin/alvenqis-indexer-loop' in (root/'docker/entrypoint.sh').read_text()
 assert 'exec /usr/local/bin/alvenqis-pool-supervisor' in (root/'docker/entrypoint.sh').read_text()
