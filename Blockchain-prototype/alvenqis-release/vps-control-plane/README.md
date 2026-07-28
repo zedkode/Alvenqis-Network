@@ -10,12 +10,12 @@ not delete legacy units, containers or data.
 ## Services
 
 - non-mining full validation and P2P node;
-- one RPC gateway for chain reads, transaction submission and Docker-internal
-  pool templates; Caddy always returns 410 for public `/mining/*`;
+- one Docker-private RPC process for chain reads, transaction submission,
+  Stratum work and rate-limited public solo-mining templates/submissions;
 - TLS-only Stratum pool (`ENABLE_POOL`) with direct DNS-only TCP routing;
 - supervised read-only indexer loop with bounded exponential retry;
 - authenticated controller or fleet agent;
-- Caddy with optional Cloudflare Tunnel or direct DNS;
+- hardened Nginx gateway with optional Cloudflare Tunnel or direct DNS;
 - Prometheus, Alertmanager, Grafana, Loki, Alloy, node exporter and alvenqis-metrics-exporter (chain/RPC/indexer/pool gauges);
 - encrypted local and optional R2/S3 backups;
 - one token-authenticated Docker broker with the only Docker socket mount.
@@ -95,13 +95,13 @@ from the monorepo root.
 
 ## Secured pool mining ops
 
-Remote mining uses the direct DNS-only Stratum TLS endpoint. Public HTTP mining
-stays retired, while the HTTPS pool endpoint remains read-only for statistics:
+Remote pool mining uses the direct DNS-only Stratum TLS endpoint. Solo mining
+uses the HTTPS RPC endpoint, while the pool HTTPS endpoint remains read-only:
 [`Blockchain-docs/human/operator/PRIVATE_MINING_OPS.md`](../../../Blockchain-docs/human/operator/PRIVATE_MINING_OPS.md).
 
 ```bash
-# require HTTP 410 for /mining/* and verify the Stratum TLS certificate
-./scripts/smoke-private-mining.sh
+# verify the public solo template and Stratum TLS certificate
+ALVENQIS_SMOKE_MINER_ADDRESS=alve1... ./scripts/smoke-private-mining.sh
 ```
 
 See [INSTALL_AND_UNINSTALL.md](INSTALL_AND_UNINSTALL.md) for the complete

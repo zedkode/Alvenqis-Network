@@ -39,7 +39,7 @@ while :; do
     find "$cert_root" -type f -exec chmod 644 {} + 2>/dev/null || true
     find "$cert_root" -name 'privkey*.pem' -exec chmod 640 {} + 2>/dev/null || true
     chgrp -R 10001 "$cert_root" 2>/dev/null || true
-    touch "$cert_root/.stratum-cert-ready"
+    printf 'ready\n' > "$cert_root/.stratum-cert-ready"
     sleep 43200
   else
     echo "Stratum certificate issue/renewal failed; retrying in 5 minutes." >&2

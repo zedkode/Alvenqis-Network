@@ -59,7 +59,7 @@ assert installer.count('/var/run/docker.sock:/var/run/docker.sock') == 1
 assert 'alvenqis-mining-rpc:' not in main
 assert 'ALVENQIS_COMPONENT: mining-rpc' not in main
 assert 'profiles: [pool]' in main
-assert 'RPC_ACCESS_MODE: public-submit' in main
+assert 'RPC_ACCESS_MODE: private-mining' in main
 assert 'RPC_EXPOSE_MINING: "true"' in main
 assert 'ENABLE_MINING_RPC' not in (root/'.env.example').read_text()
 assert 'working_dir: /app' in main
@@ -75,7 +75,7 @@ assert (root/'docker/pool-supervisor.sh').is_file()
 assert (root/'scripts/runtime-preflight.sh').is_file()
 assert 'runtime-preflight.sh' in (root/'docker/ops/broker.py').read_text()
 health=(root/'scripts/health-check-docker.sh').read_text()
-assert 'Public mining route must return HTTP 410' in health
+assert 'Public solo mining template is unavailable or invalid.' in health
 assert 'alvenqis-mining-rpc' not in health
 assert 'P2P_MIN_VALIDATED_PEERS' in health
 assert 'Private mining RPC did not return a valid live template.' in health
@@ -83,8 +83,10 @@ proxy=(root/'docker/gateway/nginx.conf.template').read_text()
 assert 'location /pool/' in proxy
 assert 'alvenqis-pool:30787' in proxy
 assert 'location /mining/' in proxy
-assert 'use stratum+tls://' in proxy
-assert 'return 410' in proxy
+assert 'location = /mining/template' in proxy
+assert 'location = /mining/submit' in proxy
+assert 'limit_req zone=mining_template' in proxy
+assert 'limit_req zone=mining_submit' in proxy
 assert 'X-Alvenqis-Admin-Authenticated' in proxy
 assert not (root/'docker/caddy/Caddyfile.template').exists()
 assert not (root/'docker/caddy/caddy-entrypoint.sh').exists()

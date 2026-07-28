@@ -53,6 +53,9 @@ http {
     default $http_x_forwarded_proto;
   }
 
+  limit_req_zone $forwarded_client_ip zone=mining_template:10m rate=30r/m;
+  limit_req_zone $forwarded_client_ip zone=mining_submit:10m rate=10r/m;
+
   upstream control_backend {
     server alvenqis-control:10788;
     keepalive 16;
@@ -172,9 +175,24 @@ http {
       proxy_pass $pool_backend;
     }
 
+    location = /mining/template {
+      limit_except GET { deny all; }
+      limit_req zone=mining_template burst=10 nodelay;
+      proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+      proxy_next_upstream_tries 2;
+      proxy_pass http://rpc_backend;
+    }
+
+    location = /mining/submit {
+      limit_except POST { deny all; }
+      limit_req zone=mining_submit burst=5 nodelay;
+      proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
+      proxy_next_upstream_tries 2;
+      proxy_pass http://rpc_backend;
+    }
+
     location /mining/ {
-      default_type text/plain;
-      return 410 "Public mining RPC retired; use stratum+tls://${STRATUM_HOST}:${STRATUM_PORT}\n";
+      return 404;
     }
 
     location / {

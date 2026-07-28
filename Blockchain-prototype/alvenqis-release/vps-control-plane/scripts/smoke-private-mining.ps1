@@ -1,18 +1,17 @@
 param(
     [string]$BaseUrl = "https://rpcnode.dohotstudio.com",
     [string]$StratumHost = "stratum.dohotstudio.com",
-    [int]$StratumPort = 3333
+    [int]$StratumPort = 3333,
+    [Parameter(Mandatory = $true)]
+    [string]$MinerAddress
 )
 $ErrorActionPreference = "Stop"
 
-try {
-    Invoke-WebRequest -Uri "$($BaseUrl.TrimEnd('/'))/mining/template" -TimeoutSec 20 -UseBasicParsing | Out-Null
-    throw "Public mining HTTP unexpectedly returned success."
-} catch {
-    $status = [int]$_.Exception.Response.StatusCode
-    if ($status -ne 410) {
-        throw "Expected public mining HTTP 410, got $status."
-    }
+$template = Invoke-RestMethod `
+    -Uri "$($BaseUrl.TrimEnd('/'))/mining/template?miner_address=$([uri]::EscapeDataString($MinerAddress))" `
+    -TimeoutSec 45
+if (-not $template.template_id -or $template.network_id -ne "alvenqis-mainnet-candidate") {
+    throw "Public solo mining endpoint returned an invalid template."
 }
 
 $client = [System.Net.Sockets.TcpClient]::new()
@@ -23,7 +22,7 @@ try {
     if (-not $tls.IsAuthenticated -or -not $tls.IsEncrypted) {
         throw "Stratum connection is not authenticated and encrypted."
     }
-    Write-Host "PASS: HTTP mining is retired and Stratum TLS authenticated."
+    Write-Host "PASS: Solo mining template is valid and Stratum TLS authenticated."
 } finally {
     $client.Dispose()
 }

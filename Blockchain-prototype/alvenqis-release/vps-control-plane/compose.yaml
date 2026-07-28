@@ -61,18 +61,18 @@ services:
     container_name: alvenqis-rpc
     environment:
       ALVENQIS_COMPONENT: rpc
-      # One gateway owns chain reads/writes. Mining remains Docker-internal:
-      # the edge gateway retires every public /mining route with HTTP 410.
-      RPC_ACCESS_MODE: public-submit
+      # The RPC process stays private on the Docker network. The edge gateway
+      # publishes only the exact solo-mining routes with strict rate limits.
+      RPC_ACCESS_MODE: private-mining
       RPC_EXPOSE_MINING: "true"
     depends_on:
       alvenqis-node: {condition: service_healthy}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:10787/health >/dev/null && curl -fsS http://127.0.0.1:10787/status | grep -q '\"initialized\":true'"]
+      test: ["CMD-SHELL", "curl -fsS --max-time 20 http://127.0.0.1:10787/health >/dev/null && curl -fsS --max-time 20 http://127.0.0.1:10787/status | grep -q '\"initialized\":true'"]
       interval: 15s
-      timeout: 5s
+      timeout: 45s
       retries: 12
-      start_period: 30s
+      start_period: 90s
     mem_limit: ${RPC_MEMORY_LIMIT:-1536M}
     cpus: ${RPC_CPU_LIMIT:-1.25}
     pids_limit: 384

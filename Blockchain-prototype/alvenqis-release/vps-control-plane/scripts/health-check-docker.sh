@@ -48,9 +48,9 @@ budget_bytes="${CONTAINER_MEMORY_BUDGET_BYTES:-11274289152}"
 }
 printf 'Container memory-limit budget: %s / %s bytes\n' "$memory_limit_total" "$budget_bytes"
 
-"${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS http://127.0.0.1:10787/health >/dev/null
-status_json="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS http://127.0.0.1:10787/status)"
-p2p_json="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS http://127.0.0.1:10787/p2p/status)"
+"${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS --max-time 45 http://127.0.0.1:10787/health >/dev/null
+status_json="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS --max-time 45 http://127.0.0.1:10787/status)"
+p2p_json="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS --max-time 45 http://127.0.0.1:10787/p2p/status)"
 read -r initialized height index_lag < <(python3 -c 'import json,sys; d=json.load(sys.stdin); print(str(bool(d.get("initialized"))).lower(), d.get("height", -1), d.get("index_lag_blocks", -1))' <<<"$status_json")
 read -r configured connected validated < <(python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("configured_seed_count", -1), d.get("connected_peer_count", -1), d.get("validated_peer_count", -1))' <<<"$p2p_json")
 [[ "$initialized" == true && "$height" -ge 0 ]] || {
@@ -84,11 +84,16 @@ if command -v ss >/dev/null 2>&1; then
   }
 fi
 
-# Mining methods are reachable only on the Docker-internal RPC route used by
-# the pool. The public gateway boundary must retire them with HTTP 410.
-public_mining_code="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -sS -o /dev/null -w '%{http_code}' -H "Host: ${RPC_HOST}" "http://gateway:8080/mining/template")"
-[[ "$public_mining_code" == 410 ]] || {
-  echo "Public mining route must return HTTP 410, got $public_mining_code" >&2
+# Solo mining uses the same private RPC process as Stratum. The edge publishes
+# only the exact template/submit routes and applies per-client rate limits.
+public_template="$("${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS --max-time 45 \
+  -H "Host: ${RPC_HOST}" \
+  "http://gateway:8080/mining/template?miner_address=${POOL_ADDRESS}")" || {
+  echo "Public solo mining template is unavailable or invalid." >&2
+  exit 1
+}
+python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("template_id") and d.get("network_id") == "alvenqis-mainnet-candidate"' <<<"$public_template" || {
+  echo "Public solo mining template is unavailable or invalid." >&2
   exit 1
 }
 "${ALVENQIS_COMPOSE_ARGS[@]}" exec -T alvenqis-control curl -fsS http://127.0.0.1:10788/health >/dev/null

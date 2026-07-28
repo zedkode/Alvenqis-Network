@@ -348,9 +348,8 @@ async fn start_remote_miner(
         let response = heavy.get(&probe).send().await.map_err(|e| {
             AppError::msg(format!(
                 "VPS solo mining template failed at {rpc_url}: {e}. \
-                 Check Settings > Mining > Mining RPC URL (use http://rpcnode.dohotstudio.com, not 127.0.0.1). \
-                 Public gateways may disable /mining/template; enable expose_mining on a private mining RPC, \
-                 or switch Miner mode to Pool / Stratum TLS."
+                 Check Settings > Mining > Mining RPC URL (use https://rpcnode.dohotstudio.com). \
+                 Verify network connectivity, or switch Miner mode to Pool / Stratum TLS."
             ))
         })?;
         let template_status = response.status();
@@ -364,8 +363,8 @@ async fn start_remote_miner(
             };
             let code = template_status.as_u16();
             let hint = if code == 404 {
-                " Mining endpoints are not registered on this gateway (public-submit often disables them). \
-                 Point solo at a private mining RPC with expose_mining=true, or use Pool / Stratum TLS."
+                " This server does not publish the Alvenqis solo-mining endpoints. \
+                 Use https://rpcnode.dohotstudio.com or Pool / Stratum TLS."
             } else if code == 401 || code == 403 {
                 " Mining write auth is required or this wallet is blocked."
             } else if code == 429 {

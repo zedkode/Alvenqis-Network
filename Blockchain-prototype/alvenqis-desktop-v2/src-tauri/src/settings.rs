@@ -174,6 +174,9 @@ fn migrate_mining_settings(settings: &mut AppSettings) {
     if settings
         .mining_rpc_url
         .eq_ignore_ascii_case(DEFAULT_RPC_URL)
+        || settings
+            .mining_rpc_url
+            .eq_ignore_ascii_case("http://127.0.0.1:10787")
     {
         settings.mining_rpc_url = DEFAULT_MINING_RPC_URL.to_owned();
     }

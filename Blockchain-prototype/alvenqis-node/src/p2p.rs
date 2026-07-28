@@ -28,7 +28,7 @@ use std::net::IpAddr;
 use std::num::NonZeroU8;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Protocol v3: peer scoring/bans + header-first branch verification (A-H05).
@@ -43,6 +43,18 @@ const MAX_STAGED_REORG_BLOCKS: usize = 2_048;
 const MAX_STAGED_HEADERS: usize = 2_048;
 /// Refuse advertised height deltas larger than this without intermediate checkpoints.
 const MAX_HEADER_HEIGHT_DELTA: u64 = 2_048;
+
+#[derive(Clone)]
+struct CachedLocalChainIdentity {
+    fingerprint: storage::ChainStorageFingerprint,
+    genesis_hash: String,
+    best_height: u64,
+    best_hash: String,
+    cumulative_work: String,
+}
+
+static LOCAL_CHAIN_IDENTITY_CACHE: OnceLock<Mutex<BTreeMap<PathBuf, CachedLocalChainIdentity>>> =
+    OnceLock::new();
 const MINER_PRESENCE_TTL_SECONDS: u64 = 30;
 const MAX_CONCURRENT_SYNC_BRANCHES: usize = 4;
 const MAX_OUTBOUND_PEERS: usize = 8;
@@ -1601,23 +1613,51 @@ fn validate_header_chain(
 }
 
 fn local_hello(config: &NetworkConfig, data_dir: &Path) -> NodeResult<PeerHello> {
-    let blocks = storage::load_blocks(data_dir)?;
-    let tip = blocks
-        .last()
-        .ok_or_else(|| NodeError::ChainNotInitialized(storage::chain_file_path(data_dir)))?;
+    let identity = local_chain_identity(data_dir)?;
     let miner = read_local_miner_metrics(config, data_dir);
     Ok(PeerHello {
         protocol_version: P2P_PROTOCOL_VERSION,
         network_id: config.network_id.clone(),
         chain_magic_hex: config.chain_magic_hex.clone(),
-        genesis_hash: hash_to_hex(&blocks[0].hash()?),
-        best_height: tip.header.height,
-        best_hash: hash_to_hex(&tip.hash()?),
-        cumulative_work: cumulative_work(&blocks)?.to_string(),
+        genesis_hash: identity.genesis_hash,
+        best_height: identity.best_height,
+        best_hash: identity.best_hash,
+        cumulative_work: identity.cumulative_work,
         validating: true,
         mining: miner.is_some(),
         hashrate_hs: miner.map_or(0, |metrics| miner_hashrate_hs(&metrics)),
     })
+}
+
+fn local_chain_identity(data_dir: &Path) -> NodeResult<CachedLocalChainIdentity> {
+    let fingerprint = storage::chain_storage_fingerprint(data_dir);
+    let cache = LOCAL_CHAIN_IDENTITY_CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    if let Some(cached) = cache
+        .lock()
+        .map_err(|_| NodeError::P2p("local chain identity cache lock poisoned".to_owned()))?
+        .get(data_dir)
+        .filter(|cached| cached.fingerprint == fingerprint)
+        .cloned()
+    {
+        return Ok(cached);
+    }
+
+    let blocks = storage::load_blocks(data_dir)?;
+    let tip = blocks
+        .last()
+        .ok_or_else(|| NodeError::ChainNotInitialized(storage::chain_file_path(data_dir)))?;
+    let identity = CachedLocalChainIdentity {
+        fingerprint,
+        genesis_hash: hash_to_hex(&blocks[0].hash()?),
+        best_height: tip.header.height,
+        best_hash: hash_to_hex(&tip.hash()?),
+        cumulative_work: cumulative_work(&blocks)?.to_string(),
+    };
+    cache
+        .lock()
+        .map_err(|_| NodeError::P2p("local chain identity cache lock poisoned".to_owned()))?
+        .insert(data_dir.to_path_buf(), identity.clone());
+    Ok(identity)
 }
 
 fn validate_peer_hello(
@@ -1649,13 +1689,7 @@ fn validate_peer_hello(
 }
 
 fn local_genesis_hash(data_dir: &Path) -> NodeResult<String> {
-    let blocks = storage::load_blocks(data_dir)?;
-    match blocks.first() {
-        Some(block) => Ok(hash_to_hex(&block.hash()?)),
-        None => Err(NodeError::ChainNotInitialized(storage::chain_file_path(
-            data_dir,
-        ))),
-    }
+    Ok(local_chain_identity(data_dir)?.genesis_hash)
 }
 
 fn local_miner_presence(

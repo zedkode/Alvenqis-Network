@@ -4,7 +4,7 @@ use crate::protocol::Network;
 pub const DEFAULT_MAINNET_CANDIDATE_RPC: &str = "https://rpcnode.dohotstudio.com";
 
 /// Local-only mining RPC default. Public VPS mining HTTP is intentionally retired.
-pub const DEFAULT_MAINNET_CANDIDATE_MINING_RPC: &str = "http://127.0.0.1:10787";
+pub const DEFAULT_MAINNET_CANDIDATE_MINING_RPC: &str = "https://rpcnode.dohotstudio.com";
 
 /// Default local Mainnet Candidate RPC base URL (no trailing slash).
 pub const DEFAULT_LOCAL_MAINNET_CANDIDATE_RPC: &str = "http://127.0.0.1:10787";

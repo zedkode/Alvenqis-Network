@@ -17,12 +17,12 @@ export function predictFromMessage(raw: string): PredictedIssue {
   if (msg.includes("mining template") || msg.includes("mining disabled") || msg.includes("/mining/template")) {
     return {
       code: "MINING_PATH_DISABLED",
-      title: "Public mining path unavailable",
+      title: "Solo mining endpoint unavailable",
       severity: "warning",
       summary:
-        "The public RPC profile keeps mining disabled. Solo work needs local RPC or VPS ENABLE_MINING_RPC / private mining-rpc.",
+        "The configured RPC did not return a valid Alvenqis solo-mining template.",
       actions: [
-        "Use Miner mode Solo with a private mining RPC (loopback or enabled VPS mining profile).",
+        "Set Mining RPC URL to https://rpcnode.dohotstudio.com and retry.",
         "Or switch to Pool / Stratum when those endpoints are intentionally enabled.",
         "Run public smoke scripts: smoke-public-candidate / smoke-private-mining."
       ]
