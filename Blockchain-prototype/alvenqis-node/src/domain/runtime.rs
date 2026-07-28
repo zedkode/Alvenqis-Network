@@ -7,8 +7,8 @@ use crate::domain::genesis::{
 };
 use crate::error::{NodeError, NodeResult};
 use crate::mempool::{
-    clear_mempool, current_unix_seconds, default_network_root,
-    load_pending_transactions_for_chain, mempool_runtime_fingerprint,
+    clear_mempool, current_unix_seconds, default_network_root, load_pending_transactions_for_chain,
+    mempool_runtime_fingerprint,
 };
 use crate::p2p::{load_p2p_status, run_p2p_service};
 use crate::storage;

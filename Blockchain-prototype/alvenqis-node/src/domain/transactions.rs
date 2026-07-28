@@ -1,6 +1,4 @@
-use crate::domain::chain::{
-    load_validated_chain, persist_validated_chain_state, prototype_mode,
-};
+use crate::domain::chain::{load_validated_chain, persist_validated_chain_state, prototype_mode};
 use crate::error::{NodeError, NodeResult};
 use crate::mempool::{
     current_unix_seconds, load_pending_transactions_for_chain, lowest_fee_sender_package,
@@ -261,8 +259,7 @@ pub fn mempool_status(data_dir: &Path, mempool_dir: &Path) -> NodeResult<Mempool
     let chain = load_chain_only(data_dir)?;
     let (valid_records, anticipated_base_fee) =
         crate::mempool::with_mempool_lock(mempool_dir, || {
-            let pending_records =
-                load_pending_transactions_for_chain(data_dir, mempool_dir)?;
+            let pending_records = load_pending_transactions_for_chain(data_dir, mempool_dir)?;
             let (valid_records, _invalid_hashes, _state) =
                 sanitize_pending_transactions(&chain, pending_records)?;
             crate::mempool::write_pending_transactions_for_chain_in_lock(

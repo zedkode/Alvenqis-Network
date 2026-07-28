@@ -5,9 +5,7 @@ use crate::domain::chain::{
 };
 use crate::domain::transactions::mempool_status;
 use crate::error::{NodeError, NodeResult};
-use crate::mempool::{
-    current_unix_seconds, load_pending_transactions_for_chain, tx_hash_string,
-};
+use crate::mempool::{current_unix_seconds, load_pending_transactions_for_chain, tx_hash_string};
 use crate::storage::{self, BlockStore, SqliteBlockStore};
 use alvenqis_core::{
     block_reward, child_block_with_consensus_difficulty, hash_to_hex, median_time_past,
@@ -215,13 +213,14 @@ pub fn submit_mined_block(
     let config = NetworkConfig::load_from_path(config_path)?;
     ensure_network_storage_path(config.network, data_dir)?;
     let store = SqliteBlockStore::new(data_dir);
-    let (canonical_blocks, validated_chain) = store.append_validated(candidate, |blocks, candidate| {
-        let mut chain = build_validated_chain(config_path, &config, blocks)?;
-        chain.append_block(candidate.clone())?;
-        let mut canonical_blocks = blocks.to_vec();
-        canonical_blocks.push(candidate.clone());
-        Ok((canonical_blocks, chain))
-    })?;
+    let (canonical_blocks, validated_chain) =
+        store.append_validated(candidate, |blocks, candidate| {
+            let mut chain = build_validated_chain(config_path, &config, blocks)?;
+            chain.append_block(candidate.clone())?;
+            let mut canonical_blocks = blocks.to_vec();
+            canonical_blocks.push(candidate.clone());
+            Ok((canonical_blocks, chain))
+        })?;
     persist_validated_chain_state(data_dir, &canonical_blocks, &validated_chain)?;
 
     let accepted_tx_hashes: Vec<String> = candidate
@@ -233,8 +232,7 @@ pub fn submit_mined_block(
     let accepted: std::collections::BTreeSet<&str> =
         accepted_tx_hashes.iter().map(String::as_str).collect();
     let cleanup = crate::mempool::with_mempool_lock(mempool_dir, || {
-        let records =
-            load_pending_transactions_for_chain(data_dir, mempool_dir)?;
+        let records = load_pending_transactions_for_chain(data_dir, mempool_dir)?;
         let remaining: Vec<_> = records
             .into_iter()
             .filter(|record| !accepted.contains(record.tx_hash.as_str()))

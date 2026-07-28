@@ -60,10 +60,10 @@ pub use peer_reputation::{
 };
 #[cfg(feature = "storage-rocksdb")]
 pub use state_store::{
-    backup_state_database, load_persisted_chain_state, load_persisted_mempool,
-    persist_chain_state, replace_persisted_mempool, restore_latest_state_database,
-    state_database_path, verify_state_database, PersistedChainState, RocksBackupInfo,
-    RocksStateStatus, STATE_DATABASE_DIR_NAME, STATE_DATABASE_LOCK_FILE_NAME,
+    backup_state_database, load_persisted_chain_state, load_persisted_mempool, persist_chain_state,
+    replace_persisted_mempool, restore_latest_state_database, state_database_path,
+    verify_state_database, PersistedChainState, RocksBackupInfo, RocksStateStatus,
+    STATE_DATABASE_DIR_NAME, STATE_DATABASE_LOCK_FILE_NAME,
 };
 pub use storage::{
     append_block, append_block_unchecked, backup_chain_database, chain_database_path,
