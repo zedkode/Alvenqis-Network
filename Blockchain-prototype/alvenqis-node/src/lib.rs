@@ -1,6 +1,5 @@
 pub mod config;
 pub mod dev_helpers;
-pub mod devnet;
 pub mod domain;
 pub mod error;
 pub mod mempool;
@@ -13,20 +12,31 @@ pub use dev_helpers::{
     default_miner_address, format_verified_transaction, generate_dev_address, sign_dev_transaction,
     verify_dev_transaction, GeneratedDevAddress,
 };
-pub use devnet::{
-    adopt_candidate_chain, approve_genesis, balance, create_block_template, default_config_path,
-    default_data_dir, default_runtime_dir, export_genesis_block, format_status,
-    genesis_approval_status, genesis_hash_hex_from_config, genesis_review_manifest,
-    import_genesis_block, init_devnet, load_genesis_config, mempool_status, mine_block,
-    mine_dev_block, mine_dev_blocks, mine_pending_block, node_status, peers, print_chain,
-    reset_devnet, runtime_dir_for_data_dir, send_dev_tx, shutdown, start_node, state, status,
-    submit_mined_block, submit_transaction, validate_chain, write_genesis_review_manifest,
-    BalanceSummary, BlockTemplate, ChainReorgSummary, ChainSummary, GenesisApprovalRecord,
-    GenesisApprovalStatus, GenesisConfig, GenesisReviewManifest, MempoolStatusSummary,
-    MinePendingBlockSummary, NodeRuntimeStatus, PeersSummary, ResetSummary, SendTransactionSummary,
-    StateSummary, StatusReport, SubmitTransactionSummary, SubmittedMinedBlock, DEFAULT_CONFIG_PATH,
-    DEFAULT_DATA_DIR, DEFAULT_MAINNET_CANDIDATE_CONFIG_PATH, GENESIS_APPROVAL_STANDARD_ID,
-    GENESIS_REVIEW_STANDARD_ID, MAX_BLOCK_TEMPLATE_TRANSACTIONS,
+pub use domain::chain::{
+    adopt_candidate_chain, balance, format_status, print_chain, state, status, validate_chain,
+    BalanceSummary, ChainReorgSummary, ChainSummary, StateSummary, StatusReport,
+};
+pub use domain::genesis::{
+    approve_genesis, default_config_path, export_genesis_block, genesis_approval_status,
+    genesis_hash_hex_from_config, genesis_review_manifest, import_genesis_block, init_devnet,
+    load_genesis_config, write_genesis_review_manifest, GenesisApprovalRecord,
+    GenesisApprovalStatus, GenesisConfig, GenesisReviewManifest, DEFAULT_CONFIG_PATH,
+    DEFAULT_MAINNET_CANDIDATE_CONFIG_PATH, GENESIS_APPROVAL_STANDARD_ID,
+    GENESIS_REVIEW_STANDARD_ID,
+};
+pub use domain::mining::{
+    create_block_template, mine_block, mine_dev_block, mine_dev_blocks, mine_pending_block,
+    submit_mined_block, BlockTemplate, MinePendingBlockSummary, SubmittedMinedBlock,
+    MAX_BLOCK_TEMPLATE_TRANSACTIONS,
+};
+pub use domain::runtime::{
+    default_data_dir, default_runtime_dir, node_status, peers, reset_devnet,
+    runtime_dir_for_data_dir, shutdown, start_node, NodeRuntimeStatus, PeersSummary, ResetSummary,
+    DEFAULT_DATA_DIR,
+};
+pub use domain::transactions::{
+    mempool_status, send_dev_tx, submit_transaction, MempoolStatusSummary, SendTransactionSummary,
+    SubmitTransactionSummary,
 };
 pub use error::{NodeError, NodeResult};
 pub use mempool::{

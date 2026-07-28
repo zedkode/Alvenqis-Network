@@ -1,7 +1,9 @@
 use crate::config::NetworkConfig;
+use crate::domain::chain::adopt_candidate_chain;
 #[cfg(test)]
-use crate::devnet::genesis_hash_hex_from_config;
-use crate::devnet::{adopt_candidate_chain, submit_mined_block, submit_transaction};
+use crate::domain::genesis::genesis_hash_hex_from_config;
+use crate::domain::mining::submit_mined_block;
+use crate::domain::transactions::submit_transaction;
 use crate::error::{NodeError, NodeResult};
 use crate::peer_reputation::{
     acknowledge_admin_requests, enqueue_admin_request, load_admin_requests, PeerAdminAction,
@@ -2098,7 +2100,8 @@ fn unix_seconds() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::devnet::{init_devnet, mine_dev_blocks, mine_pending_block};
+    use crate::domain::genesis::init_devnet;
+    use crate::domain::mining::{mine_dev_blocks, mine_pending_block};
     use alvenqis_core::{Address, Amount, Network, PrivateKey, INITIAL_BASE_FEE_ATOMIC};
     use std::net::TcpListener;
     use std::sync::atomic::AtomicU16;
