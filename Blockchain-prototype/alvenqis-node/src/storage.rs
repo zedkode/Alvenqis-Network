@@ -1,13 +1,14 @@
 use crate::error::{NodeError, NodeResult};
-use alvenqis_core::{hash_to_hex, Block};
+use alvenqis_core::{cumulative_work, hash_to_hex, Block};
 use fs2::FileExt;
 use rusqlite::{
     params, Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, MAIN_DB,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub const CHAIN_DATABASE_FILE_NAME: &str = "chain.sqlite3";
@@ -21,6 +22,9 @@ const STORAGE_APPLICATION_ID: i64 = 0x5649_5245; // "ALVE"
 const MINIMUM_SAFE_SQLITE_VERSION: i32 = 3_051_003;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
+static VALIDATED_BLOCK_HASH_CACHE: OnceLock<Mutex<BTreeMap<PathBuf, BTreeMap<i64, Vec<u8>>>>> =
+    OnceLock::new();
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FileFingerprint {
     pub len: u64,
@@ -31,6 +35,14 @@ pub struct FileFingerprint {
 pub struct ChainStorageFingerprint {
     pub database: FileFingerprint,
     pub wal: FileFingerprint,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredChainIdentity {
+    pub genesis_hash: String,
+    pub best_height: u64,
+    pub best_hash: String,
+    pub cumulative_work: String,
 }
 
 pub trait BlockStore {
@@ -355,6 +367,16 @@ fn load_blocks_from_connection(
         ))
     })?;
 
+    let validation_cache = VALIDATED_BLOCK_HASH_CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let cached_hashes = validation_cache
+        .lock()
+        .map_err(|_| NodeError::Input("block validation cache lock poisoned".to_owned()))?
+        .get(database_path)
+        .cloned()
+        .unwrap_or_default();
+    let mut validated_hashes = BTreeMap::new();
+    let mut previous_stored_hash: Option<Vec<u8>> = None;
+    let mut expected_height = 0_i64;
     let mut blocks = Vec::new();
     for row in rows {
         let (height, stored_hash, stored_previous, stored_network, block_json) = row?;
@@ -365,8 +387,13 @@ fn load_blocks_from_connection(
             )
         })?;
         let block_height = height_to_i64(block.header.height)?;
-        if block_height != height
-            || stored_hash.as_slice() != block.hash()?.as_bytes()
+        let hash_was_validated = cached_hashes
+            .get(&height)
+            .is_some_and(|cached| cached == &stored_hash);
+        let hash_matches = hash_was_validated || stored_hash.as_slice() == block.hash()?.as_bytes();
+        if height != expected_height
+            || block_height != height
+            || !hash_matches
             || stored_previous.as_slice() != block.header.previous_hash.as_bytes()
             || stored_network != block.header.network_id
         {
@@ -375,13 +402,29 @@ fn load_blocks_from_connection(
                 format!("stored columns do not match serialized block at height {height}"),
             ));
         }
+        if previous_stored_hash
+            .as_deref()
+            .is_some_and(|previous| previous != stored_previous.as_slice())
+        {
+            return Err(NodeError::InvalidChainFile {
+                path: database_path.to_path_buf(),
+                line: height as usize + 1,
+                message: format!("broken previous_hash link at height {height}"),
+            });
+        }
+        expected_height = expected_height.saturating_add(1);
+        previous_stored_hash = Some(stored_hash.clone());
+        validated_hashes.insert(height, stored_hash);
         blocks.push(block);
     }
 
     if blocks.is_empty() && !allow_empty {
         return Err(NodeError::ChainNotInitialized(database_path.to_path_buf()));
     }
-    verify_chain_structure(database_path, &blocks)?;
+    validation_cache
+        .lock()
+        .map_err(|_| NodeError::Input("block validation cache lock poisoned".to_owned()))?
+        .insert(database_path.to_path_buf(), validated_hashes);
     Ok(blocks)
 }
 
@@ -576,6 +619,75 @@ pub fn load_blocks(data_dir: &Path) -> NodeResult<Vec<Block>> {
     SqliteBlockStore::new(data_dir).load_blocks()
 }
 
+pub fn load_stored_chain_identity(data_dir: &Path) -> NodeResult<StoredChainIdentity> {
+    let store = SqliteBlockStore::new(data_dir);
+    let connection = store.open_read_connection()?;
+    let database_path = chain_database_path(data_dir);
+    let mut statement = connection.prepare(
+        "SELECT height, hash, previous_hash, network_id, block_json
+         FROM canonical_blocks ORDER BY height ASC",
+    )?;
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, Vec<u8>>(1)?,
+            row.get::<_, Vec<u8>>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, Vec<u8>>(4)?,
+        ))
+    })?;
+
+    let mut blocks = Vec::new();
+    let mut genesis_hash = None;
+    let mut best_hash = None;
+    let mut previous_stored_hash: Option<Vec<u8>> = None;
+    for row in rows {
+        let (height, stored_hash, stored_previous, stored_network, block_json) = row?;
+        if height < 0 || stored_hash.len() != 32 || stored_previous.len() != 32 {
+            return Err(invalid_database(
+                &database_path,
+                format!("invalid stored chain identity at height {height}"),
+            ));
+        }
+        let block: Block = serde_json::from_slice(&block_json).map_err(|error| {
+            invalid_database(
+                &database_path,
+                format!("cannot decode block at height {height}: {error}"),
+            )
+        })?;
+        if block.header.height != height as u64
+            || block.header.previous_hash.as_bytes() != stored_previous.as_slice()
+            || block.header.network_id != stored_network
+            || previous_stored_hash
+                .as_deref()
+                .is_some_and(|previous| previous != stored_previous.as_slice())
+        {
+            return Err(invalid_database(
+                &database_path,
+                format!("stored chain identity mismatch at height {height}"),
+            ));
+        }
+        let stored_hash_hex = stored_hash
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        genesis_hash.get_or_insert_with(|| stored_hash_hex.clone());
+        best_hash = Some(stored_hash_hex);
+        previous_stored_hash = Some(stored_hash);
+        blocks.push(block);
+    }
+
+    let tip = blocks
+        .last()
+        .ok_or_else(|| NodeError::ChainNotInitialized(database_path.clone()))?;
+    Ok(StoredChainIdentity {
+        genesis_hash: genesis_hash.expect("non-empty chain has genesis hash"),
+        best_height: tip.header.height,
+        best_hash: best_hash.expect("non-empty chain has tip hash"),
+        cumulative_work: cumulative_work(&blocks)?.to_string(),
+    })
+}
+
 pub fn backup_chain_database(data_dir: &Path, destination: &Path) -> NodeResult<()> {
     let store = SqliteBlockStore::new(data_dir);
     let source = store.open_read_connection()?;
@@ -741,6 +853,20 @@ mod tests {
         assert_eq!(loaded.len(), 2);
         assert_eq!(loaded[0].header.height, 0);
         assert_eq!(loaded[1].header.height, 1);
+        let identity = load_stored_chain_identity(dir.path()).expect("stored identity");
+        assert_eq!(
+            identity.genesis_hash,
+            hash_to_hex(&loaded[0].hash().expect("hash"))
+        );
+        assert_eq!(identity.best_height, 1);
+        assert_eq!(
+            identity.best_hash,
+            hash_to_hex(&loaded[1].hash().expect("hash"))
+        );
+        assert_eq!(
+            identity.cumulative_work,
+            cumulative_work(&loaded).expect("work").to_string()
+        );
         verify_database_integrity(dir.path()).expect("integrity");
     }
 

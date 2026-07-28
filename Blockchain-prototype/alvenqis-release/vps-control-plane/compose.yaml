@@ -74,7 +74,7 @@ services:
       retries: 12
       start_period: 90s
     mem_limit: ${RPC_MEMORY_LIMIT:-1536M}
-    cpus: ${RPC_CPU_LIMIT:-1.25}
+    cpus: ${RPC_CPU_LIMIT:-2.00}
     pids_limit: 384
     ulimits:
       nofile: {soft: 32768, hard: 32768}
@@ -482,7 +482,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 8
-    mem_limit: ${LOKI_MEMORY_LIMIT:-768M}
+    mem_limit: ${LOKI_MEMORY_LIMIT:-640M}
     cpus: ${LOKI_CPU_LIMIT:-0.40}
     pids_limit: 256
 

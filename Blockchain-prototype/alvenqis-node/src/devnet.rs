@@ -18,12 +18,13 @@ use alvenqis_core::{
     MAX_TRANSACTIONS_PER_BLOCK,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
@@ -38,6 +39,16 @@ const NODE_RUNTIME_FILE_NAME: &str = "runtime.json";
 const NODE_SHUTDOWN_FILE_NAME: &str = "shutdown.signal";
 const GENESIS_MARKER_FILE_NAME: &str = "genesis-info.json";
 const NODE_POLL_INTERVAL_SECONDS: u64 = 1;
+
+#[derive(Clone)]
+struct CachedValidatedChain {
+    fingerprint: storage::ChainStorageFingerprint,
+    blocks: Vec<Block>,
+    chain: Chain,
+}
+
+static VALIDATED_CHAIN_CACHE: OnceLock<Mutex<BTreeMap<PathBuf, CachedValidatedChain>>> =
+    OnceLock::new();
 pub const MAX_BLOCK_TEMPLATE_TRANSACTIONS: usize = 10_000;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -1462,12 +1473,49 @@ fn load_validated_chain(
 ) -> NodeResult<(NetworkConfig, Vec<Block>, Chain)> {
     let config = NetworkConfig::load_from_path(config_path)?;
     ensure_network_storage_path(config.network, data_dir)?;
+    let fingerprint = storage::chain_storage_fingerprint(data_dir);
+    let cache = VALIDATED_CHAIN_CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let previous = cache
+        .lock()
+        .map_err(|_| NodeError::Input("validated chain cache lock poisoned".to_owned()))?
+        .get(data_dir)
+        .cloned();
+    if let Some(cached) = previous
+        .as_ref()
+        .filter(|cached| cached.fingerprint == fingerprint)
+    {
+        return Ok((config, cached.blocks.clone(), cached.chain.clone()));
+    }
     // Do NOT call verified_mainnet_genesis_manifest / genesis_review_manifest here.
     // Those re-mine genesis at candidate difficulty (~16) on every template load and
     // freeze /mining/template for minutes on CPU-only validators.
     // Approval is enforced via verify_existing_genesis inside build_validated_chain.
     let blocks = storage::load_blocks(data_dir)?;
-    let chain = build_validated_chain(config_path, &config, &blocks)?;
+    let chain = if let Some(cached) = previous {
+        if blocks.len() >= cached.blocks.len() && blocks[..cached.blocks.len()] == cached.blocks[..]
+        {
+            let mut chain = cached.chain;
+            for block in &blocks[cached.blocks.len()..] {
+                chain.append_block(block.clone())?;
+            }
+            chain
+        } else {
+            build_validated_chain(config_path, &config, &blocks)?
+        }
+    } else {
+        build_validated_chain(config_path, &config, &blocks)?
+    };
+    cache
+        .lock()
+        .map_err(|_| NodeError::Input("validated chain cache lock poisoned".to_owned()))?
+        .insert(
+            data_dir.to_path_buf(),
+            CachedValidatedChain {
+                fingerprint,
+                blocks: blocks.clone(),
+                chain: chain.clone(),
+            },
+        );
     Ok((config, blocks, chain))
 }
 

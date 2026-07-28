@@ -225,6 +225,8 @@ coverage/
 .cache/
 **/.cache/
 cache/
+!alvenqis-rpc-gateway/src/cache/
+!alvenqis-rpc-gateway/src/cache/**
 tmp/
 temp/
 *.tmp

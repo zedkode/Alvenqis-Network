@@ -1642,16 +1642,13 @@ fn local_chain_identity(data_dir: &Path) -> NodeResult<CachedLocalChainIdentity>
         return Ok(cached);
     }
 
-    let blocks = storage::load_blocks(data_dir)?;
-    let tip = blocks
-        .last()
-        .ok_or_else(|| NodeError::ChainNotInitialized(storage::chain_file_path(data_dir)))?;
+    let stored = storage::load_stored_chain_identity(data_dir)?;
     let identity = CachedLocalChainIdentity {
         fingerprint,
-        genesis_hash: hash_to_hex(&blocks[0].hash()?),
-        best_height: tip.header.height,
-        best_hash: hash_to_hex(&tip.hash()?),
-        cumulative_work: cumulative_work(&blocks)?.to_string(),
+        genesis_hash: stored.genesis_hash,
+        best_height: stored.best_height,
+        best_hash: stored.best_hash,
+        cumulative_work: stored.cumulative_work,
     };
     cache
         .lock()
