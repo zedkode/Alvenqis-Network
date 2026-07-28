@@ -1,6 +1,7 @@
 pub mod config;
 pub mod dev_helpers;
 pub mod devnet;
+pub mod domain;
 pub mod error;
 pub mod mempool;
 pub mod p2p;
