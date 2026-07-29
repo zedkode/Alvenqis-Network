@@ -11,6 +11,18 @@ use crate::error::{Result, SdkError};
 use crate::maturity::{pool_block_maturity, DEFAULT_BLOCK_MATURITY_CONFIRMATIONS};
 use std::time::{Duration, Instant};
 
+const RPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const RPC_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+const RPC_GET_ATTEMPTS: usize = 3;
+
+fn retry_delay(attempt: usize) -> Duration {
+    Duration::from_millis(250 * (attempt as u64 + 1))
+}
+
+fn retryable_status(status: reqwest::StatusCode) -> bool {
+    status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
+}
+
 /// Async JSON HTTP client for the Alvenqis RPC gateway + public pool APIs.
 #[derive(Clone, Debug)]
 pub struct RpcClient {
@@ -22,6 +34,8 @@ impl RpcClient {
     pub fn new(config: NetworkConfig) -> Result<Self> {
         let http = reqwest::Client::builder()
             .user_agent(concat!("alvenqis-sdk-rust/", env!("CARGO_PKG_VERSION")))
+            .connect_timeout(RPC_CONNECT_TIMEOUT)
+            .timeout(RPC_REQUEST_TIMEOUT)
             .build()
             .map_err(|error| SdkError::rpc(error.to_string()))?;
         Ok(Self { config, http })
@@ -257,13 +271,25 @@ impl RpcClient {
     }
 
     async fn get_url_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
-        let response = self
-            .http
-            .get(url)
-            .send()
-            .await
-            .map_err(|error| SdkError::rpc(format!("GET {url}: {error}")))?;
-        Self::decode_response(response, url).await
+        for attempt in 0..RPC_GET_ATTEMPTS {
+            let response = match self.http.get(url).send().await {
+                Ok(response) => response,
+                Err(error)
+                    if attempt + 1 < RPC_GET_ATTEMPTS
+                        && (error.is_connect() || error.is_timeout()) =>
+                {
+                    tokio::time::sleep(retry_delay(attempt)).await;
+                    continue;
+                }
+                Err(error) => return Err(SdkError::rpc(format!("GET {url}: {error}"))),
+            };
+            if attempt + 1 < RPC_GET_ATTEMPTS && retryable_status(response.status()) {
+                tokio::time::sleep(retry_delay(attempt)).await;
+                continue;
+            }
+            return Self::decode_response(response, url).await;
+        }
+        unreachable!("RPC GET retry loop always returns on its final attempt")
     }
 
     async fn decode_response<T: serde::de::DeserializeOwned>(
@@ -301,6 +327,8 @@ pub mod blocking {
         pub fn new(config: NetworkConfig) -> Result<Self> {
             let http = reqwest::blocking::Client::builder()
                 .user_agent(concat!("alvenqis-sdk-rust/", env!("CARGO_PKG_VERSION")))
+                .connect_timeout(RPC_CONNECT_TIMEOUT)
+                .timeout(RPC_REQUEST_TIMEOUT)
                 .build()
                 .map_err(|error| SdkError::rpc(error.to_string()))?;
             Ok(Self { config, http })
@@ -494,12 +522,25 @@ pub mod blocking {
         }
 
         fn get_url_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
-            let response = self
-                .http
-                .get(url)
-                .send()
-                .map_err(|error| SdkError::rpc(format!("GET {url}: {error}")))?;
-            Self::decode_response(response, url)
+            for attempt in 0..RPC_GET_ATTEMPTS {
+                let response = match self.http.get(url).send() {
+                    Ok(response) => response,
+                    Err(error)
+                        if attempt + 1 < RPC_GET_ATTEMPTS
+                            && (error.is_connect() || error.is_timeout()) =>
+                    {
+                        std::thread::sleep(retry_delay(attempt));
+                        continue;
+                    }
+                    Err(error) => return Err(SdkError::rpc(format!("GET {url}: {error}"))),
+                };
+                if attempt + 1 < RPC_GET_ATTEMPTS && retryable_status(response.status()) {
+                    std::thread::sleep(retry_delay(attempt));
+                    continue;
+                }
+                return Self::decode_response(response, url);
+            }
+            unreachable!("RPC GET retry loop always returns on its final attempt")
         }
 
         fn decode_response<T: serde::de::DeserializeOwned>(
@@ -519,5 +560,19 @@ pub mod blocking {
             }
             serde_json::from_str(&body).map_err(|error| SdkError::RpcDecode(error.to_string()))
         }
+    }
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::*;
+
+    #[test]
+    fn retries_only_transient_http_statuses() {
+        assert!(retryable_status(reqwest::StatusCode::TOO_MANY_REQUESTS));
+        assert!(retryable_status(reqwest::StatusCode::BAD_GATEWAY));
+        assert!(retryable_status(reqwest::StatusCode::SERVICE_UNAVAILABLE));
+        assert!(!retryable_status(reqwest::StatusCode::BAD_REQUEST));
+        assert!(!retryable_status(reqwest::StatusCode::GONE));
     }
 }

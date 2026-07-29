@@ -1,4 +1,4 @@
-- [Home](/)
+- [Home](README.md)
 - Technical
   - [Architecture](architecture/README.md)
   - [Protocol](protocol/README.md)
@@ -6,6 +6,8 @@
   - [Mining](mining/README.md)
 - Operations
   - [Security](security/README.md)
+  - [Audit Status](security/AUDIT_STATUS.md)
   - [Runbook](operator/LOCAL_RUNBOOK.md)
   - [Release Status](release/NETWORK_MATURITY.md)
+- [Whitepaper](whitepaper/README.md)
 - [GitHub](https://github.com/zedkode/Alvenqis-Network)

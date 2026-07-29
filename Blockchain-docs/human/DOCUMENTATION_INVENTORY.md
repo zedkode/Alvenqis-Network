@@ -14,8 +14,8 @@ excluded by policy.
 |---|---:|
 | Component reference | 19 |
 | Historical | 2 |
-| Public | 117 |
-| **Total** | **138** |
+| Public | 118 |
+| **Total** | **139** |
 
 ## Complete inventory
 
@@ -95,6 +95,7 @@ excluded by policy.
 | `Blockchain-docs/human/release/NETWORK_MATURITY.md` | Public | **Draft / Mainnet Candidate / Prototype — not a public live Mainnet** | Network Maturity and Release Readiness |
 | `Blockchain-docs/human/release/RELEASE_GATE.md` | Public | **Draft / Mainnet Candidate / Prototype** | Release Gate (G1) |
 | `Blockchain-docs/human/roadmap/README.md` | Public | Draft | Roadmap Docs |
+| `Blockchain-docs/human/security/AUDIT_STATUS.md` | Public | **Current internal verification record / no external audit** | Verification and Audit Status |
 | `Blockchain-docs/human/security/EXTERNAL_SECURITY_REVIEW_SCOPE.md` | Public | Draft audit package / not yet ready for external sign-off | External Security Review Scope |
 | `Blockchain-docs/human/security/KNOWN_LIMITATIONS.md` | Public | Open risk register / Mainnet Candidate / not an audit result | Known Limitations and Open Security Findings |
 | `Blockchain-docs/human/security/MINING_POOL_RISKS.md` | Public | Draft / Mainnet Candidate / Prototype | Mining Pool Security Risks |
@@ -119,7 +120,7 @@ excluded by policy.
 | `Blockchain-docs/human/tokenomics/02_FEES_DRAFT.md` | Public | Transfer fee model implemented / contract gas unresolved | Transfer Fees and Contract Gas |
 | `Blockchain-docs/human/tokenomics/03_PUBLIC_CLAIMS_RULES.md` | Public | Accepted public-communication policy | Public Claims Rules |
 | `Blockchain-docs/human/tokenomics/README.md` | Public | Current reference / Mainnet Candidate | Tokenomics Docs |
-| `Blockchain-docs/human/whitepaper/README.md` | Public | Draft | Whitepaper Docs |
+| `Blockchain-docs/human/whitepaper/README.md` | Public | **Draft / Mainnet Candidate / Experimental Prototype** | Alvenqis Network Whitepaper |
 | `Blockchain-docs/README.md` | Component reference | Current documentation boundary / mixed implementation maturity | Alvenqis Documentation |
 | `Blockchain-prototype/alvenqis-browser/README.md` | Public | Prototype / Mainnet Candidate / not store-ready | alvenqis-browser |
 | `Blockchain-prototype/alvenqis-core/README.md` | Public | Implemented / Mainnet Candidate / not public Mainnet | alvenqis-core |

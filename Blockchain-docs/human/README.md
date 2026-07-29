@@ -6,6 +6,9 @@ Status: Current documentation index / mixed maturity
 
 Start with:
 
+- `whitepaper/README.md` - candidate design overview and canonical source map;
+- `security/AUDIT_STATUS.md` - current verification evidence and claim boundary;
+
 - `DOCUMENTATION_POLICY.md` — precedence, maturity, history, and publication;
 - `DOCUMENTATION_INVENTORY.md` — generated publishable-document inventory;
 - `source-info/README.md` — canonical project source information;
@@ -20,3 +23,6 @@ imply public Mainnet readiness.
 
 Private execution trackers, workspace directives, and decision registers are not
 part of the public website or generated public inventory.
+
+The GitHub Pages publication target is
+`https://zedkode.github.io/Alvenqis-Network/`.

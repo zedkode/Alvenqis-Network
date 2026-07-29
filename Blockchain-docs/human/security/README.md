@@ -4,6 +4,9 @@ Threat models, review notes, audit preparation and secure development guidance.
 
 Status: Current Mainnet Candidate security index
 
+Start with [Verification and Audit Status](AUDIT_STATUS.md) for the current
+evidence boundary and the explicit statement that no external audit is claimed.
+
 Current network-separation safeguards:
 - Devnet, Testnet and Mainnet Candidate use separate network IDs and chain magic values.
 - Devnet, Testnet and Mainnet Candidate use separate default data roots: `.alvenqis-dev/`, `.alvenqis-testnet/` and `.alvenqis-mainnet/`.
@@ -21,10 +24,13 @@ Remaining boundaries:
 - P2P transport, persistent peer reputation, Noise/Yamux, and genesis/network
   validation exist, but discovery diversity, source-network admission,
   multi-host soak, and abuse evidence are incomplete;
-- public RPC capability profiles remain inconsistent with the accepted
-  no-public-mining policy and are not an authenticated production control plane.
+- public RPC and local/private mining capabilities are separated in the current
+  code; deployed endpoint parity and independent availability evidence remain
+  required.
 
 Audit and risk entry points:
+
+- `AUDIT_STATUS.md` - current verification evidence and claim boundary;
 
 - `KNOWN_LIMITATIONS.md` — open findings and required closure evidence;
 - `THREAT_MODEL.md` — assets, trust boundaries, actors, and priority scenarios;

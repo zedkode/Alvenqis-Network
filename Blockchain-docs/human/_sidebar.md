@@ -57,6 +57,7 @@
 
 - **Security**
   - [Security Index](security/README.md)
+  - [Verification and Audit Status](security/AUDIT_STATUS.md)
   - [Security Gate](security/SECURITY_GATE.md)
   - [Secret Handling](security/SECRET_HANDLING.md)
   - [Production Risks](security/PRODUCTION_RISKS.md)
