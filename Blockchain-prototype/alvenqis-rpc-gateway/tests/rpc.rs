@@ -151,10 +151,10 @@ async fn public_read_profile_hides_mutating_and_operator_routes() {
         RpcAccessMode::PublicRead,
     ));
 
-    for (method, uri) in [
-        ("POST", "/transactions"),
-        ("GET", "/mining/template"),
-        ("POST", "/mining/submit"),
+    for (method, uri, expected) in [
+        ("POST", "/transactions", StatusCode::NOT_FOUND),
+        ("GET", "/mining/template", StatusCode::GONE),
+        ("POST", "/mining/submit", StatusCode::GONE),
     ] {
         let response = app
             .clone()
@@ -168,7 +168,7 @@ async fn public_read_profile_hides_mutating_and_operator_routes() {
             )
             .await
             .expect("response");
-        assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+        assert_eq!(response.status(), expected, "{method} {uri}");
     }
 }
 
@@ -194,7 +194,7 @@ async fn public_read_profile_exposes_p2p_status() {
 }
 
 #[tokio::test]
-async fn public_submit_profile_hides_mining_by_default() {
+async fn public_submit_profile_returns_gone_for_mining() {
     let (temp_dir, _config_path, data_dir) = setup_paths();
     let index_dir = temp_dir.path().join(".alvenqis-dev/indexer");
     let app = router(rpc_state_with_access_mode(
@@ -203,7 +203,6 @@ async fn public_submit_profile_hides_mining_by_default() {
         RpcAccessMode::PublicSubmit,
     ));
 
-    // A-H01: public-submit no longer registers mining unless expose_mining_endpoints=true.
     let response = app
         .oneshot(
             Request::builder()
@@ -213,28 +212,19 @@ async fn public_submit_profile_hides_mining_by_default() {
         )
         .await
         .expect("response");
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::GONE);
 }
 
-#[tokio::test]
-async fn public_submit_can_opt_in_to_loopback_mining() {
+#[test]
+fn public_submit_cannot_opt_in_to_mining() {
     let (temp_dir, _config_path, data_dir) = setup_paths();
     let index_dir = temp_dir.path().join(".alvenqis-dev/indexer");
     let mut state = rpc_state_with_access_mode(&data_dir, &index_dir, RpcAccessMode::PublicSubmit);
     state.config.expose_mining_endpoints = Some(true);
-    let app = router(state);
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/mining/template")
-                .body(Body::empty())
-                .expect("request"),
-        )
-        .await
-        .expect("response");
-    // Route exists; missing miner_address query → 400 from extractor.
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let error = state.config.validate().expect_err("public mining must fail");
+    assert!(error
+        .to_string()
+        .contains("public RPC profiles cannot expose mining endpoints"));
 }
 
 #[tokio::test]

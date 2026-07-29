@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::settings::{self, get_mining_rpc_url, get_rpc_url};
+use crate::settings::{self, get_mining_rpc_url, get_rpc_url, is_loopback_rpc_url};
 use crate::workspace::{find_workspace_root, local_root, resource_root};
 use serde::Deserialize;
 use std::fs;
@@ -323,8 +323,13 @@ async fn start_remote_miner(
             ));
         }
     } else {
+        if !is_loopback_rpc_url(&rpc_url) {
+            return Err(AppError::msg(
+                "Solo mining requires a local loopback RPC at 127.0.0.1, ::1, or localhost. Start the local node/RPC sidecars or use verified Stratum TLS.",
+            ));
+        }
         // Solo: prefer a real mining template. Soft-fail /health so transient
-        // DNS/TLS blips do not hard-block miner start when the template still works.
+        // local startup races do not hard-block miner start when the template works.
         let health_url = format!("{}/health", rpc_url.trim_end_matches('/'));
         match light.get(&health_url).send().await {
             Ok(health) if health.status().is_success() => {}
@@ -347,9 +352,9 @@ async fn start_remote_miner(
         );
         let response = heavy.get(&probe).send().await.map_err(|e| {
             AppError::msg(format!(
-                "VPS solo mining template failed at {rpc_url}: {e}. \
-                 Check Settings > Mining > Mining RPC URL (use https://rpcnode.dohotstudio.com). \
-                 Verify network connectivity, or switch Miner mode to Pool / Stratum TLS."
+                "Local solo mining template failed at {rpc_url}: {e}. \
+                 Start the local node and RPC sidecars, verify Settings > Mining uses loopback, \
+                 or switch Miner mode to Pool / Stratum TLS."
             ))
         })?;
         let template_status = response.status();
@@ -362,9 +367,8 @@ async fn start_remote_miner(
                 body_trim.to_string()
             };
             let code = template_status.as_u16();
-            let hint = if code == 404 {
-                " This server does not publish the Alvenqis solo-mining endpoints. \
-                 Use https://rpcnode.dohotstudio.com or Pool / Stratum TLS."
+            let hint = if code == 404 || code == 410 {
+                " This RPC does not serve solo-mining endpoints. Start the local RPC in local mode or use Pool / Stratum TLS."
             } else if code == 401 || code == 403 {
                 " Mining write auth is required or this wallet is blocked."
             } else if code == 429 {
@@ -373,7 +377,7 @@ async fn start_remote_miner(
                 ""
             };
             return Err(AppError::msg(format!(
-                "VPS mining template rejected (HTTP {template_status}) at {probe}.{hint} Detail: {body_short} \
+                "Local mining template rejected (HTTP {template_status}) at {probe}.{hint} Detail: {body_short} \
                  Or switch Miner mode to Pool / Stratum TLS."
             )));
         }
@@ -382,8 +386,8 @@ async fn start_remote_miner(
             if text.contains("veiron") || text.contains("vireon") || text.contains("\"vire") {
                 return Err(AppError::msg(format!(
                     "RPC at {rpc_url} still serves a legacy/foreign identity (veiron/vireon), not Alvenqis \
-                     (alvenqis-mainnet-candidate / alvenqis-mining-v1). Redeploy the Alvenqis control-plane \
-                     gateway with mining enabled, or use Alvenqis Pool / Stratum TLS."
+                     (alvenqis-mainnet-candidate / alvenqis-mining-v1). Restart the local node/RPC \
+                     sidecars, or use Alvenqis Pool / Stratum TLS."
                 )));
             }
             if !text.contains("alvenqis-mining-v1") && !text.contains("alvenqis-mainnet-candidate")

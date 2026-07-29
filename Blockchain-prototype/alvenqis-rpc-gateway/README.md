@@ -10,21 +10,24 @@ consensus.
 
 - `local`: public reads, signed submission, detailed P2P status, and mining;
 - `public-read`: read routes only;
-- `public-submit`: reads plus `POST /transactions`; mining requires explicit
-  `expose_mining_endpoints = true`.
+- `public-submit`: reads plus `POST /transactions`; mining returns HTTP 410 and
+  cannot be enabled by configuration;
+- `private-mining`: mining routes for an unpublished container network used by
+  the optional pool role.
 
-The reference VPS binds the Rust service to `127.0.0.1`, enables public-submit
-plus solo mining, and exposes it through HTTPS with request/body/rate limits.
-This deliberate public mining surface is candidate/prototype behavior and still
-requires abuse testing before G4. Detailed `/p2p/status` remains local.
+The reference VPS binds the Rust service only inside Docker. Its normal RPC
+roles use `public-submit` with mining disabled. Pool roles render
+`private-mining`; the public gateway returns HTTP 410 for every `/mining/*`
+request. Solo mining uses local loopback RPC, while remote miners use verified
+Stratum TLS. Detailed `/p2p/status` exposure remains a separate open finding.
 
 Mining templates use `alvenqis-mining-v1`, unpredictable in-memory IDs, immutable
 candidate fields, and 90-second expiry. Submissions carry nonce, final hash, and
 FiroPoW mix hash; node/core recompute and fully validate before persistence.
 
-See `../docs/api/00_RPC_GATEWAY_OVERVIEW.md` and
-`../docs/api/01_RPC_ENDPOINTS_DRAFT.md` for profiles, the current route list,
-and safety boundaries.
+See `../../Blockchain-docs/human/api/00_RPC_GATEWAY_OVERVIEW.md` and
+`../../Blockchain-docs/human/api/01_RPC_ENDPOINTS_DRAFT.md` for profiles, the
+current route list, and safety boundaries.
 
 Run locally:
 

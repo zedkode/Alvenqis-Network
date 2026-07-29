@@ -33,7 +33,7 @@ not an availability or trust dependency for an independent operator.
 | Label stays **Mainnet Candidate** | Not live mainnet |
 | Upgrades are **manual only** | `tauri build` on a laptop does **not** update the VPS |
 | Host has no CUDA miner in the standard stack | Mining is client-side (desktop) or uses an explicitly enabled pool role |
-| Public-mining policy and current gateway smoke disagree | Do not treat the public mining surface as release-ready until the blocker in `../security/KNOWN_LIMITATIONS.md` is closed |
+| Public `/mining/*` is retired | The public smoke requires HTTP 410; solo mining uses local loopback RPC |
 
 ---
 
@@ -67,14 +67,12 @@ bash Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/smoke-publi
 # powershell -File Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/smoke-public-candidate.ps1
 ```
 
-The health and status assertions remain useful. The mining assertion is not
-closure evidence while the accepted HTTP 410 policy, gateway template, RPC
-profile, and current smoke script disagree:
+The smoke verifies the reviewed public capability contract:
 
 - `/health` → 200, mode contains `mining disabled` on public profile
 - `/status` → initialized, tip matches pinned genesis while height is 0
   (`0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5`, `index_in_sync=true`)
-- `/mining/template` → unresolved repository blocker; accepted policy requires HTTP 410
+- `/mining/template` → HTTP 410
 
 ---
 
@@ -151,7 +149,7 @@ COMPOSE_PARALLEL_LIMIT=1 ./scripts/compose.sh up -d --build
 | Inventory recorded | Session log: VERSION, commit, height, tip |
 | Backup succeeded | Path under `state/backups/` + SHA256SUMS |
 | Restore drill once | Health green + tip match after restore |
-| Public smoke green | Health/status assertions plus the mining-policy blocker closed |
+| Public smoke green | Health/status assertions plus HTTP 410 for public mining |
 | Memory updated | `Blockchain-docs/internal/memory/*` |
 
 Task 1 does **not** require mining height > 0 (that is Task 2 —

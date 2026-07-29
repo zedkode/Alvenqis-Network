@@ -10,10 +10,9 @@ indexer_data_path = "/var/lib/alvenqis/.alvenqis-mainnet/indexer"
 mempool_data_path = "/var/lib/alvenqis/.alvenqis-mainnet/mempool"
 public_rpc_allowed = false
 access_mode = "public-submit"
-# Required for solo miners (desktop/CLI) and the local pool upstream.
-# Public HTTPS never exposes mining routes; the optional pool uses a separate private RPC.
-# Without this flag, public-submit no longer registers mining routes (gateway default).
-expose_mining_endpoints = true
+# Public submit/read profile. Solo mining uses local loopback RPC; the pool role
+# renders private-mining=true only on the unpublished Docker network.
+expose_mining_endpoints = false
 max_mempool_transactions = 4096
 max_request_body_bytes = 65536
 cors_allowed_origin = "__PUBLIC_ORIGIN__"

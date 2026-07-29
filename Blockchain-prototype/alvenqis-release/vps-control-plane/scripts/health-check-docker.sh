@@ -125,14 +125,12 @@ if command -v ss >/dev/null 2>&1; then
 fi
 
 if compose_has_service gateway; then
-  public_template="$("${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS --max-time 45 \
+  public_mining_code="$("${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" exec -T alvenqis-rpc \
+    curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
     -H "Host: ${PUBLIC_RPC_HOST:-${RPC_HOST:-rpc.example.invalid}}" \
-    "http://gateway:8080/mining/template?miner_address=${POOL_ADDRESS}")" || {
-    echo "Public solo mining template is unavailable or invalid." >&2
-    exit 1
-  }
-  python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("template_id") and d.get("network_id") == "alvenqis-mainnet-candidate"' <<<"$public_template" || {
-    echo "Public solo mining template is unavailable or invalid." >&2
+    "http://gateway:8080/mining/template")"
+  [[ "$public_mining_code" == 410 ]] || {
+    echo "Public mining boundary returned HTTP $public_mining_code instead of 410." >&2
     exit 1
   }
   "${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" exec -T alvenqis-rpc curl -fsS -H "Host: ${WEBSITE_HOST}" http://gateway:8080/healthz >/dev/null

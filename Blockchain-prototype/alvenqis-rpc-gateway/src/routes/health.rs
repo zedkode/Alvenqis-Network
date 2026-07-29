@@ -19,13 +19,7 @@ pub(crate) async fn health(State(state): State<RpcState>) -> Json<HealthResponse
     let exposure = match state.config.access_mode {
         crate::config::RpcAccessMode::Local => "Local only",
         crate::config::RpcAccessMode::PublicRead => "Public read",
-        crate::config::RpcAccessMode::PublicSubmit => {
-            if state.config.mining_endpoints_enabled() {
-                "Public submit + mining (loopback/proxy-deny required)"
-            } else {
-                "Public submit (mining disabled)"
-            }
-        }
+        crate::config::RpcAccessMode::PublicSubmit => "Public submit (mining disabled)",
         crate::config::RpcAccessMode::PrivateMining => {
             "Private container-network mining (no published host port)"
         }

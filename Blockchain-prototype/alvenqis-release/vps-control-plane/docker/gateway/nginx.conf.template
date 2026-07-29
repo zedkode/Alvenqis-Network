@@ -175,24 +175,8 @@ http {
       proxy_pass $pool_backend;
     }
 
-    location = /mining/template {
-      limit_except GET { deny all; }
-      limit_req zone=mining_template burst=10 nodelay;
-      proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
-      proxy_next_upstream_tries 2;
-      proxy_pass http://rpc_backend;
-    }
-
-    location = /mining/submit {
-      limit_except POST { deny all; }
-      limit_req zone=mining_submit burst=5 nodelay;
-      proxy_next_upstream error timeout invalid_header http_502 http_503 http_504;
-      proxy_next_upstream_tries 2;
-      proxy_pass http://rpc_backend;
-    }
-
-    location /mining/ {
-      return 404;
+    location ^~ /mining/ {
+      return 410;
     }
 
     location / {

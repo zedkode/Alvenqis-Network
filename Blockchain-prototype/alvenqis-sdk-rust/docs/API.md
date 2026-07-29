@@ -8,7 +8,8 @@ Import: `use alvenqis_sdk_rust::…`
 | Item | Notes |
 |---|---|
 | `DEFAULT_MAINNET_CANDIDATE_RPC` | `https://rpcnode.dohotstudio.com` |
-| `DEFAULT_MAINNET_CANDIDATE_POOL` | `http://rpcnode.dohotstudio.com/pool` |
+| `DEFAULT_MAINNET_CANDIDATE_MINING_RPC` | `http://127.0.0.1:10787` |
+| `DEFAULT_MAINNET_CANDIDATE_POOL` | `https://pool.dohotstudio.com` |
 | `DEFAULT_LOCAL_MAINNET_CANDIDATE_RPC` | `http://127.0.0.1:10787` |
 | `NetworkConfig::mainnet_candidate()` | RPC + pool public defaults |
 | `NetworkConfig::mainnet_candidate_local()` | local RPC, empty pool |

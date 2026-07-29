@@ -65,7 +65,7 @@ does not claim complete threat coverage.
 |---|---|---|---|
 | TM-P2P-01 | Seed compromise eclipses a new node. | Network/genesis handshake, bounded peer count, seed redial backoff. | PeerId pinning, independent seeds, active discovery, and topology tests. |
 | TM-P2P-02 | Many PeerIds from one network source consume inbound capacity. | Per-PeerId connection limits and persisted reputation. | IP/subnet/ASN admission and abuse tests. |
-| TM-RPC-01 | Public edge exposes a capability intended to remain private. | Application profiles, reverse proxy, request bounds. | Reconcile public mining policy and add route-negative tests. |
+| TM-RPC-01 | Public edge exposes a capability intended to remain private. | Application and gateway return HTTP 410 for public mining; pool mining RPC is Docker-private; route and static tests cover the boundary. | Prove the deployed revision, complete transaction-submit authentication policy, and run abuse tests. |
 | TM-OPS-01 | One credential gains read and mutation access across the fleet. | Authentication boundary and action allowlist. | Viewer/operator RBAC, mTLS, revocation, and external audit anchoring. |
 | TM-STO-01 | Corruption or unsafe restore changes canonical state. | SQLite integrity checks, transactional writes, RocksDB state checks, encrypted backup material. | Independent restore, disk-failure, migration, and long-duration tests. |
 | TM-WAL-01 | Renderer or remote API obtains key custody or signs without clear intent. | Tauri command boundary and local key-handling design. | Recovery, signing-failure, permission, and external-review evidence. |

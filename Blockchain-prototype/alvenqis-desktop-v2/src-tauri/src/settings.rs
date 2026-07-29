@@ -178,13 +178,7 @@ fn migrate_language(settings: &mut AppSettings) {
 }
 
 fn migrate_mining_settings(settings: &mut AppSettings) {
-    if settings
-        .mining_rpc_url
-        .eq_ignore_ascii_case(DEFAULT_RPC_URL)
-        || settings
-            .mining_rpc_url
-            .eq_ignore_ascii_case("http://127.0.0.1:10787")
-    {
+    if !is_loopback_rpc_url(&settings.mining_rpc_url) {
         settings.mining_rpc_url = DEFAULT_MINING_RPC_URL.to_owned();
     }
     let legacy_pool = "https://rpcnode.dohotstudio.com/pool";
@@ -477,16 +471,38 @@ pub fn normalize_rpc_url(raw: &str) -> AppResult<String> {
 
 fn normalize_mining_rpc_url(raw: &str) -> AppResult<String> {
     let trimmed = raw.trim();
-    if trimmed.contains("://") {
+    let normalized = if trimmed.contains("://") {
         normalize_rpc_url(trimmed)
     } else {
         normalize_rpc_url(&format!("http://{trimmed}"))
+    }?;
+    if !is_loopback_rpc_url(&normalized) {
+        return Err(AppError::msg(
+            "Solo mining RPC must use loopback (127.0.0.1, ::1, or localhost). Use verified Stratum TLS for remote mining.",
+        ));
     }
+    Ok(normalized)
+}
+
+pub(crate) fn is_loopback_rpc_url(raw: &str) -> bool {
+    let Ok(url) = url::Url::parse(raw) else {
+        return false;
+    };
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    host.eq_ignore_ascii_case("localhost")
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{migrate_language, normalize_explorer_url, AppSettings, DEFAULT_EXPLORER_URL};
+    use super::{
+        migrate_language, migrate_mining_settings, normalize_explorer_url,
+        normalize_mining_rpc_url, AppSettings, DEFAULT_EXPLORER_URL, DEFAULT_MINING_RPC_URL,
+    };
 
     #[test]
     fn persisted_romanian_language_migrates_to_english() {
@@ -514,5 +530,26 @@ mod tests {
     fn public_explorer_rejects_credentials_and_query() {
         assert!(normalize_explorer_url("https://user:secret@example.com/explorer").is_err());
         assert!(normalize_explorer_url("https://example.com/explorer?q=secret").is_err());
+    }
+
+    #[test]
+    fn remote_solo_rpc_is_rejected() {
+        assert!(normalize_mining_rpc_url("https://rpc.example.com").is_err());
+        assert_eq!(
+            normalize_mining_rpc_url("localhost:10787").unwrap(),
+            "http://localhost:10787"
+        );
+    }
+
+    #[test]
+    fn persisted_remote_mining_rpc_migrates_to_loopback() {
+        let mut settings = AppSettings {
+            mining_rpc_url: "https://rpcnode.dohotstudio.com".into(),
+            ..AppSettings::default()
+        };
+
+        migrate_mining_settings(&mut settings);
+
+        assert_eq!(settings.mining_rpc_url, DEFAULT_MINING_RPC_URL);
     }
 }

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$BaseUrl,
+    [string]$PrivateRpcUrl,
     [Parameter(Mandatory = $true)]
     [string]$StratumHost,
     [int]$StratumPort = 3333,
@@ -10,10 +10,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $template = Invoke-RestMethod `
-    -Uri "$($BaseUrl.TrimEnd('/'))/mining/template?miner_address=$([uri]::EscapeDataString($MinerAddress))" `
+    -Uri "$($PrivateRpcUrl.TrimEnd('/'))/mining/template?miner_address=$([uri]::EscapeDataString($MinerAddress))" `
     -TimeoutSec 45
 if (-not $template.template_id -or $template.network_id -ne "alvenqis-mainnet-candidate") {
-    throw "Public solo mining endpoint returned an invalid template."
+    throw "Docker-private pool mining RPC returned an invalid template."
 }
 
 $client = [System.Net.Sockets.TcpClient]::new()
@@ -24,7 +24,7 @@ try {
     if (-not $tls.IsAuthenticated -or -not $tls.IsEncrypted) {
         throw "Stratum connection is not authenticated and encrypted."
     }
-    Write-Host "PASS: Solo mining template is valid and Stratum TLS authenticated."
+    Write-Host "PASS: Docker-private pool mining template is valid and Stratum TLS authenticated."
 } finally {
     $client.Dispose()
 }

@@ -3,10 +3,10 @@
  * Rust desktop shell reads the same values from `alvenqis_sdk_rust::DEFAULT_*` constants.
  */
 export const RPC_URL = "https://rpcnode.dohotstudio.com";
-export const MINING_RPC_URL = "http://rpcnode.dohotstudio.com";
 export const LOCAL_RPC_URL = "http://127.0.0.1:10787";
+export const MINING_RPC_URL = LOCAL_RPC_URL;
 export const EXPLORER_URL = "https://explorer.dohotstudio.com";
-export const POOL_URL = `${MINING_RPC_URL}/pool`;
+export const POOL_URL = "https://pool.dohotstudio.com";
 export const NETWORK_ID = "alvenqis-mainnet-candidate";
 export const STATUS_LABEL = "Planned / Mainnet Candidate";
 export const ADDRESS_PREFIX = "alve";

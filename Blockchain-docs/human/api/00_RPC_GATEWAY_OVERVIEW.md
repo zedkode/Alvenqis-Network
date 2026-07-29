@@ -10,14 +10,18 @@ validates through current Alvenqis libraries; it does not define consensus.
 
 - `local`: read, submission, detailed P2P, and mining routes;
 - `public-read`: public read routes only;
-- `public-submit`: public reads plus signed transaction submission; mining is
-  registered only when `expose_mining_endpoints = true`.
+- `public-submit`: public reads plus signed transaction submission; mining
+  routes return HTTP 410 and cannot be enabled by configuration;
+- `private-mining`: mining routes for an unpublished container-network
+  listener used by the optional pool role.
 
 The accepted deployment policy retires public HTTP mining and keeps solo mining
-on loopback. The current VPS gateway, RPC profile, and public smoke script do
-not yet implement one consistent policy. `/p2p/status` is also registered on
-the shared router and currently exposes detailed peer telemetry. Both are open
-security findings, not supported public-boundary claims.
+on loopback. The application router, VPS gateway, role renderer, public smoke,
+private pool smoke, desktop defaults, and operator documentation now implement
+that contract. Deployment evidence is still required before assuming a running
+rehearsal host has the reviewed revision. `/p2p/status` remains registered on
+the shared router and exposes detailed peer telemetry; that separate security
+finding remains open.
 
 ## Safety boundaries
 
@@ -30,8 +34,8 @@ security findings, not supported public-boundary claims.
 - node/core recompute PoW and fully validate every submitted block;
 - no RPC route receives or stores wallet private keys;
 - observed peer/miner totals are the local node view, never a global census.
-- write/mining authentication is fail-open when no API token is configured;
-  production profiles must make the credential requirement explicit.
+- transaction-submission authentication remains a separate production policy
+  item; public mining is unavailable regardless of token configuration.
 
 Production readiness still requires authenticated/abuse-tested public policy,
 multi-host soak, storage review, monitoring, and external security review.

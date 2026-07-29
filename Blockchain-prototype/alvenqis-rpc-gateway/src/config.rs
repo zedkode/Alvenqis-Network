@@ -49,8 +49,8 @@ pub struct RpcConfig {
     pub public_rpc_allowed: bool,
     #[serde(default)]
     pub access_mode: RpcAccessMode,
-    /// When set, overrides access_mode default for `/mining/*` route registration.
-    /// Default: true for Local, false for PublicRead/PublicSubmit.
+    /// When set, may disable mining for a local or private-mining profile.
+    /// Public profiles cannot opt in to mining.
     #[serde(default)]
     pub expose_mining_endpoints: Option<bool>,
     #[serde(default = "default_max_mempool_transactions")]
@@ -209,29 +209,14 @@ impl RpcConfig {
                 RpcError::Config(format!("invalid CORS origin {origin:?}: {error}"))
             })?;
         }
-        // Public bind + mining is a high-risk footgun unless operators know.
-        if self.mining_endpoints_enabled()
-            && self.bind_host == "0.0.0.0"
-            && self.access_mode != RpcAccessMode::PrivateMining
+        if self.expose_mining_endpoints == Some(true)
+            && !matches!(
+                self.access_mode,
+                RpcAccessMode::Local | RpcAccessMode::PrivateMining
+            )
         {
             return Err(RpcError::Config(
-                "public RPC profiles cannot expose mining endpoints on 0.0.0.0; use private-mining on an un-published container network".to_owned(),
-            ));
-        }
-        // Public write on 0.0.0.0 without a token is allowed when the operator opts in
-        // (Docker edge / reverse-proxy meshes). Prefer setting api_token for internet-facing hosts.
-        let allow_tokenless_public = std::env::var("ALVENQIS_RPC_ALLOW_PUBLIC_SUBMIT_NO_TOKEN")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
-        if self.access_mode == RpcAccessMode::PublicSubmit
-            && self.api_token.trim().is_empty()
-            && self.bind_host == "0.0.0.0"
-            && !allow_tokenless_public
-            && self.mining_endpoints_enabled()
-        {
-            // Mining on a publicly bound port without a token is the high-risk footgun.
-            return Err(RpcError::Config(
-                "public-submit with mining on 0.0.0.0 requires api_token (or ALVENQIS_RPC_API_TOKEN), or set ALVENQIS_RPC_ALLOW_PUBLIC_SUBMIT_NO_TOKEN=1 behind a trusted edge proxy".to_owned(),
+                "public RPC profiles cannot expose mining endpoints; use local loopback RPC or private-mining on an unpublished container network".to_owned(),
             ));
         }
         Ok(())
@@ -263,10 +248,10 @@ impl RpcConfig {
         }
     }
 
-    /// Whether `/mining/template` and `/mining/submit` are registered.
+    /// Whether `/mining/template` and `/mining/submit` serve mining work.
     pub fn mining_endpoints_enabled(&self) -> bool {
-        self.expose_mining_endpoints
-            .unwrap_or_else(|| self.access_mode.default_exposes_mining())
+        self.access_mode.default_exposes_mining()
+            && self.expose_mining_endpoints.unwrap_or(true)
     }
 }
 

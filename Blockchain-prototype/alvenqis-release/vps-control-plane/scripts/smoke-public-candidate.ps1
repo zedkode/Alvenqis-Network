@@ -1,11 +1,10 @@
 # Public Mainnet Candidate smoke (Windows operator laptop). No SSH, no secrets.
-# Exit 0 only when health, status and solo mining template pass.
+# Exit 0 only when health, status, and the public mining denial pass.
 [CmdletBinding()]
 param(
     [string]$BaseUrl = $env:ALVENQIS_PUBLIC_RPC,
     [string]$ExpectedGenesisTip = $(if ($env:ALVENQIS_EXPECTED_GENESIS_TIP) { $env:ALVENQIS_EXPECTED_GENESIS_TIP } else { '0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5' }),
-    [string]$ExpectedNetworkId = $(if ($env:ALVENQIS_EXPECTED_NETWORK_ID) { $env:ALVENQIS_EXPECTED_NETWORK_ID } else { 'alvenqis-mainnet-candidate' }),
-    [string]$MinerAddress = $env:ALVENQIS_SMOKE_MINER_ADDRESS
+    [string]$ExpectedNetworkId = $(if ($env:ALVENQIS_EXPECTED_NETWORK_ID) { $env:ALVENQIS_EXPECTED_NETWORK_ID } else { 'alvenqis-mainnet-candidate' })
 )
 
 $ErrorActionPreference = 'Stop'
@@ -61,21 +60,22 @@ if ($status.height -eq 0 -and ([string]$status.tip_hash).ToLowerInvariant() -ne 
 Write-Host ("status ok initialized=true network_id={0} height={1} tip_hash={2} index_in_sync={3} index_lag_blocks={4}" -f `
     $status.network_id, $status.height, $status.tip_hash, $status.index_in_sync, $status.index_lag_blocks)
 
-# --- /mining/template must return real Alvenqis work ---
-if ([string]::IsNullOrWhiteSpace($MinerAddress)) {
-    Fail "set ALVENQIS_SMOKE_MINER_ADDRESS or pass -MinerAddress"
-}
+# --- public /mining/* is intentionally retired ---
+$miningCode = 0
 try {
-    $template = Invoke-RestMethod `
-        -Uri "$BaseUrl/mining/template?miner_address=$([uri]::EscapeDataString($MinerAddress))" `
-        -Method Get -TimeoutSec 45
+    $response = Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/mining/template" -Method Get -TimeoutSec 20
+    $miningCode = [int]$response.StatusCode
 } catch {
-    Fail "/mining/template request failed: $_"
+    if ($_.Exception.Response -and $_.Exception.Response.StatusCode) {
+        $miningCode = [int]$_.Exception.Response.StatusCode
+    } else {
+        Fail "/mining/template request failed: $_"
+    }
 }
-if (-not $template.template_id -or $template.network_id -ne $ExpectedNetworkId) {
-    Fail "invalid Alvenqis mining template"
+if ($miningCode -ne 410) {
+    Fail "/mining/template HTTP $miningCode (want 410)"
 }
-Write-Host ("mining template ok id={0} height={1}" -f $template.template_id, $template.height)
+Write-Host 'public mining boundary ok HTTP 410'
 
 Write-Host ("PASS: public Mainnet Candidate smoke OK ({0})" -f $BaseUrl)
 Write-Host 'NOTE: This does not prove VPS monorepo revision, backup, or restore drills.'

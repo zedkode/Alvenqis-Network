@@ -4,15 +4,15 @@ Status: **Mainnet Candidate / Prototype — not Mainnet Live**
 
 Remote pool mining is designed to use `alvenqis-stratum-v1` over verified TLS.
 Accepted policy retires public HTTP template/share endpoints, and local solo
-mining remains loopback-only. The current gateway, RPC profile, and smoke script
-do not yet enforce one consistent public-mining policy, so this document is a
-target operating contract rather than deployment-closure evidence.
+mining remains loopback-only. Repository profiles and smoke scripts enforce
+this capability contract; a deployed host must still be probed before its
+revision is treated as current.
 
 ## Security boundaries
 
 | Surface | Rule |
 |---|---|
-| Public edge | Accepted policy: the gateway returns HTTP 410 for every `/mining/*` request; repository reconciliation remains open |
+| Public edge | The gateway returns HTTP 410 for every `/mining/*` request |
 | Pool work/share | `stratum+tls://<operator-stratum-host>:3333` |
 | Pool HTTPS | Read-only status, history, miner and payout views |
 | Solo mining | Loopback RPC only, normally `http://127.0.0.1:10787` |

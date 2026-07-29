@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Public Mainnet Candidate smoke (laptop or VPS). No SSH, no secrets.
-# Exit 0 only when health, status and solo mining template pass.
+# Exit 0 only when health, status, and the public mining denial pass.
 set -Eeuo pipefail
 
 base_url="${1:-${ALVENQIS_PUBLIC_RPC:-}}"
@@ -13,7 +13,6 @@ base_url="${base_url%/}"
 # Pinned release genesis tip (height 0). Override only with explicit approval.
 expected_genesis_tip="${ALVENQIS_EXPECTED_GENESIS_TIP:-0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5}"
 expected_network_id="${ALVENQIS_EXPECTED_NETWORK_ID:-alvenqis-mainnet-candidate}"
-miner_address="${ALVENQIS_SMOKE_MINER_ADDRESS:-${POOL_ADDRESS:-}}"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -86,21 +85,14 @@ print(
 )
 PY
 
-# --- /mining/template must return real Alvenqis work ---
-[[ -n "$miner_address" ]] || fail "set ALVENQIS_SMOKE_MINER_ADDRESS to a valid Alvenqis address"
+# --- public /mining/* is intentionally retired ---
 mining_code="$(
   curl -sS -o "$mining_tmp" -w '%{http_code}' \
     --connect-timeout 8 --max-time 20 \
-    "${base_url}/mining/template?miner_address=${miner_address}" || true
+    "${base_url}/mining/template" || true
 )"
-[[ "$mining_code" == 200 ]] || fail "/mining/template HTTP $mining_code; body=$(cat "$mining_tmp")"
-python3 - "$mining_tmp" "$expected_network_id" <<'PY'
-import json, sys
-data = json.load(open(sys.argv[1], encoding="utf-8"))
-if not data.get("template_id") or data.get("network_id") != sys.argv[2]:
-    raise SystemExit("invalid Alvenqis mining template")
-print(f"mining template ok id={data['template_id']} height={data.get('height')}")
-PY
+[[ "$mining_code" == 410 ]] || fail "/mining/template HTTP $mining_code (want 410); body=$(cat "$mining_tmp")"
+echo "public mining boundary ok HTTP 410"
 
 echo "PASS: public Mainnet Candidate smoke OK ($base_url)"
 echo "NOTE: This does not prove VPS monorepo revision, backup, or restore drills."

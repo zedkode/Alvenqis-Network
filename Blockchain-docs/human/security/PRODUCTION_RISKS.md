@@ -27,9 +27,9 @@ Status: Mainnet Candidate risk register / not public Mainnet
   reverse-proxy rate limits; authenticated abuse-tested public policy is not
   complete.
 - Accepted policy requires public `/mining/*` routes to return HTTP 410 and
-  keeps solo mining on loopback. The current VPS gateway/RPC/smoke configuration
-  is not yet consistent with that policy; this is an open release blocker, not a
-  supported public mining surface.
+  keeps solo mining on loopback. Repository application, gateway, role, smoke,
+  desktop, and documentation surfaces now agree; the running rehearsal host
+  still requires an immutable-revision probe before deployment closure.
 - Peer/miner/hashrate figures are observed local telemetry, not global truth.
 
 ## Wallet and clients

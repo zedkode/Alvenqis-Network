@@ -182,6 +182,16 @@ PY
     echo "Compose role mapping returned no files." >&2
     return 78
   }
+  if [[ "$ALVENQIS_OPERATOR_ROLE_RESOLVED" == pool \
+    || "$ALVENQIS_OPERATOR_ROLE_RESOLVED" == stratum \
+    || ( "$ALVENQIS_OPERATOR_ROLE_RESOLVED" == full-stack && "$pool_enabled" == true ) ]]; then
+    RPC_ACCESS_MODE=private-mining
+    RPC_EXPOSE_MINING=true
+  else
+    RPC_ACCESS_MODE=public-submit
+    RPC_EXPOSE_MINING=false
+  fi
+  export RPC_ACCESS_MODE RPC_EXPOSE_MINING
   local compose_frontend=(docker compose)
   if [[ -n "$compose_bin_override" ]]; then
     [[ -x "$compose_bin_override" ]] || {

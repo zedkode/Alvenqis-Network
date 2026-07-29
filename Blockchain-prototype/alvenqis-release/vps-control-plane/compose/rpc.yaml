@@ -36,8 +36,8 @@ services:
     <<: *runtime-common
     environment:
       ALVENQIS_COMPONENT: rpc
-      RPC_ACCESS_MODE: ${RPC_ACCESS_MODE:-private-mining}
-      RPC_EXPOSE_MINING: ${RPC_EXPOSE_MINING:-true}
+      RPC_ACCESS_MODE: ${RPC_ACCESS_MODE:-public-submit}
+      RPC_EXPOSE_MINING: ${RPC_EXPOSE_MINING:-false}
     depends_on:
       alvenqis-node: {condition: service_healthy}
     healthcheck:

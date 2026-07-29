@@ -23,7 +23,7 @@ use crate::state::RpcState;
 use axum::routing::{get, post};
 use axum::Router;
 use http::header::CONTENT_TYPE;
-use http::{HeaderValue, Method};
+use http::{HeaderValue, Method, StatusCode};
 use std::path::PathBuf;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
@@ -88,6 +88,10 @@ pub fn router(state: RpcState) -> Router {
         router = router
             .route("/mining/template", get(mining_template))
             .route("/mining/submit", post(mining_submit));
+    } else {
+        router = router
+            .route("/mining/template", get(mining_unavailable))
+            .route("/mining/submit", post(mining_unavailable));
     }
     if !state.config.explorer_static_path.trim().is_empty() {
         let root = PathBuf::from(&state.config.explorer_static_path);
@@ -101,4 +105,8 @@ pub fn router(state: RpcState) -> Router {
         ))
         .layer(cors)
         .with_state(state)
+}
+
+async fn mining_unavailable() -> StatusCode {
+    StatusCode::GONE
 }
