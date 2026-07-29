@@ -353,6 +353,8 @@ def configure(data: dict[str, Any]) -> None:
     env_values = {
         "COMPOSE_PROJECT_NAME": "alvenqis-control-plane",
         "STACK_VERSION": "2.1.0-no-autoupdate",
+        "ALVENQIS_OPERATOR_ROLE": os.environ.get("ALVENQIS_OPERATOR_ROLE", "full-stack"),
+        "ALVENQIS_DEPLOYMENT_ROLE": os.environ.get("ALVENQIS_OPERATOR_ROLE", "full-stack"),
         "ALVENQIS_HOST_WORKSPACE": os.environ.get("ALVENQIS_HOST_WORKSPACE", str(WORKSPACE)),
         "ALVENQIS_HOST_REPO": os.environ.get("ALVENQIS_HOST_REPO", str(WORKSPACE)),
         "ALVENQIS_STATE_ROOT": os.environ.get("ALVENQIS_STATE_ROOT", str(STATE_DIR)),
@@ -368,6 +370,9 @@ def configure(data: dict[str, Any]) -> None:
         "ALVENQIS_WEBSITE_IMAGE": data.get("alvenqis_website_image", "ghcr.io/zedkode/alvenqis-website"),
         "ALVENQIS_EXPLORER_IMAGE": data.get("alvenqis_explorer_image", "ghcr.io/zedkode/alvenqis-explorer"),
         "BASE_DOMAIN": base,
+        "PUBLIC_RPC_HOST": hosts["RPC_HOST"],
+        "P2P_ADVERTISE_HOST": hosts["P2P_HOST"],
+        "MINING_RPC_BIND": "docker-internal",
         "WEBSITE_HOST": data.get("website_host") or base,
         "WWW_HOST": data.get("www_host") or f"www.{base}",
         "NODE_NAME": data["node_name"],

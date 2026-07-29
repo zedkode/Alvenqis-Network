@@ -1094,9 +1094,8 @@ fn enrollment_command(
     controller: &str,
     seed: &str,
 ) -> String {
-    let (profile, targets, stop_targets) = compose_plan(request.role);
     format!(
-        "set -Eeuo pipefail\nread -r -s -p 'Enrollment token: ' ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\n'\n{docker_install}\ninstall -d -m 0755 /opt/alvenqis-agent\ntest -z \"$(ls -A /opt/alvenqis-agent)\" || {{ echo 'Refusing to overwrite /opt/alvenqis-agent' >&2; exit 73; }}\ncurl -fsSL {bundle} -o /tmp/alvenqis-docker-control-plane.tar.gz\ncurl -fsSL {bundle}.sha256 -o /tmp/alvenqis-docker-control-plane.tar.gz.sha256\ncd /tmp\nsha256sum -c alvenqis-docker-control-plane.tar.gz.sha256\ntar -xzf alvenqis-docker-control-plane.tar.gz -C /opt/alvenqis-agent\ncd /opt/alvenqis-agent/alvenqis-release/vps-control-plane\nprintf '%s\\n' \"$ALVENQIS_ENROLLMENT_TOKEN\" | ./scripts/enroll-docker-node.sh --node-name {node} --p2p-host {domain} --email {email} --controller-url {controller} --enrollment-token-stdin --seed {seed} --release-bundle-url {bundle}\nunset ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\nALVENQIS_DEPLOYMENT_ROLE=%s\\nENABLE_POOL=%s\\n' {role} {enable_pool} >> .env\n{stop_command}\ndocker compose --env-file .env -f compose.yaml {profile} up -d --build {targets}\ndocker compose --env-file .env -f compose.yaml {profile} ps {targets}\ninstall -m 0600 /dev/null /root/alvenqis-access.txt\n{{ printf 'Node: %s\\nRole: %s\\nController: %s\\nControl URL: %s\\n' {node} {role} {controller} {control_url}; if test -s state/secrets/admin_password; then printf 'Admin password: '; cat state/secrets/admin_password; fi; }} > /root/alvenqis-access.txt\nchmod 0600 /root/alvenqis-access.txt\nprintf 'Credentials saved to /root/alvenqis-access.txt (mode 0600)\\n'\n",
+        "set -Eeuo pipefail\nread -r -s -p 'Enrollment token: ' ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\n'\n{docker_install}\ninstall -d -m 0755 /opt/alvenqis-agent\ntest -z \"$(ls -A /opt/alvenqis-agent)\" || {{ echo 'Refusing to overwrite /opt/alvenqis-agent' >&2; exit 73; }}\ncurl -fsSL {bundle} -o /tmp/alvenqis-docker-control-plane.tar.gz\ncurl -fsSL {bundle}.sha256 -o /tmp/alvenqis-docker-control-plane.tar.gz.sha256\ncd /tmp\nsha256sum -c alvenqis-docker-control-plane.tar.gz.sha256\ntar -xzf alvenqis-docker-control-plane.tar.gz -C /opt/alvenqis-agent\ncd /opt/alvenqis-agent/alvenqis-release/vps-control-plane\nprintf '%s\\n' \"$ALVENQIS_ENROLLMENT_TOKEN\" | ./scripts/enroll-docker-node.sh --node-name {node} --p2p-host {domain} --email {email} --controller-url {controller} --enrollment-token-stdin --seed {seed} --release-bundle-url {bundle} --role {role} {pool_flag}\nunset ALVENQIS_ENROLLMENT_TOKEN\n./scripts/compose.sh ps\ninstall -m 0600 /dev/null /root/alvenqis-access.txt\n{{ printf 'Node: %s\\nRole: %s\\nController: %s\\nControl URL: %s\\n' {node} {role} {controller} {control_url}; if test -s state/secrets/admin_password; then printf 'Admin password: '; cat state/secrets/admin_password; fi; }} > /root/alvenqis-access.txt\nchmod 0600 /root/alvenqis-access.txt\nprintf 'Credentials saved to /root/alvenqis-access.txt (mode 0600)\\n'\n",
         docker_install = docker_install_commands(),
         bundle = shell_arg(&state.config.release_bundle_url),
         node = shell_arg(&request.node_name),
@@ -1105,14 +1104,7 @@ fn enrollment_command(
         controller = shell_arg(controller),
         seed = shell_arg(seed),
         role = shell_arg(request.role.as_str()),
-        enable_pool = shell_arg(if matches!(request.role, DeploymentRole::Stratum | DeploymentRole::FullStack) { "true" } else { "false" }),
-        stop_command = if stop_targets.is_empty() {
-            ":".to_owned()
-        } else {
-            format!("docker compose --env-file .env -f compose.yaml stop {stop_targets} || true")
-        },
-        profile = profile,
-        targets = targets,
+        pool_flag = if matches!(request.role, DeploymentRole::Stratum | DeploymentRole::FullStack) { "--enable-pool" } else { "" },
         control_url = shell_arg(&format!("https://{}", request.admin_domain.as_deref().unwrap_or(&request.advertise_host))),
     )
 }
@@ -1160,9 +1152,8 @@ fn manifest_command_template(
     controller: &str,
     seed: &str,
 ) -> String {
-    let (profile, targets, stop_targets) = compose_plan(request.role);
     format!(
-        "set -Eeuo pipefail\nread -r -s -p 'Enrollment token: ' ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\n'\n{docker_install}\ninstall -d -m 0755 /opt/alvenqis-agent\ntest -z \"$(ls -A /opt/alvenqis-agent)\" || {{ echo 'Refusing to overwrite /opt/alvenqis-agent' >&2; exit 73; }}\ncurl -fsSL {bundle} -o /tmp/alvenqis-control-plane.tar.gz\ncurl -fsSL {bundle}.sha256 -o /tmp/alvenqis-control-plane.tar.gz.sha256\ncd /tmp && sha256sum -c alvenqis-control-plane.tar.gz.sha256\ntar -xzf /tmp/alvenqis-control-plane.tar.gz -C /opt/alvenqis-agent\ncd /opt/alvenqis-agent/alvenqis-release/vps-control-plane\nprintf '%s\\n' \"$ALVENQIS_ENROLLMENT_TOKEN\" | ./scripts/enroll-docker-node.sh --node-name {node} --p2p-host {host} --email {email} --controller-url {controller} --enrollment-token-stdin --seed {seed} --release-bundle-url {bundle}\nunset ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\nALVENQIS_DEPLOYMENT_ROLE=%s\\nENABLE_POOL=%s\\n' {role} {enable_pool} >> .env\n{stop_command}\ndocker compose --env-file .env -f compose.yaml {profile} up -d --build {targets}\ndocker compose --env-file .env -f compose.yaml {profile} ps {targets}\ninstall -m 0600 /dev/null /root/alvenqis-access.txt\n{{ printf 'Node: %s\\nRole: %s\\nController: %s\\n' {node} {role} {controller}; if test -s state/secrets/admin_password; then printf 'Admin password: '; cat state/secrets/admin_password; fi; }} > /root/alvenqis-access.txt\nchmod 0600 /root/alvenqis-access.txt\n",
+        "set -Eeuo pipefail\nread -r -s -p 'Enrollment token: ' ALVENQIS_ENROLLMENT_TOKEN\nprintf '\\n'\n{docker_install}\ninstall -d -m 0755 /opt/alvenqis-agent\ntest -z \"$(ls -A /opt/alvenqis-agent)\" || {{ echo 'Refusing to overwrite /opt/alvenqis-agent' >&2; exit 73; }}\ncurl -fsSL {bundle} -o /tmp/alvenqis-control-plane.tar.gz\ncurl -fsSL {bundle}.sha256 -o /tmp/alvenqis-control-plane.tar.gz.sha256\ncd /tmp && sha256sum -c alvenqis-control-plane.tar.gz.sha256\ntar -xzf /tmp/alvenqis-control-plane.tar.gz -C /opt/alvenqis-agent\ncd /opt/alvenqis-agent/alvenqis-release/vps-control-plane\nprintf '%s\\n' \"$ALVENQIS_ENROLLMENT_TOKEN\" | ./scripts/enroll-docker-node.sh --node-name {node} --p2p-host {host} --email {email} --controller-url {controller} --enrollment-token-stdin --seed {seed} --release-bundle-url {bundle} --role {role} {pool_flag}\nunset ALVENQIS_ENROLLMENT_TOKEN\n./scripts/compose.sh ps\ninstall -m 0600 /dev/null /root/alvenqis-access.txt\n{{ printf 'Node: %s\\nRole: %s\\nController: %s\\n' {node} {role} {controller}; if test -s state/secrets/admin_password; then printf 'Admin password: '; cat state/secrets/admin_password; fi; }} > /root/alvenqis-access.txt\nchmod 0600 /root/alvenqis-access.txt\n",
         docker_install = docker_install_commands(),
         bundle = shell_arg(bundle),
         node = shell_arg(&request.node_name),
@@ -1171,45 +1162,12 @@ fn manifest_command_template(
         controller = shell_arg(controller),
         seed = shell_arg(seed),
         role = shell_arg(request.role.as_str()),
-        enable_pool = shell_arg(if matches!(request.role, DeploymentRole::Stratum | DeploymentRole::FullStack) { "true" } else { "false" }),
-        stop_command = if stop_targets.is_empty() { ":".to_owned() } else { format!("docker compose --env-file .env -f compose.yaml stop {stop_targets} || true") },
-        profile = profile,
-        targets = targets,
+        pool_flag = if matches!(request.role, DeploymentRole::Stratum | DeploymentRole::FullStack) { "--enable-pool" } else { "" },
     )
 }
 
 fn docker_install_commands() -> &'static str {
     "export DEBIAN_FRONTEND=noninteractive\napt-get update\napt-get install -y ca-certificates curl openssl python3\ninstall -m 0755 -d /etc/apt/keyrings\ncurl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc\nchmod a+r /etc/apt/keyrings/docker.asc\n. /etc/os-release\necho \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME:-$VERSION_CODENAME} stable\" > /etc/apt/sources.list.d/docker.list\napt-get update\napt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin\nsystemctl enable --now docker"
-}
-
-fn compose_plan(role: DeploymentRole) -> (&'static str, &'static str, &'static str) {
-    match role {
-        DeploymentRole::Node | DeploymentRole::Validator => (
-            "",
-            "alvenqis-node alvenqis-rpc alvenqis-control",
-            "alvenqis-indexer",
-        ),
-        DeploymentRole::Indexer => (
-            "",
-            "alvenqis-node alvenqis-rpc alvenqis-indexer alvenqis-control",
-            "",
-        ),
-        DeploymentRole::Explorer => (
-            "",
-            "alvenqis-node alvenqis-rpc alvenqis-indexer alvenqis-control alvenqis-explorer gateway",
-            "",
-        ),
-        DeploymentRole::Stratum => (
-            "--profile pool",
-            "alvenqis-node alvenqis-rpc alvenqis-control stratum-certbot alvenqis-pool",
-            "alvenqis-indexer",
-        ),
-        DeploymentRole::FullStack => (
-            "--profile pool",
-            "alvenqis-node alvenqis-rpc alvenqis-indexer alvenqis-control stratum-certbot alvenqis-pool alvenqis-website alvenqis-explorer gateway",
-            "",
-        ),
-    }
 }
 
 fn components_for_role(role: &DeploymentRole) -> Vec<&'static str> {
@@ -1586,8 +1544,9 @@ mod tests {
         );
         assert!(command.contains("apt-get update"));
         assert!(command.contains("docker-ce"));
-        assert!(command.contains("--profile pool"));
-        assert!(command.contains("stratum-certbot alvenqis-pool"));
+        assert!(command.contains("--role 'stratum'"));
+        assert!(command.contains("--enable-pool"));
+        assert!(command.contains("./scripts/compose.sh ps"));
         assert!(command.contains("/root/alvenqis-access.txt"));
         assert!(command.contains("chmod 0600"));
         assert!(command.contains("--enrollment-token-stdin"));

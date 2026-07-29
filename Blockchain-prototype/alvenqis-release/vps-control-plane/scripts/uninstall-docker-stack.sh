@@ -6,9 +6,9 @@ if [[ -f .env ]]; then
   load_dotenv .env
   resolve_state_root "$root"
   compose_args
-  "${ALVENQIS_COMPOSE_ARGS[@]}" --profile cloudflare --profile pool --profile backup down --remove-orphans || true
+  "${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" down --remove-orphans || true
 fi
-[[ -f .installer.env ]] && docker compose --env-file .installer.env -f installer.compose.yaml down --remove-orphans || true
+[[ -f .installer.env ]] && docker compose --project-directory "$root" --env-file .installer.env -f compose/installer.yaml down --remove-orphans || true
 if $purge; then
   [[ -n "${STATE_ROOT:-}" ]] || {
     echo "Cannot purge without a validated ALVENQIS_STATE_ROOT." >&2

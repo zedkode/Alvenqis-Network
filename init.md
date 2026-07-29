@@ -5,6 +5,7 @@
 
 This file is the map of the repository after the 2026 layout restructure.
 Start here, then open `PROJECT_STRUCTURE.md` for the complete public layout.
+See also `llms.txt` for the short, spec-format pointer version used by external agent tooling.
 
 ## Where is the monorepo?
 
@@ -22,8 +23,12 @@ Alvenqis_Network/          ← this repository
 | **`planned/`** | Product areas that exist only as placeholders / README stubs (not production code yet). |
 | **`Blockchain-docs/`** | Public operator, protocol, architecture, API, mining, security, and release documentation. |
 | **`Blockchain-scripts/`** | Operator / CI / local / release / security scripts. |
+| **`InternalAI/`** | Agent-facing decentralization program (directive, audit, task-master addendum). Internal use — not public copy. See `InternalAI/00_DECENTRALIZATION_READ_FIRST.md`. |
+| **`reform.md`** | Phase-by-phase technical scope/implementation detail for the decentralization + hardening work. Context document only — the real tracker is `Blockchain-docs/internal/TASK_MASTER.md`. |
 | **`init.md`** | This file — orientation. |
 | **`PROJECT_STRUCTURE.md`** | Public structure doc (safe for GitHub). |
+| **`llms.md`** | Full LLM/agent briefing. |
+| **`llms.txt`** | Short, spec-format pointer file for external agent tooling. |
 | **`README.md`** | Project overview and legal/experimental notices. |
 | **`.github/`** | CI workflows. |
 
@@ -81,7 +86,21 @@ Under `planned/` — README stubs, **no** full implementation:
 - benchmarks, contracts, faucet, governance, infra, marketplace
 - monitoring, ops, passport, research, security suite, tests harness
 
-See each folder’s README for intent.
+See each folder's README for intent.
+
+## Decentralization program (`InternalAI/`)
+
+An agent-facing program correcting evidenced centralization gaps (single VPS, single unpinned P2P
+seed, admin panel without role separation). Read order:
+
+1. `InternalAI/00_DECENTRALIZATION_READ_FIRST.md`
+2. `Blockchain-docs/internal/TASK_MASTER.md` (the real tracker — the addendum below adds to it, does
+   not replace it)
+3. `InternalAI/01_DECENTRALIZATION_DIRECTIVE.md`
+4. `InternalAI/02_DECENTRALIZATION_AUDIT.md`
+5. `InternalAI/04_TASK_MASTER_DECENTRALIZATION_ADDENDUM.md`
+6. `reform.md` (repo root) — scope/implementation detail per phase; status columns there are
+   illustrative, real status lives in `TASK_MASTER.md`
 
 ## Documentation map
 
@@ -89,6 +108,8 @@ See each folder’s README for intent.
 |------|------|
 | Setup / protocol / API / mining / security (public) | `Blockchain-docs/human/` |
 | Release / maturity gates | `Blockchain-docs/human/release/` |
+| Official task tracker (internal) | `Blockchain-docs/internal/TASK_MASTER.md` |
+| Decentralization program (internal) | `InternalAI/` |
 | Repo map for GitHub | `PROJECT_STRUCTURE.md` |
 
 ## Scripts map
@@ -117,9 +138,12 @@ See each folder’s README for intent.
 2. Browser host: recovery phrase is **host-only**; OS confirm for sign/send is **default on**.
 3. Do not reintroduce Veiron/Vireon identity strings into user-facing or wire protocol surfaces.
 4. Do not mine/re-mine genesis on the RPC hot path.
+5. Never self-declare "decentralized", "audited", or "Mainnet" labels — these are gated by
+   `NETWORK_MATURITY.md` §4 and an explicit owner decision only.
 
 ## Next reading
 
 1. `README.md` — product + legal notice
 2. `PROJECT_STRUCTURE.md` — full tree
 3. `Blockchain-docs/human/SETUP.md` — operator setup
+4. `InternalAI/00_DECENTRALIZATION_READ_FIRST.md` — if working on decentralization/hardening tasks

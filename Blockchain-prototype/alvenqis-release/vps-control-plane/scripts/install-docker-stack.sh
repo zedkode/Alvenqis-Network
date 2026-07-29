@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; repo="$(cd "$root/../.." && pwd)"; cd "$root"
+operator_role="${ALVENQIS_OPERATOR_ROLE:-full-stack}"
+while (($#)); do
+  case "$1" in
+    --role) operator_role="${2:-}"; shift 2 ;;
+    *) echo "Usage: $0 [--role node|validator|rpc|indexer|indexer-explorer|explorer|pool|stratum|full-stack]" >&2; exit 64 ;;
+  esac
+done
+python3 - "$root/compose/roles.json" "$operator_role" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+roles = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["roles"]
+if sys.argv[2] not in roles:
+    raise SystemExit(f"unsupported operator role: {sys.argv[2]}")
+PY
 command -v docker >/dev/null && docker compose version >/dev/null || { echo "Docker Engine + Compose v2 required" >&2; exit 69; }
 export ALVENQIS_STATE_ROOT="${ALVENQIS_STATE_ROOT:-/var/lib/alvenqis-control-plane}"
 bash "$root/scripts/prepare-state.sh"
@@ -30,8 +46,10 @@ ALVENQIS_STATE_ROOT=$STATE_ROOT
 OPS_BOOTSTRAP_PORT=${OPS_BOOTSTRAP_PORT:-8080}
 ALVENQIS_VERSION=${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
 ALVENQIS_OPS_IMAGE=${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}
+ALVENQIS_OPERATOR_ROLE=$operator_role
 EOF
-docker compose --env-file .installer.env -f installer.compose.yaml up -d --build --force-recreate
+docker compose --project-directory "$root" --env-file .installer.env -f compose/installer.yaml config --quiet
+docker compose --project-directory "$root" --env-file .installer.env -f compose/installer.yaml up -d --build --force-recreate
 cat <<EOF
 Create this SSH tunnel: ssh -N -L 18080:127.0.0.1:${OPS_BOOTSTRAP_PORT:-8080} root@SERVER_IP
 Open: http://127.0.0.1:18080/?token=$(cat "$STATE_ROOT/secrets/setup_token")

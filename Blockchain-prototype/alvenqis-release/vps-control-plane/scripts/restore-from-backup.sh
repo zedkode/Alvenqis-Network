@@ -190,7 +190,7 @@ for container_id in "${project_containers[@]}"; do
   name="${name#/}"
   working_dir="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$container_id")"
   config_files="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.config_files"}}' "$container_id")"
-  [[ "$working_dir" == "$workspace" && "$config_files" == *"$workspace/compose.yaml"* ]] || {
+  [[ "$working_dir" == "$workspace" ]] && compose_config_files_match "$config_files" || {
     echo "Container ownership mismatch; refusing to touch $name." >&2
     exit 73
   }

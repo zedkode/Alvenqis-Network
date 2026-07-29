@@ -47,9 +47,11 @@ rsync -aHAX --delete \
   --exclude '/chain/state.rocksdb.lock' \
   --exclude '/chain/.alvenqis-state-restore-*/' \
   "$STATE_ROOT/data/" "$snapshot/state/data/"
-for relative in \
-  control pool config/generated stratum \
-  prometheus grafana loki alloy alertmanager; do
+state_sets=(config/generated)
+compose_has_service alvenqis-control && state_sets+=(control)
+compose_has_service alvenqis-pool && state_sets+=(pool stratum)
+compose_has_service prometheus && state_sets+=(prometheus grafana loki alloy alertmanager)
+for relative in "${state_sets[@]}"; do
   source="$STATE_ROOT/$relative"
   if [[ -e "$source" ]]; then
     mkdir -p "$snapshot/state/$(dirname "$relative")"

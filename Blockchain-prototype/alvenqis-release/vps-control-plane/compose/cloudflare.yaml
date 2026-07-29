@@ -1,0 +1,31 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${CONTAINER_LOG_MAX_SIZE:-20m}
+    max-file: ${CONTAINER_LOG_MAX_FILES:-3}
+
+x-service-guardrails: &service-guardrails
+  restart: unless-stopped
+  networks: [alvenqis-internal]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  pids_limit: 256
+  stop_grace_period: 30s
+  logging: *default-logging
+
+services:
+  cloudflared:
+    <<: *service-guardrails
+    image: cloudflare/cloudflared:2026.7.2
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:20241", "run", "--token-file", "/run/secrets/cloudflare_tunnel_token"]
+    secrets: [cloudflare_tunnel_token]
+    depends_on:
+      gateway: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "cloudflared", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: ${CLOUDFLARED_MEMORY_LIMIT:-256M}
+    cpus: ${CLOUDFLARED_CPU_LIMIT:-0.20}
+    pids_limit: 128

@@ -1,0 +1,248 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${CONTAINER_LOG_MAX_SIZE:-20m}
+    max-file: ${CONTAINER_LOG_MAX_FILES:-3}
+
+x-service-guardrails: &service-guardrails
+  restart: unless-stopped
+  networks: [alvenqis-internal]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  pids_limit: 256
+  stop_grace_period: 30s
+  logging: *default-logging
+
+services:
+  prometheus:
+    <<: *service-guardrails
+    profiles: [observability]
+    image: prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}", "--storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-8GB}", "--web.enable-lifecycle"]
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ${ALVENQIS_STATE_ROOT:-./state}/prometheus:/prometheus
+    depends_on:
+      alertmanager: {condition: service_started}
+      blackbox-exporter: {condition: service_started}
+      alvenqis-metrics-exporter: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${PROMETHEUS_MEMORY_LIMIT:-768M}
+    cpus: ${PROMETHEUS_CPU_LIMIT:-0.50}
+    pids_limit: 256
+
+  alertmanager:
+    <<: *service-guardrails
+    profiles: [observability]
+    image: prom/alertmanager:v0.28.1
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes:
+      - ${ALVENQIS_STATE_ROOT:-./state}/config/generated/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${ALVENQIS_STATE_ROOT:-./state}/alertmanager:/alertmanager
+    secrets: [smtp_password]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:9093/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${ALERTMANAGER_MEMORY_LIMIT:-128M}
+    cpus: ${ALERTMANAGER_CPU_LIMIT:-0.10}
+    pids_limit: 128
+
+  blackbox-exporter:
+    <<: *service-guardrails
+    profiles: [observability]
+    image: prom/blackbox-exporter:v0.27.0
+    command: ["--config.file=/etc/blackbox_exporter/config.yml"]
+    volumes: ["./monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro"]
+    healthcheck:
+      test: ["CMD", "/bin/blackbox_exporter", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: ${BLACKBOX_MEMORY_LIMIT:-128M}
+    cpus: ${BLACKBOX_CPU_LIMIT:-0.10}
+    pids_limit: 128
+
+  node-exporter:
+    <<: *service-guardrails
+    profiles: [observability]
+    image: prom/node-exporter:v1.9.1
+    pid: host
+    command: ["--path.rootfs=/host", "--collector.textfile.directory=/textfile"]
+    volumes:
+      - /:/host:ro,rslave
+      - ${ALVENQIS_STATE_ROOT:-./state}/metrics:/textfile:ro
+    healthcheck:
+      test: ["CMD", "/bin/node_exporter", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: ${NODE_EXPORTER_MEMORY_LIMIT:-128M}
+    cpus: ${NODE_EXPORTER_CPU_LIMIT:-0.10}
+    pids_limit: 128
+
+  cadvisor:
+    profiles: [observability]
+    image: ghcr.io/google/cadvisor:0.55.1
+    restart: unless-stopped
+    networks: [alvenqis-internal]
+    privileged: true
+    security_opt: [no-new-privileges:true]
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+      - --max_housekeeping_interval=30s
+      - --store_container_labels=false
+      - --disable_metrics=percpu,sched,hugetlb,referenced_memory,resctrl,udp,advtcp
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    healthcheck:
+      test: ["CMD", "/usr/bin/cadvisor", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    mem_limit: ${CADVISOR_MEMORY_LIMIT:-256M}
+    cpus: ${CADVISOR_CPU_LIMIT:-0.15}
+    pids_limit: 256
+
+  alvenqis-metrics-exporter:
+    <<: *service-guardrails
+    profiles: [observability]
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}/docker/metrics-exporter
+      dockerfile: Dockerfile
+    image: ${ALVENQIS_METRICS_IMAGE:-ghcr.io/zedkode/alvenqis-metrics-exporter}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    environment:
+      ALVENQIS_RPC_URL: http://alvenqis-rpc:10787
+      ALVENQIS_POOL_URL: http://alvenqis-pool:30787
+      ALVENQIS_CONTROL_URL: http://alvenqis-control:10788/health
+      ALVENQIS_OPS_URL: http://alvenqis-ops:8080/health
+      ENABLE_POOL: ${ENABLE_POOL:-false}
+      LISTEN_HOST: 0.0.0.0
+      LISTEN_PORT: "9101"
+      SCRAPE_TIMEOUT_SECONDS: ${METRICS_SCRAPE_TIMEOUT_SECONDS:-3}
+      CACHE_TTL_SECONDS: ${METRICS_CACHE_TTL_SECONDS:-10}
+    depends_on:
+      alvenqis-rpc: {condition: service_started}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9101/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    read_only: true
+    tmpfs: [/tmp:size=16m]
+    mem_limit: ${METRICS_MEMORY_LIMIT:-192M}
+    cpus: ${METRICS_CPU_LIMIT:-0.20}
+    pids_limit: 128
+
+  loki:
+    <<: *service-guardrails
+    profiles: [observability]
+    image: grafana/loki:3.5.1
+    command: ["-config.file=/etc/loki/local-config.yaml", "-config.expand-env=true"]
+    environment:
+      LOKI_RETENTION_HOURS: ${LOKI_RETENTION_HOURS:-168}
+    volumes:
+      - ./monitoring/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - ${ALVENQIS_STATE_ROOT:-./state}/loki:/loki
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${LOKI_MEMORY_LIMIT:-640M}
+    cpus: ${LOKI_CPU_LIMIT:-0.40}
+    pids_limit: 256
+
+  alloy:
+    <<: *service-guardrails
+    profiles: [observability]
+    image: grafana/alloy:v1.9.2
+    user: "473:0"
+    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ${ALVENQIS_STATE_ROOT:-./state}/alloy:/var/lib/alloy/data
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      loki: {condition: service_started}
+    read_only: true
+    tmpfs: [/tmp:size=64m]
+    healthcheck:
+      test: ["CMD", "/bin/alloy", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: ${ALLOY_MEMORY_LIMIT:-256M}
+    cpus: ${ALLOY_CPU_LIMIT:-0.20}
+    pids_limit: 256
+
+  grafana:
+    <<: *service-guardrails
+    profiles: [observability]
+    image: grafana/grafana:12.0.2
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://${GRAFANA_HOST:-grafana.example.invalid}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    secrets: [grafana_password]
+    volumes:
+      - ${ALVENQIS_STATE_ROOT:-./state}/grafana:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus: {condition: service_started}
+      loki: {condition: service_started}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/health | grep -q 'ok'"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+    mem_limit: ${GRAFANA_MEMORY_LIMIT:-512M}
+    cpus: ${GRAFANA_CPU_LIMIT:-0.35}
+    pids_limit: 256
+
+  backup-scheduler:
+    <<: *service-guardrails
+    profiles: [observability]
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}
+      dockerfile: docker/backup-scheduler/Dockerfile
+    image: ${ALVENQIS_BACKUP_IMAGE:-ghcr.io/zedkode/alvenqis-backup-scheduler}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    environment:
+      BROKER_URL: http://docker-broker:8090
+      BROKER_TOKEN_FILE: /run/secrets/broker_token
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_INITIAL_DELAY_SECONDS: ${BACKUP_INITIAL_DELAY_SECONDS:-120}
+    secrets: [broker_token]
+    volumes:
+      - ${ALVENQIS_STATE_ROOT:-./state}/metrics:/metrics:ro
+    depends_on:
+      docker-broker: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp:size=16m]
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 && test -s /metrics/alvenqis_backup.prom"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: ${BACKUP_HEALTH_START_PERIOD:-180s}
+    mem_limit: ${BACKUP_MEMORY_LIMIT:-128M}
+    cpus: ${BACKUP_CPU_LIMIT:-0.10}
+    pids_limit: 128

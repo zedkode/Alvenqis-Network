@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "roles": {
+    "node": {
+      "files": ["base.yaml", "node.yaml"],
+      "profiles": [],
+      "required_services": ["alvenqis-node"]
+    },
+    "validator": {
+      "files": ["base.yaml", "node.yaml"],
+      "profiles": [],
+      "required_services": ["alvenqis-node"]
+    },
+    "rpc": {
+      "files": ["base.yaml", "node.yaml", "rpc.yaml"],
+      "profiles": [],
+      "required_services": ["alvenqis-node", "alvenqis-rpc"]
+    },
+    "indexer": {
+      "files": ["base.yaml", "node.yaml", "rpc.yaml", "indexer-explorer.yaml"],
+      "profiles": [],
+      "required_services": ["alvenqis-node", "alvenqis-rpc", "alvenqis-indexer"]
+    },
+    "indexer-explorer": {
+      "files": ["base.yaml", "node.yaml", "rpc.yaml", "indexer-explorer.yaml"],
+      "profiles": ["explorer"],
+      "required_services": ["alvenqis-node", "alvenqis-rpc", "alvenqis-indexer", "alvenqis-explorer"]
+    },
+    "explorer": {
+      "files": ["base.yaml", "node.yaml", "rpc.yaml", "indexer-explorer.yaml"],
+      "profiles": ["explorer"],
+      "required_services": ["alvenqis-node", "alvenqis-rpc", "alvenqis-indexer", "alvenqis-explorer"]
+    },
+    "pool": {
+      "files": ["base.yaml", "node.yaml", "rpc.yaml", "pool.yaml"],
+      "profiles": [],
+      "required_services": ["alvenqis-node", "alvenqis-rpc", "stratum-certbot", "alvenqis-pool"]
+    },
+    "stratum": {
+      "files": ["base.yaml", "node.yaml", "rpc.yaml", "pool.yaml"],
+      "profiles": [],
+      "required_services": ["alvenqis-node", "alvenqis-rpc", "stratum-certbot", "alvenqis-pool"]
+    },
+    "full-stack": {
+      "files": [
+        "base.yaml",
+        "node.yaml",
+        "rpc.yaml",
+        "indexer-explorer.yaml",
+        "project-edge.yaml",
+        "project-observability.yaml"
+      ],
+      "profiles": ["explorer", "project-edge", "observability"],
+      "required_services": [
+        "alvenqis-node",
+        "alvenqis-rpc",
+        "alvenqis-indexer",
+        "alvenqis-control",
+        "docker-broker",
+        "alvenqis-ops",
+        "alvenqis-website",
+        "alvenqis-explorer",
+        "gateway",
+        "prometheus",
+        "alertmanager",
+        "blackbox-exporter",
+        "node-exporter",
+        "cadvisor",
+        "alvenqis-metrics-exporter",
+        "loki",
+        "alloy",
+        "grafana",
+        "backup-scheduler"
+      ]
+    }
+  }
+}

@@ -3,7 +3,7 @@ import json, os, secrets, shlex, subprocess, threading, time
 from pathlib import Path
 from flask import Flask, jsonify, request
 app=Flask(__name__)
-WORKSPACE=Path(os.environ['ALVENQIS_WORKSPACE']).resolve(); COMPOSE_FILE=Path(os.environ.get('ALVENQIS_COMPOSE_FILE',WORKSPACE/'compose.yaml')); TOKEN_FILE=Path(os.environ.get('BROKER_TOKEN_FILE','/run/secrets/broker_token'))
+WORKSPACE=Path(os.environ['ALVENQIS_WORKSPACE']).resolve(); TOKEN_FILE=Path(os.environ.get('BROKER_TOKEN_FILE','/run/secrets/broker_token'))
 def token(): return TOKEN_FILE.read_text().strip()
 def auth():
  v=request.headers.get('X-Alvenqis-Broker-Token',''); return bool(v and secrets.compare_digest(v,token()))
@@ -16,24 +16,16 @@ def load_env():
    k,v=line.split('=',1)
    try: parts=shlex.split(v); env[k]=parts[0] if parts else ''
    except ValueError: env[k]=v.strip().strip("'\"")
- for k in ('ALVENQIS_HOST_WORKSPACE','ALVENQIS_HOST_REPO','ALVENQIS_COMPOSE_FILE'):
+ for k in ('ALVENQIS_HOST_WORKSPACE','ALVENQIS_HOST_REPO'):
   if k in os.environ: env[k]=os.environ[k]
  return env
 def cfg(): return load_env()
-def compose(*args, profiles=()):
- e=cfg(); cmd=['docker','compose','--env-file',str(WORKSPACE/'.env'),'-f',str(COMPOSE_FILE)]
- if e.get('CLOUDFLARE_MODE','disabled')!='tunnel': cmd += ['-f',str(WORKSPACE/'compose.direct.yaml')]
- for p in profiles: cmd += ['--profile',p]
- return cmd+list(args)
+def compose(*args):
+ return ['bash',str(WORKSPACE/'scripts/compose.sh'),*args]
 def run(args,timeout=7200,check=True):
  r=subprocess.run(args,cwd=WORKSPACE,env=cfg(),text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=timeout)
  if check and r.returncode: raise RuntimeError(f"command failed ({r.returncode}): {' '.join(args)}\n{r.stdout}")
  return r.stdout
-def profiles():
- e=cfg(); p=['backup']
- if e.get('CLOUDFLARE_MODE')=='tunnel': p.append('cloudflare')
- if e.get('ENABLE_POOL','false').lower()=='true': p.append('pool')
- return p
 def schedule_installer_stop():
  if os.environ.get('ALVENQIS_INSTALLER_MODE','false').lower()!='true': return
  def stop_later():
@@ -46,7 +38,7 @@ def deploy():
  if e.get('CLOUDFLARE_MODE','disabled')=='tunnel': out.append(run(['bash',str(WORKSPACE/'scripts/cloudflare-bootstrap.sh'),'--prepare'],600))
  # Deliberately build from the checked-out repository. No pull, updater, mutable tag refresh or scheduled image replacement.
  args=('up','-d','--build')
- out.append(run(compose(*args,profiles=profiles()),7200)); out.append(run(['bash',str(WORKSPACE/'scripts/health-check-docker.sh')],600))
+ out.append(run(compose(*args),7200)); out.append(run(['bash',str(WORKSPACE/'scripts/health-check-docker.sh')],600))
  if e.get('CLOUDFLARE_MODE','disabled')!='disabled':
   out.append(run(['bash',str(WORKSPACE/'scripts/cloudflare-bootstrap.sh'),'--activate'],600))
   out.append(run(['bash',str(WORKSPACE/'scripts/verify-public-health.sh')],300))

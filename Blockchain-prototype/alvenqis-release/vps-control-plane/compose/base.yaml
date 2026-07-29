@@ -1,0 +1,22 @@
+name: ${COMPOSE_PROJECT_NAME:-alvenqis-operator}
+
+services: {}
+
+networks:
+  alvenqis-internal:
+    driver: bridge
+
+secrets:
+  alvenqis_storage_key: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/alvenqis_storage_key"}
+  admin_password: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/admin_password"}
+  grafana_password: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/grafana_password"}
+  setup_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/setup_token"}
+  broker_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/broker_token"}
+  cloudflare_api_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/cloudflare_api_token"}
+  cloudflare_tunnel_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/cloudflare_tunnel_token"}
+  pool_admin_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/pool_admin_token"}
+  backup_passphrase: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/backup_passphrase"}
+  r2_secret_access_key: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/r2_secret_access_key"}
+  discord_webhook: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/discord_webhook"}
+  telegram_bot_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/telegram_bot_token"}
+  smtp_password: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/smtp_password"}

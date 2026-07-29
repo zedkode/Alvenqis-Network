@@ -1,0 +1,53 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${CONTAINER_LOG_MAX_SIZE:-20m}
+    max-file: ${CONTAINER_LOG_MAX_FILES:-3}
+
+x-service-guardrails: &service-guardrails
+  restart: unless-stopped
+  networks: [alvenqis-internal]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  pids_limit: 256
+  stop_grace_period: 30s
+  logging: *default-logging
+
+x-runtime-image: &runtime-image
+  <<: *service-guardrails
+  image: ${ALVENQIS_RUNTIME_IMAGE:-ghcr.io/zedkode/alvenqis-runtime}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+  build:
+    context: ${ALVENQIS_HOST_ROOT:-../../..}
+    dockerfile: Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile
+
+x-runtime-common: &runtime-common
+  <<: *runtime-image
+  env_file: [.env]
+  secrets: [alvenqis_storage_key]
+  volumes:
+    - ${ALVENQIS_STATE_ROOT:-./state}/config/generated:/config
+    - ${ALVENQIS_STATE_ROOT:-./state}/data:/data/.alvenqis-mainnet
+    - ${ALVENQIS_STATE_ROOT:-./state}/backups/rocksdb-repository:/backups/rocksdb-repository
+  read_only: true
+  tmpfs: [/tmp:size=128m]
+
+services:
+  alvenqis-rpc:
+    <<: *runtime-common
+    environment:
+      ALVENQIS_COMPONENT: rpc
+      RPC_ACCESS_MODE: ${RPC_ACCESS_MODE:-private-mining}
+      RPC_EXPOSE_MINING: ${RPC_EXPOSE_MINING:-true}
+    depends_on:
+      alvenqis-node: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 20 http://127.0.0.1:10787/health >/dev/null && curl -fsS --max-time 20 http://127.0.0.1:10787/status | grep -q '\"initialized\":true'"]
+      interval: 15s
+      timeout: 45s
+      retries: 12
+      start_period: 90s
+    mem_limit: ${RPC_MEMORY_LIMIT:-1536M}
+    cpus: ${RPC_CPU_LIMIT:-2.00}
+    pids_limit: 384
+    ulimits:
+      nofile: {soft: 32768, hard: 32768}

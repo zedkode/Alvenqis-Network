@@ -86,16 +86,124 @@ PY
 }
 
 compose_args() {
-  ALVENQIS_COMPOSE_ARGS=(docker compose --env-file .env -f compose.yaml)
-  if [[ "${CLOUDFLARE_MODE:-disabled}" != "tunnel" ]]; then
-    ALVENQIS_COMPOSE_ARGS+=(-f compose.direct.yaml)
-  fi
+  local workspace="${ALVENQIS_WORKSPACE:-$PWD}"
+  local dotenv_path="${1:-$workspace/.env}"
+  local registry="$workspace/compose/roles.json"
+  local requested_role="${ALVENQIS_OPERATOR_ROLE:-${ALVENQIS_DEPLOYMENT_ROLE:-full-stack}}"
+  local control_role="${CONTROL_ROLE:-standalone}"
+  local cloudflare_mode="${CLOUDFLARE_MODE:-disabled}"
+  local pool_enabled="${ENABLE_POOL:-false}"
 
-  ALVENQIS_PROFILE_ARGS=(--profile backup)
-  if [[ "${CLOUDFLARE_MODE:-disabled}" == "tunnel" ]]; then
-    ALVENQIS_PROFILE_ARGS+=(--profile cloudflare)
-  fi
-  if [[ "${ENABLE_POOL:-false}" == "true" ]]; then
-    ALVENQIS_PROFILE_ARGS+=(--profile pool)
-  fi
+  [[ -f "$registry" ]] || {
+    echo "Missing Compose role registry: $registry" >&2
+    return 66
+  }
+  [[ -f "$dotenv_path" ]] || {
+    echo "Missing Compose dotenv file: $dotenv_path" >&2
+    return 66
+  }
+
+  ALVENQIS_COMPOSE_FILES=()
+  ALVENQIS_PROFILE_ARGS=()
+  ALVENQIS_REQUIRED_SERVICES=()
+  while IFS= read -r -d '' entry; do
+    case "$entry" in
+      role=*) ALVENQIS_OPERATOR_ROLE_RESOLVED="${entry#role=}" ;;
+      file=*) ALVENQIS_COMPOSE_FILES+=("$workspace/compose/${entry#file=}") ;;
+      profile=*) ALVENQIS_PROFILE_ARGS+=(--profile "${entry#profile=}") ;;
+      service=*) ALVENQIS_REQUIRED_SERVICES+=("${entry#service=}") ;;
+      *) echo "Invalid Compose role registry output: $entry" >&2; return 78 ;;
+    esac
+  done < <(
+    python3 - "$registry" "$requested_role" "$control_role" "$pool_enabled" "$cloudflare_mode" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+registry_path, requested_role, control_role, pool_enabled, cloudflare_mode = sys.argv[1:]
+registry = json.loads(Path(registry_path).read_text(encoding="utf-8"))
+roles = registry.get("roles", {})
+role = requested_role.strip().lower()
+if role not in roles:
+    allowed = ", ".join(sorted(roles))
+    raise SystemExit(f"unsupported ALVENQIS_OPERATOR_ROLE {requested_role!r}; expected one of: {allowed}")
+if control_role not in {"standalone", "agent", "controller"}:
+    raise SystemExit("CONTROL_ROLE must be standalone, agent or controller")
+if pool_enabled.lower() not in {"true", "false"}:
+    raise SystemExit("ENABLE_POOL must be true or false")
+if cloudflare_mode not in {"disabled", "dns", "tunnel"}:
+    raise SystemExit("CLOUDFLARE_MODE must be disabled, dns or tunnel")
+
+selected = roles[role]
+files = list(selected["files"])
+profiles = list(selected["profiles"])
+services = list(selected["required_services"])
+
+def add_file(name, before=None):
+    if name in files:
+        return
+    if before and before in files:
+        files.insert(files.index(before), name)
+    else:
+        files.append(name)
+
+def add_service(name):
+    if name not in services:
+        services.append(name)
+
+if control_role in {"agent", "controller"}:
+    add_file("rpc.yaml", before="indexer-explorer.yaml")
+    add_file("project-edge.yaml")
+    add_service("alvenqis-rpc")
+    add_service("alvenqis-control")
+
+project_edge_enabled = "project-edge" in profiles
+if role == "full-stack" and pool_enabled.lower() == "true":
+    add_file("pool.yaml", before="project-edge.yaml")
+    add_service("stratum-certbot")
+    add_service("alvenqis-pool")
+if role in {"pool", "stratum"} and pool_enabled.lower() != "true":
+    raise SystemExit(f"ALVENQIS_OPERATOR_ROLE={role} requires ENABLE_POOL=true")
+
+if project_edge_enabled:
+    add_file("cloudflare.yaml" if cloudflare_mode == "tunnel" else "direct.yaml")
+    if cloudflare_mode == "tunnel":
+        add_service("cloudflared")
+
+for kind, values in (("file", files), ("profile", profiles), ("service", services)):
+    for value in values:
+        sys.stdout.buffer.write(f"{kind}={value}\0".encode("utf-8"))
+sys.stdout.buffer.write(f"role={role}\0".encode("utf-8"))
+PY
+  )
+
+  ((${#ALVENQIS_COMPOSE_FILES[@]} > 0)) || {
+    echo "Compose role mapping returned no files." >&2
+    return 78
+  }
+  ALVENQIS_COMPOSE_ARGS=(
+    docker compose
+    --project-directory "$workspace"
+    --env-file "$dotenv_path"
+  )
+  local compose_file
+  for compose_file in "${ALVENQIS_COMPOSE_FILES[@]}"; do
+    ALVENQIS_COMPOSE_ARGS+=(-f "$compose_file")
+  done
+  export ALVENQIS_OPERATOR_ROLE_RESOLVED
+}
+
+compose_config_files_match() {
+  local config_files="$1"
+  local workspace="${ALVENQIS_WORKSPACE:-$PWD}"
+  [[ "$config_files" == *"$workspace/compose/base.yaml"* ]]
+}
+
+compose_has_service() {
+  local expected="$1"
+  local service
+  for service in "${ALVENQIS_REQUIRED_SERVICES[@]:-}"; do
+    [[ "$service" == "$expected" ]] && return 0
+  done
+  return 1
 }
