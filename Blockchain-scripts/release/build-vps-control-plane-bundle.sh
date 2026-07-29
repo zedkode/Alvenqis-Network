@@ -23,7 +23,7 @@ paths=(
   Blockchain-prototype/alvenqis-rpc-gateway Blockchain-prototype/alvenqis-wallet
   Blockchain-prototype/alvenqis-sdk-rust Blockchain-prototype/alvenqis-browser/host
   Blockchain-prototype/alvenqis-indexer Blockchain-prototype/alvenqis-miner
-  Blockchain-prototype/alvenqis-mining-pool Blockchain-prototype/alvenqis-mobile-core
+  Blockchain-prototype/alvenqis-mining-pool
   Blockchain-prototype/alvenqis-release/vps-control-plane
 )
 

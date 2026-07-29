@@ -567,7 +567,6 @@ Alvenqis-Network/
 │   ├── alvenqis-miner/
 │   ├── alvenqis-mining-pool/
 │   ├── alvenqis-desktop-v2/
-│   ├── alvenqis-mobile-core/
 │   ├── alvenqis-browser/
 │   ├── alvenqis-release/
 │   ├── alvenqis-website/

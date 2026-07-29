@@ -18,7 +18,7 @@ Alvenqis_Network/          ← this repository
 
 | Path | Purpose |
 |------|---------|
-| **`Blockchain-prototype/`** | Everything that is **implemented**: Rust crates, desktop, explorer, website, android, configs, shared assets. **Cargo workspace root.** |
+| **`Blockchain-prototype/`** | Everything that is **implemented**: Rust crates, desktop, explorer, website, configs, shared assets. **Cargo workspace root.** |
 | **`Blockchain-docs/`** | Public operator, protocol, architecture, API, mining, security, and release documentation. |
 | **`Blockchain-scripts/`** | Operator / CI / local / release / security scripts. |
 | **`init.md`** | This file — orientation. |
@@ -68,7 +68,6 @@ Under `Blockchain-prototype/`:
 | Desktop Control Center | `alvenqis-desktop-v2` | Tauri app |
 | Explorer | `alvenqis-explorer` | Vite React UI |
 | Website | `alvenqis-website` | Marketing / info site |
-| Android scaffold | `alvenqis-android` + `alvenqis-mobile-core` | Mobile bridge |
 | VPS control plane | `alvenqis-release/vps-control-plane` | Docker stack, admin |
 | Network configs | `configs/` | local + mainnet-candidate |
 | Shared brand/constants | `shared/` | logos, schemas, constants |

@@ -13,7 +13,7 @@ the order and truth boundaries, not a second independent backlog.
 | Node/network | `Blockchain-prototype/alvenqis-node/`, `Blockchain-prototype/configs/` |
 | APIs/data | `Blockchain-prototype/alvenqis-rpc-gateway/`, `Blockchain-prototype/alvenqis-indexer/`, `Blockchain-prototype/alvenqis-explorer/` |
 | Mining | `Blockchain-prototype/alvenqis-miner/`, `Blockchain-prototype/alvenqis-mining-pool/`, `Blockchain-docs/human/mining/` |
-| Clients | `Blockchain-prototype/alvenqis-desktop-v2/`, `Blockchain-prototype/alvenqis-wallet/`, `Blockchain-prototype/alvenqis-android/`, `Blockchain-prototype/alvenqis-browser/` |
+| Clients | `Blockchain-prototype/alvenqis-desktop-v2/`, `Blockchain-prototype/alvenqis-wallet/`, `Blockchain-prototype/alvenqis-browser/` |
 | Website | `Blockchain-prototype/alvenqis-website/` |
 | Operations | `Blockchain-scripts/`, `Blockchain-prototype/alvenqis-release/vps-control-plane/`, `Blockchain-docs/human/operator/` |
 | Maturity | `Blockchain-docs/human/release/`, `Blockchain-docs/internal/memory/` |

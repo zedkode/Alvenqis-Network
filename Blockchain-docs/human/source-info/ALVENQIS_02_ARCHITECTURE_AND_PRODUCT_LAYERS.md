@@ -25,7 +25,7 @@ Reserved folders and website concepts do not make these implemented features.
 - wallet CLI and platform keystore flows: candidate/prototype;
 - explorer and website: implemented UIs with candidate data boundaries;
 - TypeScript/Rust SDKs and examples: read-oriented prototypes;
-- Android and browser extension: prototypes with strict capability limits;
+- browser extension: prototype with strict capability limits;
 - Passport, marketplace, governance UI, storage products, and encrypted
   communication products: planned/research.
 

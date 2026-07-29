@@ -31,8 +31,6 @@ Alvenqis_Network/                          # git root
 │   ├── alvenqis-desktop-v2/               # Control Center (own Tauri workspace)
 │   ├── alvenqis-explorer/
 │   ├── alvenqis-website/
-│   ├── alvenqis-android/
-│   ├── alvenqis-mobile-core/
 │   ├── alvenqis-examples/
 │   ├── alvenqis-devnet/
 │   ├── alvenqis-docker/
@@ -66,8 +64,8 @@ Alvenqis_Network/                          # git root
 ## Cargo workspace
 
 - **Root:** `Blockchain-prototype/Cargo.toml`
-- **Members:** core, node, rpc-gateway, wallet, sdk-rust, browser/host, indexer, miner, mining-pool, mobile-core, vps-admin
-- **Not workspace members (on purpose):** desktop-v2 (own Tauri workspace), explorer/website (npm), android (Gradle)
+- **Members:** core, node, rpc-gateway, wallet, sdk-rust, browser/host, indexer, miner, mining-pool, vps-admin
+- **Not workspace members (on purpose):** desktop-v2 (own Tauri workspace), explorer/website (npm)
 
 ```bash
 cd Blockchain-prototype

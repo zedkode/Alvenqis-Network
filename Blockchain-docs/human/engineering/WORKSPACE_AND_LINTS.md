@@ -12,7 +12,7 @@ Root `Cargo.toml` lists only crates that:
 
 1. Share the monorepo `Cargo.lock` and dependency versions;
 2. Are exercised by `cargo test --workspace` / G1 release-gate;
-3. Are pure Rust libraries or binaries (not primary Node/Gradle apps).
+3. Are pure Rust libraries or binaries (not primary Node apps).
 
 ### In workspace
 
@@ -26,7 +26,6 @@ Root `Cargo.toml` lists only crates that:
 | `alvenqis-miner` | NVIDIA CUDA-only FiroPoW miner |
 | `alvenqis-mining-pool` | Pool prototype |
 | `alvenqis-desktop` | egui Control Center (legacy shell) |
-| `alvenqis-mobile-core` | FFI for Android |
 | `alvenqis-release/vps-control-plane/admin-server` | VPS admin agent |
 
 ### Out of workspace (by design)
@@ -36,12 +35,11 @@ Root `Cargo.toml` lists only crates that:
 | `alvenqis-explorer` | Vite/React; own `package.json` / npm CI |
 | `alvenqis-website` | Marketing + Node server |
 | `alvenqis-desktop-v2` | Nested Tauri workspace; current Control Center product path |
-| `alvenqis-android` | Gradle / NDK; consumes `alvenqis-mobile-core` via scripts |
 | `alvenqis-desktop-v2/native/keystore-helper` | Nested workspace sidecar binary |
 | `alvenqis-sdk` | TypeScript public client (`npm run build` in-tree); not a Cargo member |
 | Empty product shells (`alvenqis-contracts`, marketplace, …) | Reserved names; no crate / no product |
 
-**This is not an oversight.** Mixing npm/Gradle into `cargo test --workspace` would break G1 and slow every Rust change.
+**This is not an oversight.** Mixing npm into `cargo test --workspace` would break G1 and slow every Rust change.
 
 ### How to validate excluded trees
 
@@ -50,7 +48,6 @@ Root `Cargo.toml` lists only crates that:
 | Explorer | `cd alvenqis-explorer && npm ci && npm run build` |
 | Website | `cd alvenqis-website && npm ci && npm run build` |
 | Tauri | `cd Blockchain-prototype/alvenqis-desktop-v2 && npm ci && npm run tauri:build` |
-| Android | `cd alvenqis-android && ./gradlew …` |
 | Keystore helper | `cargo check` inside its directory |
 
 ---

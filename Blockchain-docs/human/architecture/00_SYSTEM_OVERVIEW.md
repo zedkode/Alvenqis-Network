@@ -12,7 +12,7 @@ implemented.
 |---|---|
 | Base | Core, node, P2P, RPC, indexer, CUDA miner, and pool prototype implemented for Mainnet Candidate |
 | Execution | Planned; no smart-contract VM or production VRC standards |
-| Product | Tauri desktop, wallet tooling, explorer, website, SDKs, Android/browser prototypes; several planned surfaces |
+| Product | Tauri desktop, wallet tooling, explorer, website, SDKs, and browser prototype; several planned surfaces |
 
 ## Sources of truth
 

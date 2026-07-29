@@ -38,8 +38,8 @@ Status: Mainnet Candidate risk register / not public Mainnet
   funded end-to-end flows, hardware signing, and external review remain.
 - The wallet CLI's storage boundary must not be presented as equivalent to an
   audited production keystore.
-- Android/browser/remote control remain constrained prototypes; no secret or
-  privileged operation may move into an unauthenticated renderer/API.
+- Browser and remote-control surfaces remain constrained prototypes; no secret
+  or privileged operation may move into an unauthenticated renderer/API.
 
 ## Miner and pool
 

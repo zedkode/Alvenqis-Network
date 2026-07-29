@@ -4,7 +4,6 @@
 # NOT members (managed separately on purpose):
 #   - alvenqis-explorer, alvenqis-website  -> Node/Vite frontends (npm)
 #   - alvenqis-desktop-tauri             -> own [workspace] + Tauri toolchain (Control Center)
-#   - alvenqis-android                   -> Gradle/Kotlin + mobile-core FFI
 #   - alvenqis-desktop-tauri/native/keystore-helper -> sidecar with nested [workspace]
 #   - docs-only / empty product stubs (sdk, contracts, faucet, ...)
 [workspace]
@@ -18,7 +17,6 @@ members = [
     "alvenqis-indexer",
     "alvenqis-miner",
     "alvenqis-mining-pool",
-    "alvenqis-mobile-core",
     "alvenqis-release/vps-control-plane/admin-server",
 ]
 resolver = "2"
