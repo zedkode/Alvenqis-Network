@@ -14,8 +14,8 @@ excluded by policy.
 |---|---:|
 | Component reference | 19 |
 | Historical | 2 |
-| Public | 118 |
-| **Total** | **139** |
+| Public | 117 |
+| **Total** | **138** |
 
 ## Complete inventory
 
@@ -121,7 +121,6 @@ excluded by policy.
 | `Blockchain-docs/human/tokenomics/README.md` | Public | Current reference / Mainnet Candidate | Tokenomics Docs |
 | `Blockchain-docs/human/whitepaper/README.md` | Public | Draft | Whitepaper Docs |
 | `Blockchain-docs/README.md` | Component reference | Current documentation boundary / mixed implementation maturity | Alvenqis Documentation |
-| `Blockchain-prototype/alvenqis-android/README.md` | Public | **Mainnet Candidate / Prototype / not public mainnet** | Alvenqis Mobile for Android |
 | `Blockchain-prototype/alvenqis-browser/README.md` | Public | Prototype / Mainnet Candidate / not store-ready | alvenqis-browser |
 | `Blockchain-prototype/alvenqis-core/README.md` | Public | Implemented / Mainnet Candidate / not public Mainnet | alvenqis-core |
 | `Blockchain-prototype/alvenqis-desktop-v2/README.md` | Public | ** Mainnet Candidate | Alvenqis Control Center V2 |

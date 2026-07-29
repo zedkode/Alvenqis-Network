@@ -250,8 +250,7 @@ impl RpcConfig {
 
     /// Whether `/mining/template` and `/mining/submit` serve mining work.
     pub fn mining_endpoints_enabled(&self) -> bool {
-        self.access_mode.default_exposes_mining()
-            && self.expose_mining_endpoints.unwrap_or(true)
+        self.access_mode.default_exposes_mining() && self.expose_mining_endpoints.unwrap_or(true)
     }
 }
 

@@ -53,9 +53,6 @@ http {
     default $http_x_forwarded_proto;
   }
 
-  limit_req_zone $forwarded_client_ip zone=mining_template:10m rate=30r/m;
-  limit_req_zone $forwarded_client_ip zone=mining_submit:10m rate=10r/m;
-
   upstream control_backend {
     server alvenqis-control:10788;
     keepalive 16;

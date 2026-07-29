@@ -221,7 +221,10 @@ fn public_submit_cannot_opt_in_to_mining() {
     let index_dir = temp_dir.path().join(".alvenqis-dev/indexer");
     let mut state = rpc_state_with_access_mode(&data_dir, &index_dir, RpcAccessMode::PublicSubmit);
     state.config.expose_mining_endpoints = Some(true);
-    let error = state.config.validate().expect_err("public mining must fail");
+    let error = state
+        .config
+        .validate()
+        .expect_err("public mining must fail");
     assert!(error
         .to_string()
         .contains("public RPC profiles cannot expose mining endpoints"));
