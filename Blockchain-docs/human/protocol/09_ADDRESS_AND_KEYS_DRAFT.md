@@ -1,6 +1,6 @@
-# Address And Keys Draft
+# Addresses, Keys, and Keystore
 
-Status: Draft
+Status: Implemented candidate cryptography / recovery and external review incomplete
 
 Implementation gate:
 - the launch-scope address and signing rule is now frozen through `TM-107`;
@@ -8,8 +8,8 @@ Implementation gate:
 
 ## Fixed Direction
 
-The address prefix direction is:
-- `ALVE`
+The Mainnet Candidate address HRP is lowercase:
+- `alve`
 
 ## Accepted Launch Standard
 
@@ -57,21 +57,27 @@ The current draft implementation separates environments at the address layer:
 - support for multisig or alternative key types;
 - replay and transaction-version policy beyond the frozen signing domain.
 
-## Current Non-Goals
+## Current Key Storage
 
-- no production key storage design yet;
-- no encrypted keystore flow yet;
-- no hardware-wallet integration yet.
+- wallet storage supports an encrypted Mainnet Candidate keystore using
+  Argon2id key derivation and AES-256-GCM authenticated encryption;
+- the desktop native keystore helper uses the operating-system credential
+  store rather than renderer-managed secrets;
+- wallet files and signed-transaction outputs remain network-separated;
+- recovery, migration, failure handling, hardware-wallet integration, and
+  external review remain incomplete.
 
 ## Phase 4C Draft Wallet CLI Note
 
-The current local prototype now includes a Rust wallet CLI for private-devnet use only:
-- wallet files are stored under the user home `.alvenqis-dev/wallets/` by default;
-- signed transactions are stored under the user home `.alvenqis-dev/signed-txs/` by default;
+The current Rust wallet CLI supports network-separated local workflows:
+- Devnet wallet files use `.alvenqis-dev/wallets/`;
+- Mainnet Candidate wallet storage requires the encrypted keystore path;
+- signed transactions remain under the active network data root;
 - mnemonic-derived wallets now use the frozen BIP39 plus SLIP-0010 rule above;
 - future testnet and mainnet-candidate wallet material must stay under `.alvenqis-testnet/` and `.alvenqis-mainnet/` respectively;
-- no encrypted keystore or browser-extension flow exists;
-- private key storage remains Draft / Devnet-only / Prototype and must not be treated as production-safe.
+- the browser extension and native-host flow remains a separate prototype;
+- current key storage must not be described as externally audited or
+  production-complete.
 
 ## Documentation Rule
 
@@ -83,6 +89,7 @@ Until broader launch packaging work is complete:
 ## Impact Notes
 
 - Core: signature verification and transaction hashing depend on these choices.
-- Wallet: account creation can now follow the frozen mnemonic rule or raw private-key import, while keystore UX remains separate work.
+- Wallet: account creation follows the frozen mnemonic rule or raw private-key
+  import; encrypted storage exists, while recovery and audit work remain open.
 - Explorer and Indexer: address indexing and display formats can now treat the visible address form as frozen for the launch-scope prototype.
 - RPC: transaction and network responses can now expose the frozen address and signing standard identifiers explicitly.

@@ -15,8 +15,10 @@ Status: Implemented / Mainnet Candidate / production hardening incomplete
 ## Still open or incomplete
 
 - stable final block and transaction serialization freezes;
-- production database, migrations, corruption recovery, and branch storage;
-- header-first sync, bounded verification pipeline, peer scoring, and resume;
+- production proof for the SQLite/RocksDB consistency, migration, corruption
+  recovery, and branch-storage contract;
+- bounded verification under adversarial load, diverse discovery,
+  IP/subnet/ASN admission, and deep-resume/reorg recovery;
 - final genesis allocation/treasury policy and independent genesis review;
 - multi-host soak, RPC abuse testing, and signed release artifacts;
 - contract execution and gas metering.

@@ -50,12 +50,12 @@ Still **not** production-complete (non-exhaustive):
 
 | Area | Candidate-class now | Still open for G4 |
 |---|---|---|
-| Node storage | SQLite strict schema; ACID tip/reorg transactions; WAL + `synchronous=FULL`; hash/link checks; JSONL migration; online backup + integrity check | Independent restore/disk-failure drills and multi-host soak |
+| Node storage | SQLite canonical block oracle plus RocksDB state/mempool in the VPS profile; transactional tip/reorg changes, integrity checks, encrypted state backups, and legacy migration | Cross-engine consistency contract, independent restore/disk-failure drills, and multi-host soak |
 | Node reorg | `adopt_candidate_chain` + mempool reconcile + P2P staged fork + **header-first**; detached blocks archived transactionally | Durable resume of pre-adoption branches and deep-reorg recovery |
 | Pool payouts | Confirm requires **on-chain tx lookup** covering each miner amount | Offline/HSM signer, multi-coordinator |
 | Peer scoring | Score + temporary bans (persist `peer-reputation.json`), refuse banned peers | Distributed ban lists, IP-level DDoS edge |
-| Indexer | Tip-hash rebuild, atomic `index.json`, dedicated timer writer, read-only RPC cache, bounded overview/pagination | Incremental detach, continuous daemon as default product |
-| RPC multi-client | Serialized chain-cache refresh, cached tip/work metadata, bounded index routes, `/status` lag fields | In-process rate limits, durable cache, production load test |
+| Indexer | Transactional SQLite primary store with legacy `index.json` import, tip-hash rebuild, and bounded overview/pagination | Correct RPC cache invalidation, incremental detach, recovery evidence, and continuous daemon product proof |
+| RPC multi-client | In-process request/rate limits, serialized chain-cache refresh, bounded index routes, and `/status` lag fields | Durable cache, authenticated capability policy, and production load/abuse tests |
 | Pool | Immature→Mature after N confs; **Mature re-check on reorg** claws unpaid mature | Shared admission, HSM signer, production storage |
 | Developer surface | `@alvenqis/sdk` read client + examples | Signed-tx helpers without key custody |
 

@@ -3,11 +3,11 @@
 Status: Draft / Mainnet Candidate / Prototype — **Alvenqis Network rebrand freeze**
 
 Canonical files:
-- node config: `configs/mainnet-candidate.toml`
-- genesis config: `configs/genesis.mainnet-candidate.toml`
-- genesis review: `docs/release/GENESIS_REVIEW.mainnet-candidate.json`
-- genesis approval: `docs/release/GENESIS_APPROVAL.mainnet-candidate.json`
-- genesis block: `docs/release/genesis.mainnet-candidate.block.json`
+- node config: `Blockchain-prototype/configs/mainnet-candidate.toml`
+- genesis config: `Blockchain-prototype/configs/genesis.mainnet-candidate.toml`
+- genesis review: `Blockchain-docs/human/release/GENESIS_REVIEW.mainnet-candidate.json`
+- genesis approval: `Blockchain-docs/human/release/GENESIS_APPROVAL.mainnet-candidate.json`
+- genesis block: `Blockchain-docs/human/release/genesis.mainnet-candidate.block.json`
 
 ## Deterministic genesis inputs
 
@@ -45,21 +45,29 @@ Approval note:
 | Hash | Why retired |
 |---|---|
 | `0000a26d…` | Pre-FiroPoW / Blake3 era |
-| `0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5` | Pre-Alvenqis wire identity (legacy network_id) |
 
 ## Safety rules
 
 - Node refuses accidental Mainnet Candidate chain-root regeneration unless `--force-genesis` is passed explicitly.
 - Node refuses startup when active genesis hash does not match the pinned approval record.
-- Changing `configs/mainnet-candidate.toml` or `configs/genesis.mainnet-candidate.toml` requires regenerating review + approval + block JSON.
+- Changing `Blockchain-prototype/configs/mainnet-candidate.toml` or
+  `Blockchain-prototype/configs/genesis.mainnet-candidate.toml` requires
+  regenerating review, approval, and block JSON.
+- The fixed seed key `[7; 32]` is a deterministic development helper and is
+  publicly reconstructible. Its candidate reward is not a final production
+  allocation or custody design.
+- The config currently retains a legacy `docs/release/...` approval path. That
+  path must be reconciled and tested before the candidate startup workflow can
+  be treated as release evidence.
 - Legacy pre-Alvenqis chain data is archive-only; no balance migration.
 
 ## Operator workflow
 
 ```powershell
+cd Blockchain-prototype
 cargo run -p alvenqis-node --release -- --config configs/mainnet-candidate.toml print-genesis-hash
-cargo run -p alvenqis-node --release -- --config configs/mainnet-candidate.toml export-genesis-review --output docs/release/GENESIS_REVIEW.mainnet-candidate.json
-cargo run -p alvenqis-node --release -- --config configs/mainnet-candidate.toml approve-genesis --review-file docs/release/GENESIS_REVIEW.mainnet-candidate.json --approved-by <name> --output docs/release/GENESIS_APPROVAL.mainnet-candidate.json
-cargo run -p alvenqis-node --release -- --config configs/mainnet-candidate.toml export-genesis-block --output docs/release/genesis.mainnet-candidate.block.json
+cargo run -p alvenqis-node --release -- --config configs/mainnet-candidate.toml export-genesis-review --output ../Blockchain-docs/human/release/GENESIS_REVIEW.mainnet-candidate.json
+cargo run -p alvenqis-node --release -- --config configs/mainnet-candidate.toml approve-genesis --review-file ../Blockchain-docs/human/release/GENESIS_REVIEW.mainnet-candidate.json --approved-by <name> --output ../Blockchain-docs/human/release/GENESIS_APPROVAL.mainnet-candidate.json
+cargo run -p alvenqis-node --release -- --config configs/mainnet-candidate.toml export-genesis-block --output ../Blockchain-docs/human/release/genesis.mainnet-candidate.block.json
 cargo run -p alvenqis-node --release -- --config configs/mainnet-candidate.toml genesis-approval-status
 ```

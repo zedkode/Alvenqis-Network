@@ -12,6 +12,10 @@ The current implementation provides:
 - periodic tip exchange and direct-extension block synchronization;
 - signed pending-transaction propagation through gossipsub;
 - complete node validation before received data is persisted;
+- header-first branch staging with rejection of blocks received before their
+  required headers;
+- persisted sync-resume state for interrupted branch downloads;
+- persisted peer reputation, temporary bans, and refusal of banned peers;
 - local peer telemetry for connected, handshake-validated, mining and validating peers;
 - signed miner-presence propagation through gossipsub, deduplicated by the originating Peer ID;
 - observed mining telemetry with a 30-second freshness window and summed hashrate for miners visible through the P2P mesh;
@@ -26,6 +30,9 @@ accepts direct extensions, stages divergent branches up to 2,048 blocks, and
 adopts only a fully validated branch with strictly greater cumulative work.
 Detached valid transactions are reconciled back into the mempool; the SQLite
 canonical-chain change and detached-block archival share one ACID transaction.
-Header-first synchronization, disk-backed pre-adoption branch resume,
-deep-reorg recovery, production peer scoring/bans,
-broader discovery, NAT traversal, and multi-host soak remain required before G4.
+Deep-reorg recovery, production validation of persisted resume behavior,
+PeerId-pinned diverse bootstrap, active discovery, IP/subnet/ASN admission,
+NAT traversal, and multi-host adversarial soak remain required before G4.
+
+The candidate default still names one unpinned project DNS seed. Identify and
+gossipsub observations are not a substitute for active peer discovery.

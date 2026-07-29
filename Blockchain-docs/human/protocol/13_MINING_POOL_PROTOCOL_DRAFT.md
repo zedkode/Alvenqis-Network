@@ -30,9 +30,11 @@ Lower share difficulty proves contributed work but cannot create a valid block. 
 - All calculations use integer atomic units and `u128` intermediates.
 - Shares are weighted by proven work (`2^leading_zero_bits`), so different VarDiff targets receive proportional PPLNS credit.
 - Pool fee is configured in basis points and deducted once.
-- Integer remainder is assigned deterministically in canonical address order.
+- Integer remainder uses a largest-remainder allocation. Canonical address
+  order is used only as the deterministic tie-break.
 - Allocations become mature only after the configured confirmation count and canonical-hash verification.
-- Orphaned blocks remove immature allocations.
+- Orphaned blocks remove immature allocations, and a reorg re-check claws back
+  mature but unpaid allocations that are no longer canonical.
 
 ## Payout Boundary
 

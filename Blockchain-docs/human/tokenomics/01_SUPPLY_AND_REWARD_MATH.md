@@ -14,7 +14,8 @@ Status: Implemented candidate arithmetic / allocation policy incomplete
 ```text
 initial_reward = max_supply / (2 * halving_interval)
 initial_reward = 60,000,000 / (2 * 1,576,800)
-initial_reward = 19.02587519
+ideal_initial_reward = 19.025875190258...
+implemented_initial_reward = 19.02587519
 ```
 
 ## Time Interpretation
@@ -34,6 +35,11 @@ The canonical amount model uses:
 
 This fixes amount precision while stable wire serialization and final allocation
 policy remain separate gates.
+
+Because rewards use integer atomic units and integer halving, the implemented
+schedule issues `5,999,999,968,382,400` atomic units
+(`59,999,999.68382400 ALVE`). It remains `31,617,600` atomic units
+(`0.31617600 ALVE`) below the supply cap.
 
 ## Impact Notes
 

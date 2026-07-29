@@ -12,20 +12,27 @@ Status: Implemented candidate emission / allocation policy incomplete
 
 ## Formula
 
-Source-info uses a geometric emission model:
+The ideal geometric model motivates the launch constants:
 
 ```text
 initial_reward = max_supply / (2 * halving_interval)
 initial_reward = 60,000,000 / (2 * 1,576,800)
-initial_reward = 19.02587519 ALVE
+ideal_initial_reward = 19.025875190258...
+implemented_initial_reward = 19.02587519 ALVE
 ```
+
+The implementation stores integer atomic units and halves with integer
+right-shift. The initial reward is therefore truncated to `1,902,587,519`
+atomic units.
 
 ## Schedule Interpretation
 
 Implemented emission interpretation:
 - reward epoch 0: `19.02587519 ALVE` per block;
 - each halving epoch reduces the reward by half;
-- long-run issuance converges toward the max supply target.
+- terminal scheduled issuance is `59,999,999.68382400 ALVE`;
+- the remaining `0.31617600 ALVE` under the 60,000,000 ALVE cap is never
+  created by the current subsidy schedule.
 
 ## Missing Policy Items
 
