@@ -2,13 +2,16 @@
 # Exit 0 only when health, status and solo mining template pass.
 [CmdletBinding()]
 param(
-    [string]$BaseUrl = $(if ($env:ALVENQIS_PUBLIC_RPC) { $env:ALVENQIS_PUBLIC_RPC } else { 'https://rpcnode.dohotstudio.com' }),
+    [string]$BaseUrl = $env:ALVENQIS_PUBLIC_RPC,
     [string]$ExpectedGenesisTip = $(if ($env:ALVENQIS_EXPECTED_GENESIS_TIP) { $env:ALVENQIS_EXPECTED_GENESIS_TIP } else { '0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5' }),
     [string]$ExpectedNetworkId = $(if ($env:ALVENQIS_EXPECTED_NETWORK_ID) { $env:ALVENQIS_EXPECTED_NETWORK_ID } else { 'alvenqis-mainnet-candidate' }),
     [string]$MinerAddress = $env:ALVENQIS_SMOKE_MINER_ADDRESS
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($BaseUrl)) {
+    throw 'Pass -BaseUrl or set ALVENQIS_PUBLIC_RPC.'
+}
 $BaseUrl = $BaseUrl.TrimEnd('/')
 
 function Fail {

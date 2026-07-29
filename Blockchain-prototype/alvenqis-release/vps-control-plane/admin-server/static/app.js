@@ -433,7 +433,14 @@ async function refreshSummary() {
     $("pendingInvites").textContent = summaryCache.pending_invitations ?? 0;
     if (summaryCache.advertise_host) {
       $("truthMeta").textContent = `${summaryCache.controller || "controller"} · ${summaryCache.advertise_host}`;
-      $("publicRpcLink").href = `https://${summaryCache.advertise_host}`;
+    }
+    const publicRpcLink = $("publicRpcLink");
+    if (summaryCache.public_rpc_url) {
+      publicRpcLink.href = summaryCache.public_rpc_url;
+      publicRpcLink.classList.remove("hidden");
+    } else {
+      publicRpcLink.classList.add("hidden");
+      publicRpcLink.removeAttribute("href");
     }
     if (!$("adminDomain").value && summaryCache.advertise_host) {
       $("adminDomain").placeholder = summaryCache.advertise_host;

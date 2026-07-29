@@ -28,17 +28,23 @@ grep -Eq '^[0-9A-Fa-f]{64}$' "$ALVENQIS_STORAGE_KEY_FILE" || {
   echo "ERROR: RocksDB storage key must contain exactly 64 hexadecimal characters." >&2
   exit 78
 }
-export BASE_DOMAIN="${BASE_DOMAIN:-example.invalid}" NODE_NAME="${NODE_NAME:-alvenqis-node}" RPC_HOST="${RPC_HOST:-rpc.${BASE_DOMAIN}}" CONTROL_HOST="${CONTROL_HOST:-control.${BASE_DOMAIN}}" POOL_HOST="${POOL_HOST:-pool.${BASE_DOMAIN}}" P2P_HOST="${P2P_HOST:-node.${BASE_DOMAIN}}" SEED_NODES_TOML="${SEED_NODES_TOML:-}"
+export BASE_DOMAIN="${BASE_DOMAIN:-example.invalid}" NODE_NAME="${NODE_NAME:-alvenqis-node}"
+export PUBLIC_RPC_HOST="${PUBLIC_RPC_HOST:-${RPC_HOST:-rpc.${BASE_DOMAIN}}}" RPC_HOST="${PUBLIC_RPC_HOST:-${RPC_HOST:-rpc.${BASE_DOMAIN}}}"
+export P2P_ADVERTISE_HOST="${P2P_ADVERTISE_HOST:-${P2P_HOST:-node.${BASE_DOMAIN}}}" P2P_HOST="${P2P_ADVERTISE_HOST:-${P2P_HOST:-node.${BASE_DOMAIN}}}"
+export CONTROL_HOST="${CONTROL_HOST:-control.${BASE_DOMAIN}}" POOL_HOST="${POOL_HOST:-pool.${BASE_DOMAIN}}" SEED_NODES_TOML="${SEED_NODES_TOML:-}"
 export STRATUM_HOST="${STRATUM_HOST:-stratum.${BASE_DOMAIN}}"
 export STRATUM_INTERNAL_PORT="${STRATUM_INTERNAL_PORT:-3333}"
 export STRATUM_PORT="${STRATUM_PORT:-3333}"
 export MAX_P2P_PEERS="${MAX_P2P_PEERS:-64}"
 export RPC_ACCESS_MODE="${RPC_ACCESS_MODE:-public-submit}" RPC_EXPOSE_MINING="${RPC_EXPOSE_MINING:-false}"
+export MINING_RPC_BIND="${MINING_RPC_BIND:-docker-internal}"
 [[ "$MAX_P2P_PEERS" =~ ^[0-9]+$ ]] && (( MAX_P2P_PEERS >= 8 && MAX_P2P_PEERS <= 256 )) || {
   echo "ERROR: MAX_P2P_PEERS must be between 8 and 256." >&2
   exit 64
 }
 export CONTROLLER_URL_TOML='""'; [[ -n "${CONTROLLER_URL:-}" ]] && CONTROLLER_URL_TOML="\"${CONTROLLER_URL}\""
+export PUBLIC_RPC_URL_TOML='""'
+[[ "$PUBLIC_RPC_HOST" != *.example.invalid && "$PUBLIC_RPC_HOST" != example.invalid ]] && PUBLIC_RPC_URL_TOML="\"https://${PUBLIC_RPC_HOST}\""
 case "$component" in
  node)
   render /app/templates/node.toml.template "$config_dir/node.toml"
@@ -54,6 +60,10 @@ case "$component" in
   trap stop_node TERM INT
   alvenqis-node --config "$config_dir/node.toml" --data-dir "$chain_dir" --mempool-dir "$mempool_dir" start-node & child=$!; wait "$child" ;;
  rpc)
+  if [[ "${RPC_PUBLIC_EDGE:-false}" == true && "$PUBLIC_RPC_HOST" == *.example.invalid ]]; then
+    echo "ERROR: PUBLIC_RPC_HOST must be configured before enabling a public RPC edge." >&2
+    exit 64
+  fi
   render /app/templates/node.toml.template "$config_dir/rpc-node.toml"; render /app/templates/rpc.toml.template "$config_dir/rpc.toml"
   exec alvenqis-rpc-gateway --config "$config_dir/rpc.toml" --node-config "$config_dir/rpc-node.toml" ;;
  indexer)
@@ -63,6 +73,10 @@ case "$component" in
   exec alvenqis-vps-admin --config "$config_dir/admin.toml" ;;
  pool)
   required_env POOL_ADDRESS
+  [[ "$STRATUM_HOST" != *.example.invalid && "$POOL_HOST" != *.example.invalid ]] || {
+    echo "ERROR: STRATUM_HOST and POOL_HOST must be operator-owned names for the pool role." >&2
+    exit 64
+  }
   render /app/templates/pool.toml.template "$config_dir/pool.toml"
   exec /usr/local/bin/alvenqis-pool-supervisor "$config_dir/pool.toml" ;;
  *) echo "ERROR: invalid ALVENQIS_COMPONENT" >&2; exit 64 ;;

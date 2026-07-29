@@ -454,6 +454,7 @@ async fn fleet_summary(
         "advertise_host": state.config.advertise_host,
         "p2p_port": state.config.p2p_port,
         "release_bundle_url": state.config.release_bundle_url,
+        "public_rpc_url": state.config.public_rpc_url,
         "invitation_ttl_seconds": state.config.invitation_ttl_seconds,
         "topology": topology,
         "pending_invitations": pending,
@@ -1453,6 +1454,7 @@ mod tests {
             state_dir: PathBuf::from(dir.path()),
             release_bundle_url: "https://example.org/release.tar.gz".to_owned(),
             controller_url: None,
+            public_rpc_url: Some("https://rpc.example.org".to_owned()),
             report_interval_seconds: 15,
             invitation_ttl_seconds: 900,
         };

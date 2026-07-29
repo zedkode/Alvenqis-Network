@@ -1,6 +1,8 @@
 param(
-    [string]$BaseUrl = "https://rpcnode.dohotstudio.com",
-    [string]$StratumHost = "stratum.dohotstudio.com",
+    [Parameter(Mandatory = $true)]
+    [string]$BaseUrl,
+    [Parameter(Mandatory = $true)]
+    [string]$StratumHost,
     [int]$StratumPort = 3333,
     [Parameter(Mandatory = $true)]
     [string]$MinerAddress

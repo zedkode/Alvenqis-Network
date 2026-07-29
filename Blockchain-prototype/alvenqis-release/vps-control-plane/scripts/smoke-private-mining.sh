@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-base_url="${ALVENQIS_PUBLIC_RPC_URL:-https://rpcnode.dohotstudio.com}"
-stratum_host="${STRATUM_HOST:-stratum.dohotstudio.com}"
+base_url="${ALVENQIS_PUBLIC_RPC_URL:-}"
+stratum_host="${STRATUM_HOST:-}"
 stratum_port="${STRATUM_PORT:-3333}"
 miner_address="${ALVENQIS_SMOKE_MINER_ADDRESS:-${POOL_ADDRESS:-}}"
+[[ -n "$base_url" && -n "$stratum_host" ]] || {
+  echo "Set ALVENQIS_PUBLIC_RPC_URL and STRATUM_HOST explicitly." >&2
+  exit 64
+}
 [[ -n "$miner_address" ]] || {
   echo "Set ALVENQIS_SMOKE_MINER_ADDRESS to a valid Alvenqis address." >&2
   exit 64

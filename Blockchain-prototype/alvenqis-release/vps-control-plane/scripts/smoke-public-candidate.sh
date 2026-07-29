@@ -3,7 +3,11 @@
 # Exit 0 only when health, status and solo mining template pass.
 set -Eeuo pipefail
 
-base_url="${1:-${ALVENQIS_PUBLIC_RPC:-https://rpcnode.dohotstudio.com}}"
+base_url="${1:-${ALVENQIS_PUBLIC_RPC:-}}"
+[[ -n "$base_url" ]] || {
+  echo "Pass the public RPC URL or set ALVENQIS_PUBLIC_RPC." >&2
+  exit 64
+}
 base_url="${base_url%/}"
 
 # Pinned release genesis tip (height 0). Override only with explicit approval.

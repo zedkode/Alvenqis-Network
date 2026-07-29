@@ -19,6 +19,8 @@ pub struct AdminConfig {
     pub release_bundle_url: String,
     #[serde(default)]
     pub controller_url: Option<String>,
+    #[serde(default)]
+    pub public_rpc_url: Option<String>,
     #[serde(default = "default_report_interval")]
     pub report_interval_seconds: u64,
     #[serde(default = "default_invitation_ttl")]
@@ -79,6 +81,14 @@ impl AdminConfig {
                 return Err("controller_url must not contain credentials or whitespace".to_owned());
             }
         }
+        if let Some(url) = &self.public_rpc_url {
+            if !url.is_empty() && !url.starts_with("https://") {
+                return Err("public_rpc_url must use HTTPS".to_owned());
+            }
+            if url.contains('@') || url.chars().any(char::is_whitespace) {
+                return Err("public_rpc_url must not contain credentials or whitespace".to_owned());
+            }
+        }
         if !self.release_bundle_url.starts_with("https://")
             || self.release_bundle_url.contains('@')
             || self.release_bundle_url.chars().any(char::is_whitespace)
@@ -113,6 +123,7 @@ mod tests {
             state_dir: PathBuf::from("state"),
             release_bundle_url: "https://example.org/bundle.tar.gz".to_owned(),
             controller_url: None,
+            public_rpc_url: None,
             report_interval_seconds: 15,
             invitation_ttl_seconds: 900,
         }

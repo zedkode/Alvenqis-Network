@@ -9,5 +9,6 @@ local_rpc_url = "http://alvenqis-rpc:10787"
 state_dir = "/data/control"
 release_bundle_url = "${RELEASE_BUNDLE_URL}"
 controller_url = ${CONTROLLER_URL_TOML}
+public_rpc_url = ${PUBLIC_RPC_URL_TOML}
 report_interval_seconds = 15
 invitation_ttl_seconds = 900

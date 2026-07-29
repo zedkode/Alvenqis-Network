@@ -61,7 +61,7 @@
           <div class="head-actions">
             <span class="live-pill" id="refreshState"><i></i> CONNECTING</span>
             <button id="refresh" class="btn" type="button">Refresh</button>
-            <a class="btn ghost" id="publicRpcLink" href="https://rpcnode.dohotstudio.com" target="_blank" rel="noopener">Public RPC</a>
+            <a class="btn ghost hidden" id="publicRpcLink" href="#" target="_blank" rel="noopener">Public RPC</a>
           </div>
         </header>
 
@@ -219,7 +219,7 @@
                 <small>Must resolve to the new VPS before install (A/AAAA + 80/443/20787).</small>
               </label>
               <label>Controller domain
-                <input id="adminDomain" pattern="[A-Za-z0-9._-]+" placeholder="rpcnode.dohotstudio.com" autocomplete="off" />
+                <input id="adminDomain" pattern="[A-Za-z0-9._-]+" placeholder="control.example.org" autocomplete="off" />
                 <small>Defaults to this controller’s advertise host if empty.</small>
               </label>
               <label>ACME certificate email
