@@ -36,15 +36,15 @@ cargo run -q -p alvenqis-browser-host -- --check-health --json
 cargo run -q -p alvenqis-browser-host -- --check-health --require-indexer-sync --json
 cargo run -q -p alvenqis-browser-host -- --check-health --max-indexer-lag 2 --json
 
-.\scripts\browser\probe-chain.ps1 -Strict
-.\scripts\browser\probe-chain.ps1 -MaxIndexerLag 2
-.\scripts\browser\probe-chain.ps1 -Watch -IntervalSec 30 -Strict -WebhookUrl $env:ALVENQIS_HEALTH_WEBHOOK_URL
+.\Blockchain-scripts\browser\probe-chain.ps1 -Strict
+.\Blockchain-scripts\browser\probe-chain.ps1 -MaxIndexerLag 2
+.\Blockchain-scripts\browser\probe-chain.ps1 -Watch -IntervalSec 30 -Strict -WebhookUrl $env:ALVENQIS_HEALTH_WEBHOOK_URL
 ```
 
 ```bash
-./scripts/browser/check-health.sh --strict --json
-./scripts/browser/check-health.sh --max-indexer-lag 2 --json
-./scripts/browser/probe-chain.sh --strict --watch --interval 30
+./Blockchain-scripts/browser/check-health.sh --strict --json
+./Blockchain-scripts/browser/check-health.sh --max-indexer-lag 2 --json
+./Blockchain-scripts/browser/probe-chain.sh --strict --watch --interval 30
 ```
 
 Webhook payload (JSON POST): `text`, `code`, `health` (body of health JSON when available).
@@ -65,16 +65,16 @@ Workflow: `.github/workflows/candidate-chain-health.yml`
 
 ```powershell
 # Every 30 minutes, strict indexer, optional webhook from env
-.\scripts\browser\register-health-task.ps1 -Strict
+.\Blockchain-scripts\browser\register-health-task.ps1 -Strict
 
 # Custom interval + lag tolerance
-.\scripts\browser\register-health-task.ps1 -IntervalMinutes 15 -MaxIndexerLag 2
+.\Blockchain-scripts\browser\register-health-task.ps1 -IntervalMinutes 15 -MaxIndexerLag 2
 
 # With webhook
-.\scripts\browser\register-health-task.ps1 -Strict -WebhookUrl $env:ALVENQIS_HEALTH_WEBHOOK_URL
+.\Blockchain-scripts\browser\register-health-task.ps1 -Strict -WebhookUrl $env:ALVENQIS_HEALTH_WEBHOOK_URL
 
 # Remove
-.\scripts\browser\register-health-task.ps1 -Unregister
+.\Blockchain-scripts\browser\register-health-task.ps1 -Unregister
 ```
 
 Logs: `%LOCALAPPDATA%\Alvenqis\health\probe-*.log`

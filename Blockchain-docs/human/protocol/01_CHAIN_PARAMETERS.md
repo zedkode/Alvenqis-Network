@@ -6,7 +6,7 @@ Status: Implemented / Mainnet Candidate
 |---|---:|
 | Network ID | `alvenqis-mainnet-candidate` |
 | Chain magic | `ALMC` (`414c4d43`) |
-| Address HRP | `ALVE` |
+| Address HRP | `alve` |
 | RPC / P2P port | `10787` / `20787` |
 | State model | Account based |
 | PoW | FiroPoW 0.9.4, period length 1 |

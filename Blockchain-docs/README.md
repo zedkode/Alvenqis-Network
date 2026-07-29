@@ -9,8 +9,8 @@ audit-preparation material. The public source-information set lives under
 
 `Blockchain-docs/internal/` is a local, private workspace containing the
 canonical task tracker and decision registers. It is intentionally excluded from
-the public repository. `InternalAI/` remains the separate private authority for
-the decentralization gate program and must never be copied into public docs.
+the public repository. Other private gate directives and review workspaces must
+never be copied into public documentation.
 
 Public entry points:
 

@@ -4,82 +4,192 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "Blockchain-scripts/security/**"
-      - "Blockchain-scripts/release/**"
-      - "Blockchain-scripts/git/**"
-      - "Blockchain-prototype/Cargo.toml"
-      - "Blockchain-prototype/Cargo.lock"
-      - "Blockchain-prototype/alvenqis-core/**"
-      - "Blockchain-prototype/alvenqis-node/**"
-      - "Blockchain-prototype/alvenqis-release/**"
-      - ".github/workflows/release-gate.yml"
   pull_request:
-    paths:
-      - "Blockchain-scripts/security/**"
-      - "Blockchain-scripts/release/**"
-      - "Blockchain-scripts/git/**"
-      - "Blockchain-prototype/Cargo.toml"
-      - "Blockchain-prototype/Cargo.lock"
-      - "Blockchain-prototype/alvenqis-core/**"
-      - "Blockchain-prototype/alvenqis-node/**"
-      - "Blockchain-prototype/alvenqis-release/**"
-      - ".github/workflows/release-gate.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-gate-${{ github.ref }}
+  group: release-gate-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  release-gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+  documentation-security:
+    name: Documentation and security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+
+      - name: Validate workflow syntax
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
+          printf '%s  %s\n' "$ACTIONLINT_SHA256" "$archive" | sha256sum --check
+          tar -xzf "$archive" actionlint
+          ./actionlint -no-color
+
+      - name: Verify script entry points
+        run: |
+          set -euo pipefail
+          bash Blockchain-scripts/security/check-secrets.sh --help
+          bash Blockchain-scripts/security/check-repo-hygiene.sh --help
+          bash Blockchain-scripts/security/check-config-safety.sh --help
+          bash Blockchain-scripts/security/check-workflow-pinning.sh --help
+          bash Blockchain-scripts/release/release-gate.sh --help
+
+      - name: Run repository safety checks
+        run: |
+          set -euo pipefail
+          bash Blockchain-scripts/git/check-forbidden-files.sh
+          bash Blockchain-scripts/security/check-secrets.sh
+          bash Blockchain-scripts/security/check-repo-hygiene.sh
+          bash Blockchain-scripts/security/check-config-safety.sh
+          bash Blockchain-scripts/security/check-workflow-pinning.sh
+
+      - name: Enforce English-only source content
+        run: node Blockchain-scripts/docs/check-english-content.mjs
+
+      - name: Audit public documentation
+        run: node Blockchain-scripts/docs/audit-docs.mjs
+
+  rust:
+    name: Rust workspace
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
-          components: rustfmt, clippy
+          components: rustfmt,clippy
 
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          workspaces: Blockchain-prototype -> target
+          cache-on-failure: true
 
       - name: Install Linux build dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential clang cmake libclang-dev libdbus-1-dev
 
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: Blockchain-prototype/alvenqis-explorer/package-lock.json
+      - name: Check formatting
+        run: cargo fmt --manifest-path Blockchain-prototype/Cargo.toml --all --check
 
-      - name: Script help smoke tests
-        run: |
-          bash Blockchain-scripts/security/check-secrets.sh --help
-          bash Blockchain-scripts/security/check-repo-hygiene.sh --help
-          bash Blockchain-scripts/security/check-config-safety.sh --help
-          bash Blockchain-scripts/release/release-gate.sh --help
+      - name: Run workspace tests
+        run: cargo test --manifest-path Blockchain-prototype/Cargo.toml --workspace --locked
 
-      - name: Secret scan
-        run: bash Blockchain-scripts/security/check-secrets.sh
-
-      - name: Repository hygiene scan
-        run: bash Blockchain-scripts/security/check-repo-hygiene.sh
-
-      - name: Config safety scan
-        run: bash Blockchain-scripts/security/check-config-safety.sh
+      - name: Run workspace Clippy
+        run: cargo clippy --manifest-path Blockchain-prototype/Cargo.toml --workspace --all-targets --locked -- -D warnings
 
       - name: Verify RocksDB state backend
         run: |
+          set -euo pipefail
           cargo test --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --locked --features storage-rocksdb --lib
           cargo clippy --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --all-targets --locked --features storage-rocksdb -- -D warnings
 
-      - name: Release gate
-        run: bash Blockchain-scripts/release/release-gate.sh
+  web:
+    name: Web applications
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            Blockchain-prototype/alvenqis-explorer/package-lock.json
+            Blockchain-prototype/alvenqis-website/package-lock.json
+            Blockchain-prototype/alvenqis-website/server/package-lock.json
+
+      - name: Verify explorer
+        working-directory: Blockchain-prototype/alvenqis-explorer
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Verify website
+        working-directory: Blockchain-prototype/alvenqis-website
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+
+      - name: Test website server
+        working-directory: Blockchain-prototype/alvenqis-website/server
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+
+  control-plane:
+    name: VPS control plane
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install validation parser
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.2
+
+      - name: Validate control-plane configuration
+        working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
+        run: bash ./scripts/validate-stack.sh --require-docker
+
+      - name: Build runtime image
+        run: docker build --file Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile --tag alvenqis-runtime:release-gate .
+
+  release-gate:
+    name: Release Gate
+    if: always()
+    needs:
+      - documentation-security
+      - rust
+      - web
+      - control-plane
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every release check
+        env:
+          DOCUMENTATION_SECURITY_RESULT: ${{ needs.documentation-security.result }}
+          RUST_RESULT: ${{ needs.rust.result }}
+          WEB_RESULT: ${{ needs.web.result }}
+          CONTROL_PLANE_RESULT: ${{ needs.control-plane.result }}
+        run: |
+          set -euo pipefail
+          for result in \
+            "$DOCUMENTATION_SECURITY_RESULT" \
+            "$RUST_RESULT" \
+            "$WEB_RESULT" \
+            "$CONTROL_PLANE_RESULT"; do
+            test "$result" = "success"
+          done

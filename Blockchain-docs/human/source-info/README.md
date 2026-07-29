@@ -18,12 +18,12 @@ See `../DOCUMENTATION_POLICY.md` for the workspace-wide documentation rules.
 
 ## Canonical read order
 
-1. `ALVENQIS_00_CITESTE_PRIMUL_DECIZII_DESCHISE.md` — read-first decisions and gaps
+1. `ALVENQIS_00_READ_FIRST_OPEN_DECISIONS.md` — read-first decisions and gaps
 2. `ALVENQIS_01_SOURCE_INFO_MASTER.md` — identity and fixed launch facts
 3. `ALVENQIS_02_ARCHITECTURE_AND_PRODUCT_LAYERS.md` — current and planned layers
 4. `ALVENQIS_03_ROADMAP_AND_STRUCTURE.md` — maturity-gated execution order
 5. `ALVENQIS_04_AGENTS_AND_GOVERNANCE.md` — change and claim governance
-6. `ALVENQIS_05_DECIZII_RECOMANDATE.md` — accepted decisions versus recommendations
+6. `ALVENQIS_05_RECOMMENDED_DECISIONS.md` — accepted decisions versus recommendations
 
 The filenames remain stable to avoid breaking existing links. Their content is
 English, and the legacy Romanian words in three filenames do not imply a second

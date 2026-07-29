@@ -162,11 +162,18 @@ fn load_from_disk() -> AppSettings {
     match fs::read_to_string(&path) {
         Ok(raw) => {
             let mut settings: AppSettings = serde_json::from_str(&raw).unwrap_or_default();
+            migrate_language(&mut settings);
             migrate_mining_settings(&mut settings);
             let _ = persist(&settings);
             settings
         }
         Err(_) => AppSettings::default(),
+    }
+}
+
+fn migrate_language(settings: &mut AppSettings) {
+    if settings.language != "en" {
+        settings.language = "en".into();
     }
 }
 
@@ -235,6 +242,7 @@ pub fn update(patch: serde_json::Value) -> AppResult<AppSettings> {
         }
     }
     let mut settings: AppSettings = serde_json::from_value(current)?;
+    migrate_language(&mut settings);
     if let Some(rpc) = patch.get("rpc_url").and_then(|v| v.as_str()) {
         settings.rpc_url = normalize_rpc_url(rpc)?;
     }
@@ -478,7 +486,19 @@ fn normalize_mining_rpc_url(raw: &str) -> AppResult<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_explorer_url, DEFAULT_EXPLORER_URL};
+    use super::{migrate_language, normalize_explorer_url, AppSettings, DEFAULT_EXPLORER_URL};
+
+    #[test]
+    fn persisted_romanian_language_migrates_to_english() {
+        let mut settings = AppSettings {
+            language: "ro".into(),
+            ..AppSettings::default()
+        };
+
+        migrate_language(&mut settings);
+
+        assert_eq!(settings.language, "en");
+    }
 
     #[test]
     fn public_explorer_requires_https() {

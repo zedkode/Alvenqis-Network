@@ -10,10 +10,12 @@ Status: Mainnet Candidate risk register / not public Mainnet
   long-running multi-process soak evidence is still required.
 - Node databases must remain on local filesystems; network filesystems with
   unreliable locking or sync semantics are unsupported.
-- Indexer and pool JSON snapshots are not final production storage.
-- Fork choice/reorganization exists and detached blocks are archived, but deep
-  durable pre-adoption branch storage,
-  header-first synchronization, resume, and multi-host adversarial soak remain.
+- The indexer uses transactional SQLite, but reorg recovery still performs an
+  O(n) rebuild and RPC cache invalidation still fingerprints the legacy JSON
+  path. Pool persistence is not a final transactional production design.
+- Fork choice/reorganization, detached-block archival, header-first
+  synchronization, and bounded resume exist. Deep durable pre-adoption branch
+  storage and multi-host adversarial soak remain open.
 - Stable block/transaction serialization and independent genesis verification
   are incomplete.
 

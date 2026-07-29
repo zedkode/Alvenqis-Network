@@ -49,9 +49,12 @@ Blockchain-scripts/release/release-gate.ps1 --help
 
 ## What the gate checks (G1)
 
-- Secret scanner (`scripts/security/check-secrets.*`)
+- Secret scanner (`Blockchain-scripts/security/check-secrets.*`)
 - Repository hygiene scanner
 - Config safety scanner
+- Immutable GitHub Action SHA pinning
+- GitHub Actions syntax validation with checksum-verified `actionlint`
+- English-only source and filename validation
 - Documentation audit and local-link validation
 - `cargo fmt --all --check`
 - `cargo test --workspace`
@@ -61,6 +64,15 @@ Blockchain-scripts/release/release-gate.ps1 --help
 - static VPS control-plane validation on the Bash gate
 - Required release and security documentation files
 - Required mainnet-candidate config files
+
+The GitHub `Release Gate` workflow reports four component jobs:
+
+- documentation and security;
+- Rust workspace;
+- web applications;
+- VPS control plane.
+
+A final `Release Gate` job succeeds only when all four component jobs succeed.
 
 ---
 

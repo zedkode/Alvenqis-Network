@@ -6,9 +6,7 @@
 
 > **Docs:** [`Blockchain-docs/`](./Blockchain-docs/) ·
 
-> **Scripts:** [`Blockchain-scripts/`](./Blockchain-scripts/) ·
-
-> **Stubs:** [`planned/`](./planned/)
+> **Scripts:** [`Blockchain-scripts/`](./Blockchain-scripts/)
 
 Alvenqis Network is an independent, Rust-based Proof-of-Work Layer 1 blockchain currently under active development.
 
@@ -204,7 +202,7 @@ The blockchain should preserve the verifiable proof, ownership relationship or p
 | Fork choice             | Implemented prototype   | Competing-chain selection               |
 | Reorganization handling | Implemented prototype   | Chain-branch replacement                |
 | Node runtime            | Runnable                | Local and controlled operation          |
-| P2P networking          | Prototype               | Node discovery and synchronization      |
+| P2P networking          | Prototype               | Seed-based synchronization; diverse active discovery remains open |
 | RPC gateway             | Runnable                | Wallet, miner and explorer access       |
 | Wallet CLI              | Runnable                | Experimental wallet operations          |
 | Desktop Control Center  | Mainnet Candidate       | Local node, wallet and miner management |
@@ -239,7 +237,7 @@ The following parameters describe the current Alvenqis protocol direction and Ma
 | ------------------------------ | -------------------------- |
 | Project name                   | Alvenqis Network             |
 | Native asset                   | ALVE                       |
-| Address prefix                 | `ALVE`                     |
+| Address prefix                 | `alve`                     |
 | Blockchain type                | Layer 1                    |
 | Core implementation            | Rust                       |
 | Ledger model                   | Account-based              |
@@ -555,28 +553,27 @@ Some product-layer components are runnable prototypes. Others remain planned.
 
 ```text
 Alvenqis-Network/
-├── configs/
-├── docs/
-├── scripts/
-├── shared/
-│
-├── alvenqis-core/
-├── alvenqis-node/
-├── alvenqis-rpc-gateway/
-├── alvenqis-wallet/
-├── alvenqis-sdk/
-├── alvenqis-sdk-rust/
-├── alvenqis-indexer/
-├── alvenqis-explorer/
-├── alvenqis-miner/
-├── alvenqis-mining-pool/
-├── alvenqis-desktop/
-├── alvenqis-desktop-v2/
-├── alvenqis-mobile-core/
-├── alvenqis-browser/
-├── alvenqis-release/
-├── alvenqis-website/
-└── Cargo.toml
+├── Blockchain-prototype/
+│   ├── configs/
+│   ├── shared/
+│   ├── alvenqis-core/
+│   ├── alvenqis-node/
+│   ├── alvenqis-rpc-gateway/
+│   ├── alvenqis-wallet/
+│   ├── alvenqis-sdk/
+│   ├── alvenqis-sdk-rust/
+│   ├── alvenqis-indexer/
+│   ├── alvenqis-explorer/
+│   ├── alvenqis-miner/
+│   ├── alvenqis-mining-pool/
+│   ├── alvenqis-desktop-v2/
+│   ├── alvenqis-mobile-core/
+│   ├── alvenqis-browser/
+│   ├── alvenqis-release/
+│   ├── alvenqis-website/
+│   └── Cargo.toml
+├── Blockchain-docs/
+└── Blockchain-scripts/
 ```
 
 ### `alvenqis-core`
@@ -643,7 +640,10 @@ It may expose:
 * operator endpoints;
 * health endpoints.
 
-Sensitive endpoints must not be exposed publicly without authentication and appropriate network protection.
+Sensitive endpoints must fail closed behind explicit authentication and network
+protection. The current RPC token check permits write/mining requests when no
+token is configured; this is an open finding in
+`Blockchain-docs/human/security/KNOWN_LIMITATIONS.md`.
 
 ### `alvenqis-wallet`
 
@@ -754,9 +754,9 @@ It is a Mainnet Candidate application, not a certified production financial wall
 ### Rust checks
 
 ```powershell
-cargo fmt --all --check
-cargo test --workspace --tests
-cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --manifest-path Blockchain-prototype\Cargo.toml --all --check
+cargo test --manifest-path Blockchain-prototype\Cargo.toml --workspace --tests
+cargo clippy --manifest-path Blockchain-prototype\Cargo.toml --workspace --all-targets -- -D warnings
 ```
 
 Passing these commands means that the tested code passed the repository's automated checks.
@@ -772,37 +772,37 @@ It does not mean:
 ### Local stack
 
 ```powershell
-.\scripts\local\start-all.ps1
+.\Blockchain-scripts\local\start-all.ps1
 ```
 
 Check status:
 
 ```powershell
-.\scripts\local\status-all.ps1
+.\Blockchain-scripts\local\status-all.ps1
 ```
 
 Run smoke tests:
 
 ```powershell
-.\scripts\local\run-local-smoke-test.ps1
+.\Blockchain-scripts\local\run-local-smoke-test.ps1
 ```
 
 Mine a local block:
 
 ```powershell
-.\scripts\local\mine-local-block.ps1
+.\Blockchain-scripts\local\mine-local-block.ps1
 ```
 
 Stop managed processes:
 
 ```powershell
-.\scripts\local\stop-all.ps1
+.\Blockchain-scripts\local\stop-all.ps1
 ```
 
 Reset the local chain:
 
 ```powershell
-.\scripts\local\reset-local-chain.ps1
+.\Blockchain-scripts\local\reset-local-chain.ps1
 ```
 
 A local reset may permanently remove all experimental chain history and balances in that environment.
@@ -1053,9 +1053,9 @@ These limitations are published deliberately so that experimental software is no
 
 * production-grade chain storage;
 * stronger database durability;
-* peer scoring;
-* node bans;
-* better chain synchronization;
+* PeerId-pinned independent bootstrap and active discovery;
+* per-IP/subnet/ASN admission controls;
+* adversarial synchronization and deep-resume validation;
 * stronger reorganization tests;
 * long-running soak tests;
 * multi-host deployment;

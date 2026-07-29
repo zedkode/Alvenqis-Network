@@ -288,7 +288,7 @@ export type ThemeId =
   /** @deprecated prefer "midnight" */
   | "alvenqis-midnight";
 export type DensityId = "comfortable" | "compact";
-export type LanguageId = "en" | "ro";
+export type LanguageId = "en";
 export type AccentId = "cyan" | "gold" | "emerald";
 
 /** Full Control Center preferences persisted by the Tauri backend. */

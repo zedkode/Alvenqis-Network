@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  echo "Usage: scripts/local/run-local-smoke-test.sh [--skip-release-gate]"
+  echo "Usage: Blockchain-scripts/local/run-local-smoke-test.sh [--skip-release-gate]"
   echo "Runs the local operator smoke test for node, RPC, wallet, indexer and explorer build readiness."
   exit 0
 fi
@@ -20,7 +20,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-if [[ "$skip_release_gate" != "true" && -f "$WORKSPACE_ROOT/scripts/release/release-gate.sh" ]]; then
+if [[ "$skip_release_gate" != "true" && -f "$REPO_ROOT/Blockchain-scripts/release/release-gate.sh" ]]; then
   echo "Running release gate before local smoke test..."
   run_release_gate
 fi

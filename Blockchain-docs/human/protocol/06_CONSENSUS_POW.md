@@ -51,5 +51,5 @@ documented activation or pre-launch reset, deterministic vectors, coordinated
 node/miner/pool rollout, and new genesis approval evidence.
 
 This implementation remains subject to the public launch gates in
-`docs/release/NETWORK_MATURITY.md`; a working miner does not itself authorize a
+`Blockchain-docs/human/release/NETWORK_MATURITY.md`; a working miner does not itself authorize a
 Mainnet Live claim.

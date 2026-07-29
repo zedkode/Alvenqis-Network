@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import type { LanguageId } from "@shared/types";
 import { commandLabels } from "../shared/i18n";
-import { PAGE_LABELS, PAGE_LABELS_RO, PAGE_ORDER, type PageId } from "../shared/pageMeta";
+import { PAGE_LABELS, PAGE_ORDER, type PageId } from "../shared/pageMeta";
 import { Dialog } from "./dialogs/Dialog";
 
 const pageIcons: Record<PageId, typeof Gauge> = {
@@ -38,7 +38,6 @@ type CommandItem = {
 
 export function CommandPalette({
   open,
-  language = "en",
   onClose,
   onNavigate,
   onRefresh,
@@ -53,8 +52,8 @@ export function CommandPalette({
   onToggleTheme(): void;
   onOpenWalletSwitcher(): void;
 }) {
-  const t = commandLabels[language === "ro" ? "ro" : "en"];
-  const labels = language === "ro" ? PAGE_LABELS_RO : PAGE_LABELS;
+  const t = commandLabels;
+  const labels = PAGE_LABELS;
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
 

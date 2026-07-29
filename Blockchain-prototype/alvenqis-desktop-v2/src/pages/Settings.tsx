@@ -439,8 +439,7 @@ export function Settings() {
                 value={settings.language}
                 onChange={(language) => void patch({ language })}
                 options={[
-                  { id: "en", label: "English", detail: "Default product language" },
-                  { id: "ro", label: "Română", detail: "Romanian labels (progressive)" }
+                  { id: "en", label: "English", detail: "Default product language" }
                 ]}
               />
             </Panel>

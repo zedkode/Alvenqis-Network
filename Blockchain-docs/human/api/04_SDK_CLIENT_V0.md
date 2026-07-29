@@ -21,9 +21,9 @@ Public TypeScript read client lives separately at `alvenqis-sdk/` (`@alvenqis/sd
 | Constant / helper | Value |
 |---|---|
 | Network id | `alvenqis-mainnet-candidate` |
-| Address prefix | `ALVE` |
+| Address prefix | `alve` |
 | Public RPC | `https://rpcnode.dohotstudio.com` |
-| Public pool | `https://rpcnode.dohotstudio.com/pool` |
+| Public pool | `https://pool.dohotstudio.com` |
 | Local RPC | `http://127.0.0.1:10787` |
 | Status label | from `Network::MainnetCandidate` (Planned / Mainnet Candidate) |
 
@@ -34,6 +34,10 @@ let remote = NetworkConfig::mainnet_candidate();
 let local = NetworkConfig::mainnet_candidate_local();
 let custom = NetworkConfig::with_rpc(alvenqis_sdk_rust::Network::MainnetCandidate, "https://example");
 ```
+
+The project-operated defaults are convenience values, not decentralized
+availability. Production clients still need operator-configurable endpoint
+rotation, health-based failover, and trust policy.
 
 ## Essential types (re-exported from `alvenqis-core`)
 
@@ -132,7 +136,7 @@ No RPC, no disk keystore. Browser signing uses **native messaging host**.
 |---|---|
 | `alvenqis-wallet` | `BlockingRpcClient` for balance + submit |
 | `alvenqis-browser-host` | blocking RPC + wallet + keystore + explore methods |
-| `alvenqis-desktop-tauri` | async RPC + defaults; snapshot may still mix ad-hoc GETs |
+| `alvenqis-desktop-v2` | async RPC + defaults; snapshot may still mix ad-hoc GETs |
 | Tauri `keystore-helper` | `BlockingRpcClient::account` for prepare/sign previews |
 | `alvenqis-examples` (JS) | uses TypeScript `@alvenqis/sdk` under `alvenqis-sdk/`, not this crate |
 

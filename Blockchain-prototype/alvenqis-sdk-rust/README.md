@@ -29,9 +29,9 @@ TypeScript package in `alvenqis-sdk/` (`@alvenqis/sdk`).
 | Field | Value |
 |---|---|
 | Network | `alvenqis-mainnet-candidate` |
-| Address prefix | `ALVE` |
+| Address prefix | `alve` |
 | Public RPC | `https://rpcnode.dohotstudio.com` |
-| Public pool | `http://rpcnode.dohotstudio.com/pool` |
+| Public pool | `https://pool.dohotstudio.com` |
 | Local RPC | `http://127.0.0.1:10787` |
 
 ## Example

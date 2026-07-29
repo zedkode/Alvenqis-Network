@@ -3,8 +3,8 @@
 Status: **Mainnet Candidate / Prototype — not public Mainnet**
 
 This is the operator runbook for **Priority 1 / Task 1**: make the controlled VPS
-rehearsal stack **operable, backupable, and verifiable** before any further
-`planned/` product work.
+rehearsal stack **operable, backupable, and verifiable** before future product
+work.
 
 Package root on the monorepo:
 

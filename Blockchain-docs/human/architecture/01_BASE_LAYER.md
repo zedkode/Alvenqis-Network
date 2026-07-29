@@ -10,7 +10,8 @@ Status: Implemented / Mainnet Candidate / production hardening incomplete
 - mempool admission, templates, submitted-block validation, and persistence;
 - libp2p transport, handshake validation, gossip, bounded sync, cumulative-work
   fork choice, and reorganization primitives;
-- RPC, index snapshots, CUDA-only mining, and off-chain pool accounting.
+- RPC, a transactional SQLite explorer index, CUDA-only mining, and off-chain
+  pool accounting.
 
 ## Still open or incomplete
 

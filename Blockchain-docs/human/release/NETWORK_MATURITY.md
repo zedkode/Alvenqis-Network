@@ -87,7 +87,8 @@ All of the following must be true and documented **outside** this draft approval
 3. **Production storage and ops** review (backup, restore, disk failure, monitoring, incident runbook).
 4. **RPC / mining abuse** testing (rate limits, auth boundaries, public surface minimalism).
 5. **External security review** of node, RPC, wallet keystore and deploy packaging.
-6. **Explicit go-live decision** recorded in `memory/DECISIONS.md` and public docs with date and signatories.
+6. **Explicit go-live decision** recorded in
+   `Blockchain-docs/internal/memory/DECISIONS.md` and public docs with date and signatories.
 7. Network label in configs/UI switches from **Mainnet Candidate** to **Mainnet** only after (1)–(6).
 
 Until then:

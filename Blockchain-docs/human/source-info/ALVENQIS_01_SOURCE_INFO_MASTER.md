@@ -8,7 +8,7 @@ Status: Canonical identity and launch-facts summary
 |---|---|
 | Project | Alvenqis Network |
 | Native asset | ALVE |
-| Public address HRP | `ALVE` |
+| Public address HRP | `alve` |
 | Project type | Proprietary Rust-based Layer 1 |
 | Current maturity | Mainnet Candidate / Prototype |
 | Public Mainnet | No |

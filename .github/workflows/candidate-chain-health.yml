@@ -1,5 +1,5 @@
 # Probe the public Mainnet Candidate RPC for liveness.
-# Not a mainnet-live claim — health of the candidate gateway only.
+# Not a mainnet-live claim; this checks only the candidate gateway.
 name: Candidate Chain Health
 
 on:
@@ -30,25 +30,25 @@ concurrency:
 jobs:
   health:
     name: Check candidate health
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       HEALTH_WEBHOOK_URL: ${{ secrets.ALVENQIS_HEALTH_WEBHOOK_URL }}
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
-          workspaces: "."
+          workspaces: Blockchain-prototype -> target
           cache-on-failure: true
 
       - name: Build alvenqis-browser-host
-        run: cargo build -p alvenqis-browser-host --release
+        run: cargo build --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-browser-host --release
 
       - name: Run health check
         env:
@@ -67,7 +67,7 @@ jobs:
             ARGS+=(--max-indexer-lag "${MAX_LAG:-0}")
           fi
           set +e
-          ./target/release/alvenqis-browser-host "${ARGS[@]}" | tee health.json
+          Blockchain-prototype/target/release/alvenqis-browser-host "${ARGS[@]}" | tee health.json
           CODE=${PIPESTATUS[0]}
           set -e
           if [ "$CODE" -ne 0 ]; then
@@ -77,7 +77,7 @@ jobs:
 
       - name: Upload health report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: candidate-health-report
           path: health.json

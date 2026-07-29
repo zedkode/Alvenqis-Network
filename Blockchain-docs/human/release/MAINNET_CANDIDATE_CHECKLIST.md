@@ -1,60 +1,93 @@
 # Mainnet Candidate Checklist (G2)
 
-Status: **Draft / Mainnet Candidate / Prototype — not public Mainnet**
+Status: Draft / Mainnet Candidate / Prototype — not public Mainnet
 
-> Completing this checklist authorizes **operator rehearsal** only.  
-> Public Mainnet requires the G4 criteria in `docs/release/NETWORK_MATURITY.md`.  
-> Local software hygiene is G1 (`docs/release/RELEASE_GATE.md`).
+Completing this checklist authorizes controlled operator rehearsal only. Public
+Mainnet still requires every G4 criterion in `NETWORK_MATURITY.md` and an
+explicit owner decision.
 
-Scope of this checklist:
-- core chain
-- PoW mining
-- persistent node
-- wallet CLI
-- RPC
-- indexer
-- explorer
-- release scripts
+## G1 prerequisite
 
-Minimum readiness gates:
-- deterministic genesis config exists under `configs/genesis.mainnet-candidate.toml`;
-- genesis review manifest exists under `docs/release/GENESIS_REVIEW.mainnet-candidate.json`;
-- genesis approval record exists under `docs/release/GENESIS_APPROVAL.mainnet-candidate.json`;
-- candidate node config exists under `configs/mainnet-candidate.toml`;
-- candidate RPC config exists under `configs/rpc.mainnet-candidate.toml`;
-- startup requires `allow_mainnet_candidate = true`;
-- startup requires a matching pinned genesis approval record;
-- candidate startup validates the stored genesis hash against the active config;
-- candidate startup validates the stored genesis hash against the active approval record review hash as well;
-- candidate chain validation rebuilds full state from genesis before reporting ready;
-- reset is refused for Mainnet Candidate;
-- Devnet reset requires explicit confirmation and local backup;
-- candidate chain data stays under `.alvenqis-mainnet/`;
-- mempool capacity is bounded by config and duplicate transaction hashes are rejected;
-- secret, repository-hygiene and config-safety scanners pass;
-- release gate documentation exists and can be run locally;
-- RPC binds to localhost by default unless explicit public opt-in is set;
-- wallet material stays outside tracked source folders;
-- RPC exposes only read or submit endpoints needed for the local candidate flow;
-- RPC application profiles prevent VPS deployments from registering mining and detailed P2P operator routes;
-- Ubuntu VPS services run in constrained Docker containers with fixed non-root runtime users, memory and CPU limits;
-- public VPS traffic terminates at Caddy or Cloudflare Tunnel while raw RPC and control ports remain private;
-- multi-VPS bootstrapping uses explicit libp2p seed multiaddresses and does not create a privileged consensus server;
-- explorer reads only RPC and indexer data and keeps Draft / Prototype labels visible;
-- release scripts run format, test, clippy and explorer build gates;
-- forbidden-file checks block `.env`, keys, seeds, wallet files, runtime data and obvious secret patterns.
-- local operator scripts exist for start, stop, status, backup, reset, mining and smoke-test flows under `scripts/local/`;
-- local operator data stays under `.alvenqis-local/` for rehearsal mode before any VPS deployment;
-- local operator runbook and troubleshooting docs exist under `docs/operator/`.
+- [ ] `node Blockchain-scripts/docs/audit-docs.mjs` exits 0.
+- [ ] The Windows or Bash G1 release gate exits 0 on the same commit.
+- [ ] `vps-control-plane/scripts/validate-stack.sh --require-docker` exits 0.
+- [ ] The public source-information set is version-controlled and all local
+      documentation links resolve.
+- [ ] `KNOWN_LIMITATIONS.md` and `DECENTRALIZATION_READINESS.md` match the
+      reviewed code/config snapshot.
 
-Still required before any live public launch claim (G4 — detail in `NETWORK_MATURITY.md`):
-- independent genesis verification beyond the current repository draft approval;
-- public seed deployment and multi-host soak testing of the existing encrypted P2P transport;
-- header-first synchronization, fork choice, reorg handling and peer scoring/bans operational maturity;
-- production storage review;
-- production RPC abuse testing, monitoring and incident response;
-- reorg-aware multi-node mempool and indexer behavior;
-- external security review;
-- explicit go-live decision recorded in project memory and public docs.
+## Immutable rehearsal snapshot
 
-**Until G4 is complete, keep all product labels on Mainnet Candidate / Prototype.**
+- [ ] Record the full Git commit and hashes of `Cargo.lock`, candidate configs,
+      genesis approval, genesis block, and documentation inventory.
+- [ ] Verify the deterministic genesis hash independently.
+- [ ] Confirm the active config, review, approval, block artifact, and checkpoint
+      all name the same candidate genesis.
+- [ ] Resolve and test the legacy `docs/release/...` approval path without
+      changing the approved genesis hash.
+- [ ] Confirm `allow_mainnet_candidate = true` is required and reset remains
+      refused for Mainnet Candidate data.
+
+## Independent node rehearsal
+
+- [ ] Start from a clean supported host before Docker installation.
+- [ ] Verify pinned artifacts before installation.
+- [ ] Install the explicit `node` role; do not rely on `full-stack`.
+- [ ] Confirm the rendered role excludes project edge, website, explorer,
+      monitoring, control panel, pool, wallet, and miner.
+- [ ] Confirm local storage ownership, encryption key retention, resource limits,
+      log rotation, and restart policy.
+- [ ] Record node PeerId, candidate network identity, genesis, height, tip, and
+      connected peer evidence.
+- [ ] Complete backup and restore onto a second fresh host.
+- [ ] Complete uninstall with an explicit retained-data decision.
+
+## P2P decentralization add-on
+
+- [ ] Configure three to five independently operated seeds.
+- [ ] Pin every seed to its expected PeerId.
+- [ ] Demonstrate bounded active discovery and seed failover.
+- [ ] Demonstrate reserved outbound capacity.
+- [ ] Enforce and test admission by IP/subnet/ASN in addition to PeerId.
+- [ ] Capture multi-host sync, transaction propagation, reconnect, resume, and
+      reorg evidence across independent failure domains.
+- [ ] Demonstrate that project DNS/seed failure does not prevent an already
+      configured independent node from operating.
+
+## RPC, indexer, and explorer rehearsal
+
+- [ ] Reconcile public submit/read, local solo-mining, private pool-mining, and
+      detailed P2P capability profiles.
+- [ ] Require write/mining authentication to fail closed when credentials are
+      absent.
+- [ ] Classify `/p2p/status` data and prove detailed peer telemetry is not
+      exposed unintentionally.
+- [ ] Fix and test SQLite-aware index cache freshness.
+- [ ] Start an independently operated RPC/indexer/explorer profile with no
+      hidden project endpoint fallback.
+- [ ] Demonstrate project RPC outage while independent clients remain usable.
+
+## Mining rehearsal
+
+- [ ] Prove local loopback solo mining with a physical supported NVIDIA GPU.
+- [ ] Prove remote Stratum TLS with certificate verification enabled.
+- [ ] Keep public HTTP `/mining/*` unavailable under the accepted policy.
+- [ ] Prove the pool role is optional and no VPS image contains a miner binary
+      or wallet key.
+- [ ] Document provider-neutral certificate input before claiming the pool role
+      is infrastructure-independent.
+
+## Operations and security
+
+- [ ] Complete viewer/operator RBAC and negative authorization tests.
+- [ ] Complete agent-controller mTLS, rotation, and revocation tests.
+- [ ] Validate backup, restore, disk-pressure, process failure, bad upgrade,
+      rollback, and incident procedures.
+- [ ] Run RPC/P2P/Stratum abuse and concurrency tests.
+- [ ] Record monitoring and alert evidence without treating telemetry as global
+      network truth.
+
+## G2 stop condition
+
+Publish the evidence paths and stop. G2 does not authorize a public Mainnet,
+external-audit sign-off, decentralization status, or zero-vulnerability claim.

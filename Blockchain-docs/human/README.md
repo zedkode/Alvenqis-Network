@@ -18,5 +18,5 @@ status applies to that document; a Draft product idea does not reduce the status
 of an already implemented core rule, and implemented candidate code does not
 imply public Mainnet readiness.
 
-Private execution trackers, agent directives, and decision registers are not
+Private execution trackers, workspace directives, and decision registers are not
 part of the public website or generated public inventory.

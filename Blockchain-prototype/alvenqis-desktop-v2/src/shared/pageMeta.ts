@@ -16,7 +16,7 @@ export type PageId =
   | "assets"
   | "settings";
 
-export type LanguageId = "en" | "ro";
+export type LanguageId = "en";
 
 export const PAGE_ORDER: PageId[] = [
   "overview",
@@ -54,23 +54,4 @@ export const PAGE_LABELS: Record<PageId, string> = {
   activity: "Activity",
   messages: "Messages",
   settings: "Settings"
-};
-
-export const PAGE_LABELS_RO: Record<PageId, string> = {
-  overview: "Prezentare",
-  analytics: "Analiză",
-  wallet: "Portofel",
-  send: "Trimite & Primește",
-  rewards: "Recompense",
-  assets: "Active",
-  mining: "Miner",
-  pool: "Pool",
-  explorer: "Explorer",
-  blocks: "Blocuri",
-  transactions: "Tranzacții",
-  mempool: "Mempool",
-  node: "Rețea",
-  activity: "Activitate",
-  messages: "Mesaje",
-  settings: "Setări"
 };

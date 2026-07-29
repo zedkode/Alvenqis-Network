@@ -1,7 +1,7 @@
 {
     "name":  "alvenqis-desktop-v2",
     "private":  true,
-    "version":  "2.0.0",
+    "version":  "2.0.1",
     "type":  "module",
     "description":  "Alvenqis Control Center  - premium Tauri desktop shell (UI/UX rebuild)",
     "author":  "Alvenqis Network \u003cadmin@alvenqis.network\u003e",

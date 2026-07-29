@@ -11,7 +11,8 @@ Public **TypeScript** client for Alvenqis **Mainnet Candidate / Prototype**.
 | Pool status, history, miner view, payouts list | Pool admin payout APIs |
 | Block maturity helper (`height + N confs`) | Marketplace, Passport, staking |
 
-Network label: **not public live Mainnet**. See `docs/release/NETWORK_MATURITY.md`.
+Network label: **not public live Mainnet**. See
+`../../Blockchain-docs/human/release/NETWORK_MATURITY.md`.
 
 ## Install (workspace)
 

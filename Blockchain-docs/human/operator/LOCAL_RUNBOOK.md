@@ -40,13 +40,13 @@ Windows note:
 PowerShell:
 
 ```powershell
-.\scripts\local\start-all.ps1
+.\Blockchain-scripts\local\start-all.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/start-all.sh
+bash Blockchain-scripts/local/start-all.sh
 ```
 
 What starts:
@@ -60,7 +60,7 @@ What starts:
 Show local status:
 
 ```powershell
-.\scripts\local\status-all.ps1
+.\Blockchain-scripts\local\status-all.ps1
 ```
 
 Key checks:
@@ -70,7 +70,7 @@ Key checks:
 - RPC `/health`
 - RPC `/network`
 - latest block view
-- index snapshot status
+- SQLite index status
 - managed log paths
 
 ## Mining One Local Block
@@ -78,41 +78,42 @@ Key checks:
 PowerShell:
 
 ```powershell
-.\scripts\local\mine-local-block.ps1
+.\Blockchain-scripts\local\mine-local-block.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/mine-local-block.sh
+bash Blockchain-scripts/local/mine-local-block.sh
 ```
 
-This mines one block using the local operator chain and refreshes the index snapshot after the block is written.
+This mines one block using the local operator chain and refreshes the SQLite
+index after the block is written.
 
 ## Wallet Flow
 
 Create a local wallet:
 
 ```powershell
-cargo run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --signed-tx-dir .alvenqis-local/wallets/signed-txs create-wallet
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --signed-tx-dir .alvenqis-local/wallets/signed-txs create-wallet
 ```
 
 Show the local address:
 
 ```powershell
-cargo run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets address
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets address
 ```
 
 Check a balance through local RPC:
 
 ```powershell
-cargo run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --rpc-base-url http://127.0.0.1:10787 balance <address>
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --rpc-base-url http://127.0.0.1:10787 balance <address>
 ```
 
 Submit a signed transaction if supported:
 
 ```powershell
-cargo run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --signed-tx-dir .alvenqis-local/wallets/signed-txs --rpc-base-url http://127.0.0.1:10787 submit-tx --tx-file .alvenqis-local/wallets/signed-txs/<tx-hash>.json
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --signed-tx-dir .alvenqis-local/wallets/signed-txs --rpc-base-url http://127.0.0.1:10787 submit-tx --tx-file .alvenqis-local/wallets/signed-txs/<tx-hash>.json
 ```
 
 ## Explorer
@@ -122,13 +123,13 @@ The explorer reads only the local RPC gateway.
 Start through the local wrapper:
 
 ```powershell
-.\scripts\local\start-all.ps1
+.\Blockchain-scripts\local\start-all.ps1
 ```
 
 Or manually:
 
 ```powershell
-cd alvenqis-explorer
+cd Blockchain-prototype/alvenqis-explorer
 npm install
 $env:VITE_ALVENQIS_RPC_URL = "http://127.0.0.1:10787"
 npm run dev -- --host 127.0.0.1 --port 4173
@@ -153,7 +154,7 @@ Expected files:
 Create a backup:
 
 ```powershell
-.\scripts\local\backup-local-chain.ps1
+.\Blockchain-scripts\local\backup-local-chain.ps1
 ```
 
 For Task 3 **SQLite online backup → isolated restore** evidence (integrity-checked,
@@ -168,7 +169,7 @@ See [CHAIN_MATURITY_OPS.md](CHAIN_MATURITY_OPS.md).
 By default the backup includes:
 - chain data
 - mempool data
-- index snapshot
+- SQLite index
 - local logs
 - local genesis marker if present
 
@@ -181,19 +182,19 @@ By default the backup does not include:
 PowerShell:
 
 ```powershell
-.\scripts\local\reset-local-chain.ps1
+.\Blockchain-scripts\local\reset-local-chain.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/reset-local-chain.sh
+bash Blockchain-scripts/local/reset-local-chain.sh
 ```
 
 Behavior:
 - stops managed local processes first
 - creates a backup automatically unless `--no-backup` is explicitly passed
-- clears local chain, mempool and index snapshot
+- clears local chain, mempool and SQLite index
 - keeps wallet material in place unless you remove it manually
 
 ## Local Smoke Test
@@ -201,13 +202,13 @@ Behavior:
 PowerShell:
 
 ```powershell
-.\scripts\local\run-local-smoke-test.ps1
+.\Blockchain-scripts\local\run-local-smoke-test.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/run-local-smoke-test.sh
+bash Blockchain-scripts/local/run-local-smoke-test.sh
 ```
 
 The smoke test covers:
@@ -218,5 +219,5 @@ The smoke test covers:
 - RPC `/health`
 - RPC `/network`
 - wallet create and address display
-- index snapshot refresh
+- SQLite index refresh
 - explorer build if the app exists

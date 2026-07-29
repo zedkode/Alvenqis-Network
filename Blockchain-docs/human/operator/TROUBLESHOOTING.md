@@ -68,9 +68,9 @@ Local defaults:
 - Explorer dev server: `4173`
 
 Fix:
-- run `.\scripts\local\stop-all.ps1`
+- run `.\Blockchain-scripts\local\stop-all.ps1`
 - close stale terminals or lingering processes
-- rerun `.\scripts\local\start-all.ps1`
+- rerun `.\Blockchain-scripts\local\start-all.ps1`
 
 ## Reset refuses to proceed
 
@@ -80,8 +80,8 @@ Expected behavior:
 Examples:
 
 ```powershell
-.\scripts\local\reset-local-chain.ps1
-.\scripts\local\reset-local-chain.ps1 -NoBackup
+.\Blockchain-scripts\local\reset-local-chain.ps1
+.\Blockchain-scripts\local\reset-local-chain.ps1 -NoBackup
 ```
 
 ## Wallet balance reads fail
@@ -104,7 +104,7 @@ cargo run -p alvenqis-indexer -- --network mainnet-candidate --chain-data-dir .a
 Or use:
 
 ```powershell
-.\scripts\local\mine-local-block.ps1
+.\Blockchain-scripts\local\mine-local-block.ps1
 ```
 
 That wrapper refreshes the local index after mining.

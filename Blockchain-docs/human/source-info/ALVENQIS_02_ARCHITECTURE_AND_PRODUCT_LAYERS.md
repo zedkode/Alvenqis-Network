@@ -9,7 +9,7 @@ Status: Canonical architecture summary
 - `alvenqis-core`: consensus and protocol source of truth;
 - `alvenqis-node`: chain persistence, mempool, P2P, fork choice, templates;
 - `alvenqis-rpc-gateway`: profiled HTTP read/submission/mining boundaries;
-- `alvenqis-indexer`: reorg-correct snapshot indexing and query data;
+- `alvenqis-indexer`: transactional SQLite indexing and query data;
 - `alvenqis-miner`: NVIDIA CUDA-only FiroPoW search;
 - `alvenqis-mining-pool`: off-chain pool accounting prototype.
 
@@ -37,23 +37,27 @@ Reserved folders and website concepts do not make these implemented features.
 - RPC never owns wallet secrets or weakens node validation.
 - Pool shares are off-chain accounting; only network-target blocks enter core.
 - Website and desktop render observed data and must not invent global totals.
-- VPS nodes are non-mining validators and hold no wallet material.
+- VPS node roles perform full validation and no nonce search. An explicitly
+  enabled pool role coordinates Stratum work but still contains no miner binary
+  or wallet key.
 
 ## Deployment boundaries
 
 - Mainnet Candidate is the product/operator profile.
-- The public RPC process binds to loopback behind a TLS reverse proxy.
-- Mining and detailed operator routes remain local unless a separately reviewed
-  authenticated design exists.
+- In the active container profile, RPC binds on the private Docker network and
+  the gateway owns public ingress. The raw RPC port is not host-published.
+- `/p2p/status` is currently part of the shared router, and the accepted public
+  mining policy is inconsistent with the active gateway/RPC/smoke configuration.
+  Both remain documented security blockers.
 - `alvenqis-release/vps-control-plane/` is active; `alvenqis-release/vps/` is frozen.
 - Tauri is the only Control Center product; Electron must not be reintroduced.
 
 ## Storage boundary
 
-The node uses the accepted embedded SQLite backend with a strict versioned
-schema, WAL plus full synchronous durability, transactional canonical updates,
-detached-block archival, integrity checks, online backup, and automatic
-one-way import from legacy JSONL while preserving the source file. Indexer and
-pool snapshots still require separate transactional storage decisions. Node
-restore drills, durable pre-adoption branch resume, disk-failure exercises, and
-multi-host soak remain G4 blockers.
+The node uses SQLite as the canonical block oracle and RocksDB for state/mempool
+in the VPS profile. SQLite provides a strict versioned schema, WAL plus full
+synchronous durability, transactional canonical updates, detached-block
+archival, integrity checks, online backup, and one-way legacy import. The
+indexer now uses transactional SQLite; pool persistence still requires a
+production redesign. Cross-engine consistency, restore drills, disk-failure
+exercises, and multi-host soak remain G4 blockers.

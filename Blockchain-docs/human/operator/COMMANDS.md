@@ -52,19 +52,19 @@ Primary local configs:
 PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local\start-all.ps1
+powershell -ExecutionPolicy Bypass -File .\Blockchain-scripts\local\start-all.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/start-all.sh
+bash Blockchain-scripts/local/start-all.sh
 ```
 
 What it does:
 - starts the local node;
 - starts the local RPC gateway;
-- refreshes the local index snapshot;
+- refreshes the local SQLite index;
 - starts the explorer dev server if available.
 
 ### Show Status
@@ -72,13 +72,13 @@ What it does:
 PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local\status-all.ps1
+powershell -ExecutionPolicy Bypass -File .\Blockchain-scripts\local\status-all.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/status-all.sh
+bash Blockchain-scripts/local/status-all.sh
 ```
 
 What it does:
@@ -93,19 +93,19 @@ What it does:
 PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local\mine-local-block.ps1
+powershell -ExecutionPolicy Bypass -File .\Blockchain-scripts\local\mine-local-block.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/mine-local-block.sh
+bash Blockchain-scripts/local/mine-local-block.sh
 ```
 
 What it does:
 - mines one local block;
 - validates the chain afterward;
-- refreshes the local index snapshot;
+- refreshes the local SQLite index;
 - prints the latest block when possible.
 
 ### Back Up Local Data
@@ -113,13 +113,13 @@ What it does:
 PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local\backup-local-chain.ps1
+powershell -ExecutionPolicy Bypass -File .\Blockchain-scripts\local\backup-local-chain.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/backup-local-chain.sh
+bash Blockchain-scripts/local/backup-local-chain.sh
 ```
 
 What it does:
@@ -132,13 +132,13 @@ What it does:
 PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local\reset-local-chain.ps1
+powershell -ExecutionPolicy Bypass -File .\Blockchain-scripts\local\reset-local-chain.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/reset-local-chain.sh
+bash Blockchain-scripts/local/reset-local-chain.sh
 ```
 
 What it does:
@@ -152,13 +152,13 @@ What it does:
 PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local\stop-all.ps1
+powershell -ExecutionPolicy Bypass -File .\Blockchain-scripts\local\stop-all.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/stop-all.sh
+bash Blockchain-scripts/local/stop-all.sh
 ```
 
 What it does:
@@ -170,13 +170,13 @@ What it does:
 PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\local\run-local-smoke-test.ps1
+powershell -ExecutionPolicy Bypass -File .\Blockchain-scripts\local\run-local-smoke-test.ps1
 ```
 
 Shell:
 
 ```bash
-bash scripts/local/run-local-smoke-test.sh
+bash Blockchain-scripts/local/run-local-smoke-test.sh
 ```
 
 What it verifies:
@@ -196,43 +196,43 @@ What it verifies:
 Start node:
 
 ```powershell
-cargo run -p alvenqis-node -- --config configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool start-node
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-node -- --config Blockchain-prototype/configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool start-node
 ```
 
 Node status:
 
 ```powershell
-cargo run -p alvenqis-node -- --config configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool node-status
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-node -- --config Blockchain-prototype/configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool node-status
 ```
 
 Validate chain:
 
 ```powershell
-cargo run -p alvenqis-node -- --config configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool validate-chain
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-node -- --config Blockchain-prototype/configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool validate-chain
 ```
 
 Mine one block:
 
 ```powershell
-cargo run -p alvenqis-node -- --config configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool mine-block
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-node -- --config Blockchain-prototype/configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool mine-block
 ```
 
 Mine pending block:
 
 ```powershell
-cargo run -p alvenqis-node -- --config configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool mine-pending-block
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-node -- --config Blockchain-prototype/configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool mine-pending-block
 ```
 
 Show mempool status:
 
 ```powershell
-cargo run -p alvenqis-node -- --config configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool mempool-status
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-node -- --config Blockchain-prototype/configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool mempool-status
 ```
 
 Shutdown local node:
 
 ```powershell
-cargo run -p alvenqis-node -- --config configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool shutdown
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-node -- --config Blockchain-prototype/configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool shutdown
 ```
 
 ## Direct RPC Commands
@@ -240,7 +240,7 @@ cargo run -p alvenqis-node -- --config configs/local.toml --data-dir .alvenqis-l
 Start RPC:
 
 ```powershell
-cargo run -p alvenqis-rpc-gateway -- --config configs/rpc.local.toml
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-rpc-gateway -- --config Blockchain-prototype/configs/rpc.local.toml
 ```
 
 Useful local reads:
@@ -263,51 +263,51 @@ chain history. Do not use it for recurring monitoring or UI refreshes.
 Create wallet:
 
 ```powershell
-cargo run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --signed-tx-dir .alvenqis-local/wallets/signed-txs create-wallet
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --signed-tx-dir .alvenqis-local/wallets/signed-txs create-wallet
 ```
 
 Show address:
 
 ```powershell
-cargo run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets address
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets address
 ```
 
 Wallet status:
 
 ```powershell
-cargo run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets wallet-status
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets wallet-status
 ```
 
 Check balance:
 
 ```powershell
-cargo run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --rpc-base-url http://127.0.0.1:10787 balance <address>
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --rpc-base-url http://127.0.0.1:10787 balance <address>
 ```
 
 Submit signed transaction:
 
 ```powershell
-cargo run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --signed-tx-dir .alvenqis-local/wallets/signed-txs --rpc-base-url http://127.0.0.1:10787 submit-tx --tx-file <path>
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-wallet -- --network mainnet-candidate --wallet-dir .alvenqis-local/wallets --signed-tx-dir .alvenqis-local/wallets/signed-txs --rpc-base-url http://127.0.0.1:10787 submit-tx --tx-file <path>
 ```
 
 ## Direct Indexer Commands
 
-Refresh index snapshot:
+Refresh the local index:
 
 ```powershell
-cargo run -p alvenqis-indexer -- --network mainnet-candidate --chain-data-dir .alvenqis-local/chain --index-dir .alvenqis-local/indexer index-chain
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-indexer -- --network mainnet-candidate --chain-data-dir .alvenqis-local/chain --index-dir .alvenqis-local/indexer index-chain
 ```
 
 Show index status:
 
 ```powershell
-cargo run -p alvenqis-indexer -- --network mainnet-candidate --index-dir .alvenqis-local/indexer status
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-indexer -- --network mainnet-candidate --index-dir .alvenqis-local/indexer status
 ```
 
 Print index summary:
 
 ```powershell
-cargo run -p alvenqis-indexer -- --network mainnet-candidate --index-dir .alvenqis-local/indexer print-index-summary
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-indexer -- --network mainnet-candidate --index-dir .alvenqis-local/indexer print-index-summary
 ```
 
 ## Explorer
@@ -315,7 +315,7 @@ cargo run -p alvenqis-indexer -- --network mainnet-candidate --index-dir .alvenq
 Build explorer:
 
 ```powershell
-cd alvenqis-explorer
+cd Blockchain-prototype/alvenqis-explorer
 npm install
 npm run build
 ```
@@ -323,7 +323,7 @@ npm run build
 Run explorer locally:
 
 ```powershell
-cd alvenqis-explorer
+cd Blockchain-prototype/alvenqis-explorer
 $env:VITE_ALVENQIS_RPC_URL = "http://127.0.0.1:10787"
 npm run dev -- --host 127.0.0.1 --port 4173
 ```
@@ -345,6 +345,6 @@ Local wrapper logs live under:
 
 ## Related Documents
 
-- `docs/operator/LOCAL_RUNBOOK.md`
-- `docs/operator/TROUBLESHOOTING.md`
+- `Blockchain-docs/human/operator/LOCAL_RUNBOOK.md`
+- `Blockchain-docs/human/operator/TROUBLESHOOTING.md`
 - `README.md`

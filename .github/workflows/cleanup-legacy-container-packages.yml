@@ -16,14 +16,17 @@ jobs:
   delete:
     if: ${{ inputs.confirmation == 'DELETE_LEGACY_PACKAGES' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Delete superseded container packages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE_OWNER: ${{ github.repository_owner }}
         run: |
           set -Eeuo pipefail
           for package in vireon-runtime vireon-backup-scheduler vireon-ops; do
             response="$(mktemp)"
+            trap 'rm -f "$response"' EXIT
             status="$(
               curl -sS \
                 -o "$response" \
@@ -32,7 +35,7 @@ jobs:
                 -H 'Accept: application/vnd.github+json' \
                 -H "Authorization: Bearer ${GH_TOKEN}" \
                 -H 'X-GitHub-Api-Version: 2022-11-28' \
-                "https://api.github.com/user/packages/container/${package}"
+                "https://api.github.com/users/${PACKAGE_OWNER}/packages/container/${package}"
             )"
             if [[ "$status" == 204 ]]; then
               echo "Deleted package: $package"
@@ -44,4 +47,5 @@ jobs:
               exit 1
             fi
             rm -f "$response"
+            trap - EXIT
           done

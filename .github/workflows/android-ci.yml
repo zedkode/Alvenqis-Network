@@ -7,12 +7,16 @@ on:
       - "Blockchain-prototype/alvenqis-android/**"
       - "Blockchain-prototype/alvenqis-mobile-core/**"
       - "Blockchain-prototype/alvenqis-core/**"
+      - "Blockchain-prototype/Cargo.lock"
+      - "Blockchain-prototype/Cargo.toml"
       - ".github/workflows/android-ci.yml"
   pull_request:
     paths:
       - "Blockchain-prototype/alvenqis-android/**"
       - "Blockchain-prototype/alvenqis-mobile-core/**"
       - "Blockchain-prototype/alvenqis-core/**"
+      - "Blockchain-prototype/Cargo.lock"
+      - "Blockchain-prototype/Cargo.toml"
       - ".github/workflows/android-ci.yml"
   workflow_dispatch:
 
@@ -28,17 +32,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Java
-        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
 
       - name: Setup Rust Android targets
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
@@ -56,10 +60,13 @@ jobs:
       - name: Build and verify Android debug APK
         working-directory: Blockchain-prototype/alvenqis-android
         shell: bash
-        run: ./gradlew --no-daemon clean testDebugUnitTest lintDebug assembleDebugAndroidTest assembleDebug verifyDebugNativeLibraries
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean testDebugUnitTest lintDebug assembleDebugAndroidTest assembleDebug verifyDebugNativeLibraries
 
       - name: Upload Android debug APK
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: alvenqis-android-debug
           if-no-files-found: error

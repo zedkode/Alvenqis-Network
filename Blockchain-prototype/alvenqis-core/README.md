@@ -29,13 +29,14 @@ CPU mining.
 ## Boundaries
 
 - Mainnet Candidate is not a public Mainnet launch.
-- JSONL chain persistence, P2P orchestration, RPC, wallet storage, indexing,
+- canonical chain/state persistence, P2P orchestration, RPC, wallet storage, indexing,
   pool accounting, and desktop UX belong to neighboring components.
 - Smart-contract execution, native application assets, Passport, marketplace,
   staking, and DAO behavior are not implemented protocol features.
 - Transaction serialization and production storage still require their
   dedicated maturity gates before G4.
 
-See `../docs/protocol/`, `../docs/release/NETWORK_MATURITY.md`, and
-`../memory/DECISIONS.md` for the current specification, maturity boundary, and
-accepted-decision register.
+See `../../Blockchain-docs/human/protocol/`,
+`../../Blockchain-docs/human/release/NETWORK_MATURITY.md`, and the private
+`../../Blockchain-docs/internal/memory/DECISIONS.md` register for the current
+specification, maturity boundary, and accepted decisions.

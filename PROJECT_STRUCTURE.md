@@ -36,22 +36,7 @@ Alvenqis_Network/                          # git root
 │   ├── alvenqis-examples/
 │   ├── alvenqis-devnet/
 │   ├── alvenqis-docker/
-│   ├── alvenqis-community/                # Discord bot (community tools)
 │   └── alvenqis-release/                  # packaging + VPS control plane
-│
-├── planned/                               # NOT implemented (README stubs only)
-│   ├── alvenqis-benchmarks/
-│   ├── alvenqis-contracts/
-│   ├── alvenqis-faucet/
-│   ├── alvenqis-governance/
-│   ├── alvenqis-infra/
-│   ├── alvenqis-marketplace/
-│   ├── alvenqis-monitoring/
-│   ├── alvenqis-ops/
-│   ├── alvenqis-passport/
-│   ├── alvenqis-research/
-│   ├── alvenqis-security/
-│   └── alvenqis-tests/
 │
 ├── Blockchain-docs/
 │   ├── human/                             # public human documentation site sources
@@ -82,7 +67,7 @@ Alvenqis_Network/                          # git root
 
 - **Root:** `Blockchain-prototype/Cargo.toml`
 - **Members:** core, node, rpc-gateway, wallet, sdk-rust, browser/host, indexer, miner, mining-pool, mobile-core, vps-admin
-- **Not workspace members (on purpose):** desktop-tauri (own workspace), explorer/website (npm), android (Gradle)
+- **Not workspace members (on purpose):** desktop-v2 (own Tauri workspace), explorer/website (npm), android (Gradle)
 
 ```bash
 cd Blockchain-prototype
@@ -115,7 +100,7 @@ See `.gitignore`. Highlights:
 - `target/`, `node_modules/`, `dist/`, `release-artifacts/`
 - secrets / keystores / `.env`
 - local development-tool state and private review material
-- private documentation, rebrand packs, and source-information notes
+- private task/decision material and agent-only instructions
 
 ## Status labels
 
@@ -125,7 +110,7 @@ See `.gitignore`. Highlights:
 | Desktop Control Center | Implemented (prototype UX) |
 | Explorer / website | Implemented (prototype) |
 | Browser host | Implemented (security-hardened) |
-| planned/* | Not started / stubs only |
+| Future product tracks | Planned/deferred in roadmap and the private task tracker; no placeholder package is treated as implementation |
 
 ## Naming
 

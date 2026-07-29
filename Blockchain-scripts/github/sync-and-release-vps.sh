@@ -10,7 +10,7 @@ if [[ "${1:-}" == "--sync-only" ]]; then sync_only=true; shift; fi
 message="${1:-release(vps): control-plane update $(date -u +'%Y-%m-%d %H:%M:%S UTC')}"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  echo "Usage: ./scripts/github/sync-and-release-vps.sh [--sync-only] [commit-message]"
+  echo "Usage: Blockchain-scripts/github/sync-and-release-vps.sh [--sync-only] [commit-message]"
   exit 0
 fi
 command -v gh >/dev/null || { echo "GitHub CLI is required" >&2; exit 1; }
@@ -34,9 +34,12 @@ bash Blockchain-scripts/security/check-secrets.sh
 bash Blockchain-scripts/git/check-forbidden-files.sh
 bash Blockchain-scripts/security/check-repo-hygiene.sh
 bash Blockchain-scripts/security/check-config-safety.sh
-cargo fmt --all --check
-cargo test --workspace --locked
-cargo clippy --workspace --all-targets --locked -- -D warnings
+bash Blockchain-scripts/security/check-workflow-pinning.sh
+node Blockchain-scripts/docs/check-english-content.mjs
+node Blockchain-scripts/docs/audit-docs.mjs
+cargo fmt --manifest-path Blockchain-prototype/Cargo.toml --all --check
+cargo test --manifest-path Blockchain-prototype/Cargo.toml --workspace --locked
+cargo clippy --manifest-path Blockchain-prototype/Cargo.toml --workspace --all-targets --locked -- -D warnings
 [[ -z "$(git status --porcelain)" ]] || { echo "Checks changed the working tree" >&2; exit 1; }
 git push origin main
 
@@ -45,7 +48,7 @@ if [[ "$sync_only" == true ]]; then
   exit 0
 fi
 
-version="$(tr -d '[:space:]' < alvenqis-release/vps-control-plane/VERSION)"
+version="$(tr -d '[:space:]' < Blockchain-prototype/alvenqis-release/vps-control-plane/VERSION)"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid VERSION: $version" >&2; exit 1; }
 prefix="vps-control-v${version}-rc."
 existing_head_tag="$(git tag --points-at HEAD --list "${prefix}*" | head -n1)"

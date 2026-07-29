@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$repo_root"
+
 if (git ls-files; git ls-files --others --exclude-standard) | sort -u | grep -E '(^|/)\.env($|\.)' | grep -vE '(^|/)\.env\.example$' | grep -q .; then
   echo "Forbidden tracked or unignored .env files found." >&2
   exit 1
@@ -19,6 +22,6 @@ for pattern in ".alvenqis-dev/" ".alvenqis-testnet/" ".alvenqis-mainnet/" "targe
   fi
 done
 
-bash scripts/security/check-secrets.sh
+bash "$repo_root/Blockchain-scripts/security/check-secrets.sh"
 
 echo "Forbidden file check passed."

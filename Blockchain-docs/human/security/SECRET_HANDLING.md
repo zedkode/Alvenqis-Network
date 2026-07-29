@@ -27,6 +27,6 @@ Operational rules:
 Verification commands:
 
 ```powershell
-scripts/security/check-secrets.ps1
-scripts/security/check-repo-hygiene.ps1
+Blockchain-scripts/security/check-secrets.ps1
+Blockchain-scripts/security/check-repo-hygiene.ps1
 ```

@@ -73,7 +73,7 @@ sudo apt install -y \
 ```
 
 Arch / CachyOS build deps are listed in
-`Blockchain-prototype/alvenqis-desktop-tauri/packaging/arch/PKGBUILD`
+`Blockchain-prototype/alvenqis-desktop-v2/packaging/arch/PKGBUILD`
 (`makedepends` / `depends` / `optdepends`).
 
 ## Build
@@ -116,7 +116,7 @@ chmod +x Blockchain-prototype/alvenqis-release/apps/linux/*.AppImage
 ./Blockchain-prototype/alvenqis-release/apps/linux/*.AppImage
 
 # Arch / CachyOS from monorepo PKGBUILD
-cd Blockchain-prototype/alvenqis-desktop-tauri/packaging/arch
+cd Blockchain-prototype/alvenqis-desktop-v2/packaging/arch
 makepkg -si
 ```
 

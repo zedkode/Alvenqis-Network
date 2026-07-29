@@ -4,17 +4,13 @@ on:
   push:
     tags:
       - "v*-candidate.*"
+      - "desktop-v*-candidate.*"
   workflow_dispatch:
     inputs:
       tag:
         description: Existing candidate tag, for example v1.0.0-candidate.1
         required: true
         type: string
-      force_build:
-        description: Rebuild this platform even if the tag contains a local artifact marker
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -27,47 +23,23 @@ env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
-  release-mode:
-    name: Detect release source
+  build-and-publish-vps:
+    name: Build and publish VPS control plane
     runs-on: ubuntu-24.04
-    outputs:
-      local_artifacts: ${{ steps.mode.outputs.local_artifacts }}
+    environment: candidate-release
+    timeout-minutes: 120
     steps:
-      - name: Checkout candidate tag metadata
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Checkout candidate tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
 
-      - name: Detect locally published artifacts marker
-        id: mode
-        shell: bash
-        env:
-          FORCE_BUILD: ${{ inputs.force_build || false }}
+      - name: Verify tag belongs to main
         run: |
           set -euo pipefail
-          TAG_MESSAGE="$(git for-each-ref "refs/tags/${RELEASE_TAG}" --format='%(contents)' || true)"
-          if [[ "$FORCE_BUILD" == "true" ]]; then
-            echo "local_artifacts=false" >> "$GITHUB_OUTPUT"
-            echo "Forced rebuild requested."
-          elif grep -Fq '[local-vps]' <<<"$TAG_MESSAGE"; then
-            echo "local_artifacts=true" >> "$GITHUB_OUTPUT"
-            echo "Local vps artifacts marker found. Platform build will be skipped."
-          else
-            echo "local_artifacts=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  build-and-publish-vps:
-    needs: release-mode
-    if: needs.release-mode.outputs.local_artifacts != 'true'
-    name: Build and publish VPS control plane
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    steps:
-      - name: Checkout candidate tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: ${{ inputs.tag || github.ref }}
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
@@ -83,7 +55,7 @@ jobs:
 
       - name: Validate Docker control plane
         working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
-        run: ./scripts/validate-stack.sh --require-docker
+        run: bash ./scripts/validate-stack.sh --require-docker
 
       - name: Build RocksDB runtime image
         run: docker build --file Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile --tag alvenqis-runtime:candidate .
@@ -114,7 +86,7 @@ jobs:
           ls -la release-publish/vps
 
       - name: Keep VPS build as workflow artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: candidate-vps-${{ env.RELEASE_TAG }}
           if-no-files-found: error
@@ -128,9 +100,9 @@ jobs:
           cat > release-notes.md <<'EOF'
           ## Mainnet Candidate prerelease — not public Mainnet
 
-          Release assets are built and published independently for Windows, Linux and the VPS control plane. A failed platform does not block successful platforms from publishing their own assets.
+          Windows, Linux, and VPS assets are built independently from the same candidate tag. A platform failure remains visible and does not certify another platform.
 
-          The desktop product is Tauri-based. Electron, CPU mining and OpenCL mining are not shipped. Verify the platform-specific SHA-256 checksum file before testing any asset.
+          The desktop product is Tauri-based. Electron, CPU mining, and OpenCL mining are not shipped. Verify every platform-specific SHA-256 checksum file before testing an asset.
           EOF
 
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
@@ -145,4 +117,4 @@ jobs:
       - name: Upload VPS assets to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$RELEASE_TAG" release-publish/vps/* --clobber
+        run: gh release upload "$RELEASE_TAG" release-publish/vps/*

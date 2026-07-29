@@ -8,16 +8,30 @@ on:
     paths:
       - "Blockchain-prototype/Cargo.toml"
       - "Blockchain-prototype/Cargo.lock"
+      - "Blockchain-prototype/**/Cargo.toml"
       - "Blockchain-prototype/**/*.rs"
       - "Blockchain-prototype/**/build.rs"
+      - "Blockchain-prototype/**/*.c"
+      - "Blockchain-prototype/**/*.cc"
+      - "Blockchain-prototype/**/*.cpp"
+      - "Blockchain-prototype/**/*.cu"
+      - "Blockchain-prototype/**/*.h"
+      - "Blockchain-prototype/**/*.hpp"
       - ".cargo/**"
       - ".github/workflows/rust-ci.yml"
   pull_request:
     paths:
       - "Blockchain-prototype/Cargo.toml"
       - "Blockchain-prototype/Cargo.lock"
+      - "Blockchain-prototype/**/Cargo.toml"
       - "Blockchain-prototype/**/*.rs"
       - "Blockchain-prototype/**/build.rs"
+      - "Blockchain-prototype/**/*.c"
+      - "Blockchain-prototype/**/*.cc"
+      - "Blockchain-prototype/**/*.cpp"
+      - "Blockchain-prototype/**/*.cu"
+      - "Blockchain-prototype/**/*.h"
+      - "Blockchain-prototype/**/*.hpp"
       - ".cargo/**"
       - ".github/workflows/rust-ci.yml"
   workflow_dispatch:
@@ -31,14 +45,14 @@ concurrency:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     defaults:
       run:
         working-directory: Blockchain-prototype
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
@@ -46,7 +60,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           workspaces: Blockchain-prototype -> target
 

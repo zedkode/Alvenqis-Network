@@ -31,11 +31,13 @@ mkdir -p "$output_dir"
 git archive --format=tar HEAD -- "${paths[@]}" | gzip -9 > "$output"
 (cd "$output_dir" && sha256sum "$(basename "$output")" > "$(basename "$output").sha256")
 
-tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/vps-control-plane/compose.yaml'
+tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/vps-control-plane/compose/base.yaml'
+tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/vps-control-plane/compose/installer.yaml'
+tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/vps-control-plane/compose/roles.json'
 tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/install-docker-stack.sh'
 tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile'
 
-if tar -tzf "$output" | grep -Eq '(^|/)(\.env|state/[^.].*|target/|node_modules/|\.artifacts/)'; then
+if tar -tzf "$output" | grep -Eq '(^|/)\.env$|(^|/)state/[^.]|(^|/)(target|node_modules|\.artifacts)/'; then
   echo "Forbidden runtime or generated file entered the Docker release archive." >&2
   exit 1
 fi

@@ -10,8 +10,9 @@ not delete legacy units, containers or data.
 ## Services
 
 - non-mining full validation and P2P node;
-- one Docker-private RPC process for chain reads, transaction submission,
-  Stratum work and rate-limited public solo-mining templates/submissions;
+- one Docker-private RPC process for chain reads, transaction submission and
+  Stratum work; the public/private mining capability boundary remains blocked
+  until its accepted policy and gateway configuration agree;
 - TLS-only Stratum pool (`ENABLE_POOL`) with direct DNS-only TCP routing;
 - supervised read-only indexer loop with bounded exponential retry;
 - authenticated controller or fleet agent;
@@ -153,12 +154,14 @@ before restarting the owned Alvenqis services.
 ## Secured pool mining ops
 
 Remote pool mining uses the direct DNS-only Stratum TLS endpoint. Solo mining
-uses the HTTPS RPC endpoint, while the pool HTTPS endpoint remains read-only:
+uses a local loopback or explicitly private RPC; the public RPC is not an
+approved solo-mining surface. The pool HTTPS endpoint remains read-only:
 [`Blockchain-docs/human/operator/PRIVATE_MINING_OPS.md`](../../../Blockchain-docs/human/operator/PRIVATE_MINING_OPS.md).
 
 ```bash
-# verify the public solo template and Stratum TLS certificate
-ALVENQIS_SMOKE_MINER_ADDRESS=alve1... ./scripts/smoke-private-mining.sh
+# verify public RPC policy and the Stratum TLS certificate separately
+./scripts/smoke-public-candidate.sh
+openssl s_client -connect stratum.example.org:3333 -servername stratum.example.org
 ```
 
 See [INSTALL_AND_UNINSTALL.md](INSTALL_AND_UNINSTALL.md) for the complete

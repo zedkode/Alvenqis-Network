@@ -12,9 +12,9 @@
   - [Execution Layer](architecture/02_EXECUTION_LAYER.md)
   - [Product Layer](architecture/03_PRODUCT_LAYER.md)
   - [Dependency Impact Map](architecture/04_CORE_WALLET_RPC_INDEXER_EXPLORER_IMPACT.md)
-  - [Desktop Direction](architecture/05_WINDOWS_DESKTOP_DIRECTION.md)
   - [Client Platforms](architecture/06_CLIENT_PLATFORM_DIRECTION.md)
   - [Browser Extension](architecture/07_BROWSER_EXTENSION_AND_NATIVE_HOST.md)
+  - [Storage Consistency](architecture/STORAGE_CONSISTENCY_AND_RECOVERY.md)
 
 - **Protocol**
   - [Protocol Index](protocol/README.md)
@@ -32,6 +32,8 @@
   - [Upgrade Activation](protocol/12_UPGRADE_ACTIVATION_POLICY.md)
   - [Checkpoint Policy](protocol/13_CHECKPOINT_POLICY.md)
   - [Mining Pool Protocol](protocol/13_MINING_POOL_PROTOCOL_DRAFT.md)
+  - [Fork Choice & Reorg](protocol/FORK_CHOICE_REORG_AND_CHECKPOINTS.md)
+  - [Consensus Test Vectors](protocol/CONSENSUS_SERIALIZATION_AND_TEST_VECTORS.md)
 
 - **Mining**
   - [Mining Index](mining/README.md)
@@ -62,6 +64,10 @@
   - [Known Limitations](security/KNOWN_LIMITATIONS.md)
   - [Threat Model](security/THREAT_MODEL.md)
   - [External Review Scope](security/EXTERNAL_SECURITY_REVIEW_SCOPE.md)
+  - [Wallet Key Management](security/WALLET_KEY_MANAGEMENT.md)
+  - [RPC / Stratum Abuse](security/RPC_STRATUM_POOL_ABUSE_MODEL.md)
+  - [Supply Chain](security/SUPPLY_CHAIN_AND_ARTIFACTS.md)
+  - [Responsible Disclosure](security/RESPONSIBLE_DISCLOSURE.md)
 
 - **Operations**
   - [Local Runbook](operator/LOCAL_RUNBOOK.md)
@@ -71,12 +77,14 @@
   - [Mining Troubleshooting](operator/MINING_TROUBLESHOOTING.md)
   - [Linux Desktop](operator/LINUX_DESKTOP.md)
   - [Independent Node Guide](operator/INDEPENDENT_NODE_OPERATOR_GUIDE.md)
+  - [Seed Diversity](operator/SEED_DIVERSITY_AND_DISCOVERY.md)
 
 - **Release**
   - [Network Maturity](release/NETWORK_MATURITY.md)
   - [Release Gate](release/RELEASE_GATE.md)
   - [Candidate Checklist](release/MAINNET_CANDIDATE_CHECKLIST.md)
   - [Genesis](release/GENESIS.md)
+  - [Genesis Ceremony](release/GENESIS_CEREMONY_AND_ALLOCATION.md)
   - [Decentralization Readiness](release/DECENTRALIZATION_READINESS.md)
 
 - **Project**

@@ -18,14 +18,19 @@ Current network-separation safeguards:
 Remaining boundaries:
 - no claim of live public testnet or live mainnet;
 - no production key custody or HSM integration;
-- P2P transport exists with Noise/Yamux and genesis/network validation, but
-  production peer reputation, multi-host soak, and abuse evidence are incomplete;
-- public RPC/mining exposure is a rate-limited prototype, not an authenticated
-  production control plane.
+- P2P transport, persistent peer reputation, Noise/Yamux, and genesis/network
+  validation exist, but discovery diversity, source-network admission,
+  multi-host soak, and abuse evidence are incomplete;
+- public RPC capability profiles remain inconsistent with the accepted
+  no-public-mining policy and are not an authenticated production control plane.
 
 Audit and risk entry points:
 
 - `KNOWN_LIMITATIONS.md` — open findings and required closure evidence;
 - `THREAT_MODEL.md` — assets, trust boundaries, actors, and priority scenarios;
 - `EXTERNAL_SECURITY_REVIEW_SCOPE.md` — immutable external-review package;
+- `WALLET_KEY_MANAGEMENT.md` — custody, keystore, and recovery boundary;
+- `RPC_STRATUM_POOL_ABUSE_MODEL.md` — public API and mining abuse model;
+- `SUPPLY_CHAIN_AND_ARTIFACTS.md` — SBOM, signing, and provenance requirements;
+- `RESPONSIBLE_DISCLOSURE.md` — private reporting expectations;
 - `../release/DECENTRALIZATION_READINESS.md` — row-by-row centralization register.

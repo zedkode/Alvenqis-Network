@@ -89,6 +89,8 @@ wallet.dat
 .AppleDouble
 .LSOverride
 Icon?
+!Blockchain-prototype/alvenqis-desktop-v2/src-tauri/icons/
+!Blockchain-prototype/alvenqis-desktop-v2/src-tauri/icons/**
 ._*
 Thumbs.db
 Thumbs.db:encryptable
@@ -171,6 +173,8 @@ Blockchain-scripts/release/*
 !Blockchain-scripts/release/build-vps-control-plane-bundle.sh
 !Blockchain-scripts/release/release-gate.ps1
 !Blockchain-scripts/release/release-gate.sh
+!Blockchain-scripts/release/alvenqis-release.cmd
+!Blockchain-scripts/release/alvenqis-release.ps1
 !Blockchain-scripts/release/setup-wsl-linux-build-host.sh
 !Blockchain-scripts/release/wsl-linux-setup.sh
 x64/

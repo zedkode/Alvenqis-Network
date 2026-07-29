@@ -81,6 +81,8 @@ AI-INSTRUCTIONS.md
 .AppleDouble
 .LSOverride
 Icon?
+!alvenqis-desktop-v2/src-tauri/icons/
+!alvenqis-desktop-v2/src-tauri/icons/**
 ._*
 Thumbs.db
 Thumbs.db:encryptable

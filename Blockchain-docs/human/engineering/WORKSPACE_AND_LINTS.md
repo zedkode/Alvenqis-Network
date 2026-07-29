@@ -1,7 +1,8 @@
 # Workspace Scope and Rust Lint Policy
 
 Status: Draft / engineering hygiene
-Related: `docs/release/NETWORK_MATURITY.md`, root `Cargo.toml`
+Related: `Blockchain-docs/human/release/NETWORK_MATURITY.md`,
+`Blockchain-prototype/Cargo.toml`
 
 ---
 
@@ -34,9 +35,9 @@ Root `Cargo.toml` lists only crates that:
 |---|---|
 | `alvenqis-explorer` | Vite/React; own `package.json` / npm CI |
 | `alvenqis-website` | Marketing + Node server |
-| `alvenqis-desktop-tauri` | Nested `[workspace]` (Tauri requirement); Control Center product path |
+| `alvenqis-desktop-v2` | Nested Tauri workspace; current Control Center product path |
 | `alvenqis-android` | Gradle / NDK; consumes `alvenqis-mobile-core` via scripts |
-| `alvenqis-desktop-tauri/native/keystore-helper` | Nested workspace sidecar binary |
+| `alvenqis-desktop-v2/native/keystore-helper` | Nested workspace sidecar binary |
 | `alvenqis-sdk` | TypeScript public client (`npm run build` in-tree); not a Cargo member |
 | Empty product shells (`alvenqis-contracts`, marketplace, …) | Reserved names; no crate / no product |
 
@@ -48,7 +49,7 @@ Root `Cargo.toml` lists only crates that:
 |---|---|
 | Explorer | `cd alvenqis-explorer && npm ci && npm run build` |
 | Website | `cd alvenqis-website && npm ci && npm run build` |
-| Tauri | `cd alvenqis-desktop-tauri && npm ci && npm run tauri build` (or check) |
+| Tauri | `cd Blockchain-prototype/alvenqis-desktop-v2 && npm ci && npm run tauri:build` |
 | Android | `cd alvenqis-android && ./gradlew …` |
 | Keystore helper | `cargo check` inside its directory |
 

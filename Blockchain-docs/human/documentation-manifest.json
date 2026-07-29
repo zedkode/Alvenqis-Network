@@ -8,15 +8,8 @@
     "Blockchain-prototype/alvenqis-sdk-rust/docs/**/*.md"
   ],
   "internal_prefixes": [
-    ".agents/",
-    ".codex/",
-    "memory/",
-    "Blockchain-docs/internal/",
-    "Blockchain-docs/ai/",
     "Blockchain-docs/human/operator/pr-drafts/",
-    "Blockchain-docs/human/operator/UNCOMMITTED_SPLIT_PLAN.md",
-    "AGENTS.md",
-    "TASK_MASTER.md"
+    "Blockchain-docs/human/operator/UNCOMMITTED_SPLIT_PLAN.md"
   ],
   "historical_prefixes": [
     "RUST_CODE_ANALYSIS_REPORT.md",

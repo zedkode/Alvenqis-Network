@@ -27,6 +27,7 @@ cargo build --workspace --release
 | `configs/` | Network configs |
 | `shared/` | Brand, constants, schemas |
 
-Unimplemented product stubs live in `../planned/`.
+Future product tracks remain documented as planned or deferred; no placeholder
+folder is treated as implementation.
 Scripts: `../Blockchain-scripts/`.
 Docs: `../Blockchain-docs/`.

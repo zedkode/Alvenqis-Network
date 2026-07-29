@@ -24,11 +24,13 @@ env:
 jobs:
   verify-build-publish:
     runs-on: ubuntu-24.04
+    environment: candidate-release
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
           components: clippy,rustfmt
@@ -39,6 +41,8 @@ jobs:
       - name: Verify requested tag
         run: |
           set -euo pipefail
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
           VERSION="$(tr -d '[:space:]' < Blockchain-prototype/alvenqis-release/vps-control-plane/VERSION)"
           case "$RELEASE_TAG" in
             "vps-control-v${VERSION}-rc."*) ;;
@@ -54,7 +58,7 @@ jobs:
 
       - name: Rust release checks
         run: |
-          cargo fmt --all --check
+          cargo fmt --manifest-path Blockchain-prototype/Cargo.toml --all --check
           cargo test --manifest-path Blockchain-prototype/Cargo.toml --workspace --locked
           cargo clippy --manifest-path Blockchain-prototype/Cargo.toml --workspace --all-targets --locked -- -D warnings
           cargo test --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --locked --features storage-rocksdb --lib
@@ -62,7 +66,7 @@ jobs:
 
       - name: Validate Docker control plane
         working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
-        run: ./scripts/validate-stack.sh --require-docker
+        run: bash ./scripts/validate-stack.sh --require-docker
 
       - name: Build RocksDB runtime image
         run: docker build --file Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile --tag alvenqis-runtime:release-gate .
@@ -79,8 +83,9 @@ jobs:
           for required in \
             Cargo.toml \
             Cargo.lock \
-            Blockchain-prototype/alvenqis-release/vps-control-plane/compose.yaml \
-            Blockchain-prototype/alvenqis-release/vps-control-plane/installer.compose.yaml \
+            Blockchain-prototype/alvenqis-release/vps-control-plane/compose/base.yaml \
+            Blockchain-prototype/alvenqis-release/vps-control-plane/compose/installer.yaml \
+            Blockchain-prototype/alvenqis-release/vps-control-plane/compose/roles.json \
             Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile \
             Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/install-docker-stack.sh; do
             grep -Fxq "$required" vps-control-contents.txt || {
@@ -90,7 +95,7 @@ jobs:
           done
 
       - name: Publish VPS control-plane prerelease
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: Alvenqis VPS Control Plane ${{ env.RELEASE_TAG }}
@@ -105,4 +110,5 @@ jobs:
             release-artifacts/alvenqis-docker-control-plane.tar.gz
             release-artifacts/alvenqis-docker-control-plane.tar.gz.sha256
             release-artifacts/vps-control-contents.txt
+          overwrite_files: false
           fail_on_unmatched_files: true

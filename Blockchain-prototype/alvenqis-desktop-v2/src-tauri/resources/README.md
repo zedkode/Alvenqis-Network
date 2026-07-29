@@ -1,6 +1,7 @@
 # Packaged runtime resources
 
-Populated by `npm run prepare:native:sidecars` from `alvenqis-desktop/installer/stage`.
+Populated by `npm run prepare:native:sidecars` from the monorepo binaries,
+configs, release documents, explorer build, and operator scripts.
 
 Expected layout after staging:
 

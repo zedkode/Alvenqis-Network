@@ -34,7 +34,7 @@ written in a source-info, roadmap, audit, or website document.
 The machine-readable publication rules live in
 `documentation-manifest.json`. The generated
 `DOCUMENTATION_INVENTORY.md` covers the publishable documentation surface and
-tracked component references. Private agent instructions, internal trackers,
+tracked component references. Private workspace instructions, internal trackers,
 local tooling, build outputs, release staging, and generated artifacts are
 deliberately excluded.
 

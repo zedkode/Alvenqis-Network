@@ -23,22 +23,22 @@ keystore, signing, account composition, and RPC submission stay in the host.
 ## Build and inspect
 
 ```powershell
-cargo build -p alvenqis-browser-host --release
-cargo run -p alvenqis-browser-host -- --print-info
-cargo run -q -p alvenqis-browser-host -- --check-health --json
+cargo --manifest-path Blockchain-prototype/Cargo.toml build -p alvenqis-browser-host --release
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-browser-host -- --print-info
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -q -p alvenqis-browser-host -- --check-health --json
 ```
 
 Create a recoverable encrypted wallet from the host CLI:
 
 ```powershell
-cargo run -p alvenqis-browser-host -- --init-wallet --passphrase "your-long-passphrase"
-cargo run -p alvenqis-browser-host -- --export-public
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-browser-host -- --init-wallet --passphrase "your-long-passphrase"
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-browser-host -- --export-public
 ```
 
 Import recovery words only through the CLI:
 
 ```powershell
-cargo run -p alvenqis-browser-host -- --import-mnemonic --mnemonic "word1 word2 ..." --passphrase "..."
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-browser-host -- --import-mnemonic --mnemonic "word1 word2 ..." --passphrase "..."
 ```
 
 ## Register the native host on Windows
@@ -48,7 +48,7 @@ cargo run -p alvenqis-browser-host -- --import-mnemonic --mnemonic "word1 word2 
 3. Run:
 
 ```powershell
-.\scripts\browser\register-native-host.ps1 -ExtensionId <id> -Build -Browser Chrome
+.\Blockchain-scripts\browser\register-native-host.ps1 -ExtensionId <id> -Build -Browser Chrome
 ```
 
 Use `-Browser All` or `-LocalRpc` only when required. OS confirm for send/sign/submit
@@ -56,20 +56,20 @@ is **on by default** in the host; use `-NoOsConfirm` only for automated dev/test
 Remove the registration with:
 
 ```powershell
-.\scripts\browser\unregister-native-host.ps1 -Browser All -RemoveInstallDir
+.\Blockchain-scripts\browser\unregister-native-host.ps1 -Browser All -RemoveInstallDir
 ```
 
 Linux registration:
 
 ```bash
-./scripts/browser/register-native-host.sh --extension-id <id> --build --browser chrome
+./Blockchain-scripts/browser/register-native-host.sh --extension-id <id> --build --browser chrome
 ```
 
 ## Development protocol
 
-Run `cargo run -p alvenqis-browser-host -- --jsonl --local` and send line-delimited
+Run `cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-browser-host -- --jsonl --local` and send line-delimited
 JSON requests such as `{"id":1,"method":"ping"}`. Native browser mode uses the
 standard little-endian `u32` length plus UTF-8 JSON framing.
 
-See `../docs/architecture/07_BROWSER_EXTENSION_AND_NATIVE_HOST.md` for the
-method and trust-boundary summary.
+See `../../Blockchain-docs/human/architecture/07_BROWSER_EXTENSION_AND_NATIVE_HOST.md`
+for the method and trust-boundary summary.

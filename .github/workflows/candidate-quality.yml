@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*-candidate.*"
+      - "desktop-v*-candidate.*"
   workflow_dispatch:
     inputs:
       tag:
@@ -18,6 +19,9 @@ concurrency:
   group: candidate-quality-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
 jobs:
   verify:
     name: Rust workspace quality checks
@@ -25,23 +29,48 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout candidate tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
           components: clippy,rustfmt
 
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          workspaces: Blockchain-prototype -> target
 
       - name: Install Linux build dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential clang cmake libclang-dev libdbus-1-dev
 
+      - name: Verify tag belongs to main
+        run: |
+          set -euo pipefail
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
+
+      - name: Run repository release checks
+        run: |
+          set -euo pipefail
+          bash Blockchain-scripts/git/check-forbidden-files.sh
+          bash Blockchain-scripts/security/check-secrets.sh
+          bash Blockchain-scripts/security/check-repo-hygiene.sh
+          bash Blockchain-scripts/security/check-config-safety.sh
+          bash Blockchain-scripts/security/check-workflow-pinning.sh
+          node Blockchain-scripts/docs/check-english-content.mjs
+          node Blockchain-scripts/docs/audit-docs.mjs
+
       - name: Check formatting
-        run: cargo fmt --all --check
+        run: cargo fmt --manifest-path Blockchain-prototype/Cargo.toml --all --check
 
       - name: Run workspace tests
         run: cargo test --manifest-path Blockchain-prototype/Cargo.toml --workspace --locked

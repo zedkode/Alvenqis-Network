@@ -50,6 +50,7 @@ bash "$scripts_root/security/check-secrets.sh"
 bash "$scripts_root/security/check-repo-hygiene.sh"
 bash "$scripts_root/security/check-config-safety.sh"
 bash "$scripts_root/security/check-workflow-pinning.sh"
+node "$scripts_root/docs/check-english-content.mjs"
 node "$scripts_root/docs/audit-docs.mjs"
 bash "$prototype_root/alvenqis-release/vps-control-plane/scripts/validate-stack.sh"
 
