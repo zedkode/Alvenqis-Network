@@ -58,6 +58,20 @@ for forbidden in ('init: true','DATABASE_URL','postgres-exporter','alvenqis-post
  assert forbidden not in operational, f'forbidden mechanism remains: {forbidden}'
 assert 'value="latest"' not in operational
 assert '${ALVENQIS_VERSION:-latest}' not in operational
+independent_inputs='\n'.join(
+ path.read_text()
+ for group in (
+  root/'compose',
+  root/'docker/templates',
+  root/'scripts',
+ )
+ for path in group.rglob('*')
+ if path.is_file()
+) + (root/'.env.example').read_text()
+project_domain='dohotstudio' + '.com'
+project_ip='144.91.' + '81.81'
+assert project_domain not in independent_inputs
+assert project_ip not in independent_inputs
 assert '--no-autoupdate' in (root/'compose/cloudflare.yaml').read_text()
 assert not (root/'scripts/update-stack.sh').exists()
 for legacy_path in (
@@ -94,6 +108,7 @@ for role in roles['roles'].values():
  assert len(role['files']) == len(set(role['files']))
 assert ',mode=' not in main
 assert ',mode=' not in installer
+assert 'container_name:' not in main
 assert main.count('/var/run/docker.sock:/var/run/docker.sock') == 1
 assert installer.count('/var/run/docker.sock:/var/run/docker.sock') == 1
 assert 'alvenqis-mining-rpc:' not in main
@@ -227,18 +242,25 @@ if grep -R -n --exclude=validate-stack.sh -E 'source[[:space:]]+\.env|docker[[:s
   exit 1
 fi
 echo "Static YAML, JSON, Python, Bash, storage, security and no-auto-update validation passed."
-if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+compose_frontend=()
+if [[ -n "${ALVENQIS_COMPOSE_BIN:-}" && -x "$ALVENQIS_COMPOSE_BIN" ]] \
+  && "$ALVENQIS_COMPOSE_BIN" version >/dev/null 2>&1; then
+  compose_frontend=("$ALVENQIS_COMPOSE_BIN")
+elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  compose_frontend=(docker compose)
+fi
+if ((${#compose_frontend[@]} > 0)); then
   original_role="${ALVENQIS_OPERATOR_ROLE:-}"
   original_pool="${ENABLE_POOL:-}"
   for role in node rpc indexer-explorer pool full-stack; do
     export ALVENQIS_OPERATOR_ROLE="$role"
     [[ "$role" == pool ]] && export ENABLE_POOL=true || export ENABLE_POOL=false
-    compose_args "$root/.env.example"
+    compose_args "$root/.env.example" "${ALVENQIS_COMPOSE_BIN:-}"
     "${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" config --quiet
   done
   export ALVENQIS_OPERATOR_ROLE="$original_role" ENABLE_POOL="$original_pool"
   ALVENQIS_HOST_WORKSPACE="$root" ALVENQIS_HOST_REPO="$(cd ../.. && pwd)" \
-    docker compose --project-directory "$root" --env-file .env.example -f compose/installer.yaml config --quiet
+    "${compose_frontend[@]}" --project-directory "$root" --env-file .env.example -f compose/installer.yaml config --quiet
   echo "Docker Compose role rendering passed."
 elif [[ "$require_docker" == true ]]; then
   echo "Docker Compose v2 is required for full validation." >&2; exit 127

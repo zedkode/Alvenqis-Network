@@ -14,7 +14,9 @@ Implemented corrections:
 - PostgreSQL and postgres-exporter are absent until a real indexer database adapter exists;
 - the web UI, backup scheduler and log collector do not mount Docker socket;
 - one non-public, token-authenticated broker owns the single Docker socket mount and exposes an action allow-list only;
-- cAdvisor is removed; host metrics use node-exporter;
+- cAdvisor is retained only in the explicit project-observability overlay;
+  host metrics use node-exporter and container metrics use bounded cAdvisor
+  collection;
 - `alvenqis-metrics-exporter` scrapes live RPC/pool JSON status into Prometheus (chain height, indexer lag, peers, pool workers/hashrate);
 - one bounded RPC gateway serves the public read/submit API and the pool's
   Docker-internal mining API, avoiding a second chain-loading gateway;

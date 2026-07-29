@@ -88,6 +88,7 @@ PY
 compose_args() {
   local workspace="${ALVENQIS_WORKSPACE:-$PWD}"
   local dotenv_path="${1:-$workspace/.env}"
+  local compose_bin_override="${2:-}"
   local registry="$workspace/compose/roles.json"
   local requested_role="${ALVENQIS_OPERATOR_ROLE:-${ALVENQIS_DEPLOYMENT_ROLE:-full-stack}}"
   local control_role="${CONTROL_ROLE:-standalone}"
@@ -181,8 +182,16 @@ PY
     echo "Compose role mapping returned no files." >&2
     return 78
   }
+  local compose_frontend=(docker compose)
+  if [[ -n "$compose_bin_override" ]]; then
+    [[ -x "$compose_bin_override" ]] || {
+      echo "Compose frontend is not executable: $compose_bin_override" >&2
+      return 69
+    }
+    compose_frontend=("$compose_bin_override")
+  fi
   ALVENQIS_COMPOSE_ARGS=(
-    docker compose
+    "${compose_frontend[@]}"
     --project-directory "$workspace"
     --env-file "$dotenv_path"
   )

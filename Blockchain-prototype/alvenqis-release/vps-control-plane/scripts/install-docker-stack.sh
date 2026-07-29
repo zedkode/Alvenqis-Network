@@ -18,7 +18,9 @@ if sys.argv[2] not in roles:
     raise SystemExit(f"unsupported operator role: {sys.argv[2]}")
 PY
 command -v docker >/dev/null && docker compose version >/dev/null || { echo "Docker Engine + Compose v2 required" >&2; exit 69; }
-export ALVENQIS_STATE_ROOT="${ALVENQIS_STATE_ROOT:-/var/lib/alvenqis-control-plane}"
+default_state_root="/var/lib/alvenqis/$operator_role"
+[[ "$operator_role" == full-stack ]] && default_state_root="/var/lib/alvenqis-control-plane"
+export ALVENQIS_STATE_ROOT="${ALVENQIS_STATE_ROOT:-$default_state_root}"
 bash "$root/scripts/prepare-state.sh"
 source scripts/lib.sh
 resolve_state_root "$root"
