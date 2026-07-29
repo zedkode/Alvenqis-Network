@@ -209,11 +209,10 @@ install -d -m 0700 "$pre_dir" "$stage"
 completed=false
 stopped=false
 live_mutated=false
-managed_paths=(
-  data control pool config/generated stratum
-  prometheus grafana loki alloy alertmanager
-  secrets backups/rocksdb-repository
-)
+managed_paths=(data config/generated secrets backups/rocksdb-repository)
+compose_has_service alvenqis-control && managed_paths+=(control)
+compose_has_service alvenqis-pool && managed_paths+=(pool stratum)
+compose_has_service prometheus && managed_paths+=(prometheus grafana loki alloy alertmanager)
 
 cleanup() {
   local exit_code=$?
@@ -426,8 +425,7 @@ assert_rocks_status "$verify_json" "Staged RocksDB/SQLite verification"
 echo "Staged RocksDB restore and full SQLite replay verification: ok"
 
 echo "Stopping only positively identified project $project..."
-"${ALVENQIS_COMPOSE_ARGS[@]}" \
-  --profile cloudflare --profile pool --profile backup stop
+"${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" stop
 stopped=true
 
 echo "Creating pre-restore safety snapshot..."
@@ -504,7 +502,7 @@ bash scripts/prepare-state.sh
 compose_args
 
 live_verify_output="$(
-  "${ALVENQIS_COMPOSE_ARGS[@]}" run --rm --no-deps \
+  "${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" run --rm --no-deps \
     --entrypoint /usr/local/bin/alvenqis-node \
     alvenqis-node \
       --config /config/node.toml \

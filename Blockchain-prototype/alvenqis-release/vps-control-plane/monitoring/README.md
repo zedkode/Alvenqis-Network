@@ -122,7 +122,8 @@ Confirm jobs `alvenqis-metrics`, `node-exporter`, `alvenqis-http` show `health: 
 
 ## Pool profile notes
 
-- Set `ENABLE_POOL=true` in `.env` and enable compose profile `pool`.
+- Set `ENABLE_POOL=true` in `.env`; the allowlisted role resolver adds
+  `compose/pool.yaml` for `pool`, `stratum`, or an enabled `full-stack`.
 - Metrics exporter reads the same flag and only expects pool status when enabled.
 - Alert `AlvenqisPoolDown` fires only when `alvenqis_pool_enabled == 1`.
 - Blackbox job `alvenqis-pool-http` may show down when the pool profile is off; it is informational.

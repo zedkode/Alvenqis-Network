@@ -6,6 +6,7 @@ cd "$root"
 source scripts/lib.sh
 load_dotenv .env
 resolve_state_root "$root"
+compose_args "$root/.env"
 
 assert_owner_mode() {
   local path="$1" expected_owner="$2" expected_mode="$3" label="$4"
@@ -65,9 +66,31 @@ free_bytes="$(df -PB1 "$(dirname "$STATE_ROOT")" | awk 'NR==2 {print $4}')"
 minimum_cpus="${VPS_MIN_CPU_COUNT:-6}"
 minimum_memory="${VPS_MIN_MEMORY_BYTES:-11811160064}"
 minimum_free_disk="${VPS_MIN_FREE_DISK_BYTES:-34359738368}"
+case "$ALVENQIS_OPERATOR_ROLE_RESOLVED" in
+  node|validator)
+    minimum_cpus="${VPS_MIN_CPU_COUNT:-2}"
+    minimum_memory="${VPS_MIN_MEMORY_BYTES:-2147483648}"
+    minimum_free_disk="${VPS_MIN_FREE_DISK_BYTES:-17179869184}"
+    ;;
+  rpc)
+    minimum_cpus="${VPS_MIN_CPU_COUNT:-2}"
+    minimum_memory="${VPS_MIN_MEMORY_BYTES:-4294967296}"
+    minimum_free_disk="${VPS_MIN_FREE_DISK_BYTES:-21474836480}"
+    ;;
+  indexer|indexer-explorer|explorer)
+    minimum_cpus="${VPS_MIN_CPU_COUNT:-4}"
+    minimum_memory="${VPS_MIN_MEMORY_BYTES:-6442450944}"
+    minimum_free_disk="${VPS_MIN_FREE_DISK_BYTES:-34359738368}"
+    ;;
+  pool|stratum)
+    minimum_cpus="${VPS_MIN_CPU_COUNT:-4}"
+    minimum_memory="${VPS_MIN_MEMORY_BYTES:-6442450944}"
+    minimum_free_disk="${VPS_MIN_FREE_DISK_BYTES:-34359738368}"
+    ;;
+esac
 
 ((host_cpus >= minimum_cpus)) || {
-  echo "Host has ${host_cpus} CPUs; at least ${minimum_cpus} are required for the full stack." >&2
+  echo "Host has ${host_cpus} CPUs; role ${ALVENQIS_OPERATOR_ROLE_RESOLVED} requires at least ${minimum_cpus}." >&2
   exit 78
 }
 ((host_memory >= minimum_memory)) || {
@@ -108,14 +131,17 @@ if (role != "controller" or minimum_peers > 0) and not seeds:
 print(f"P2P seed preflight: role={role} seeds={len(seeds)} minimum_validated={minimum_peers}")
 PY
 
-for port_name in P2P_PORT STRATUM_PORT STRATUM_INTERNAL_PORT HTTP_PORT; do
+port_names=(P2P_PORT)
+compose_has_service alvenqis-pool && port_names+=(STRATUM_PORT STRATUM_INTERNAL_PORT)
+compose_has_service gateway && port_names+=(HTTP_PORT)
+for port_name in "${port_names[@]}"; do
   value="${!port_name:-}"
   [[ "$value" =~ ^[0-9]+$ ]] && ((value >= 1 && value <= 65535)) || {
     echo "$port_name must be between 1 and 65535." >&2
     exit 64
   }
 done
-if [[ "${ENABLE_POOL:-false}" == true ]]; then
+if compose_has_service alvenqis-pool; then
   [[ -n "${POOL_ADDRESS:-}" && -n "${STRATUM_HOST:-}" ]] || {
     echo "POOL_ADDRESS and STRATUM_HOST are required when ENABLE_POOL=true." >&2
     exit 64
@@ -128,6 +154,15 @@ if [[ "${ENABLE_POOL:-false}" == true ]]; then
     echo "Cloudflare DNS token is required for Stratum DNS-01 TLS." >&2
     exit 64
   }
+fi
+if compose_has_service gateway; then
+  for required_host in WEBSITE_HOST EXPLORER_HOST PUBLIC_RPC_HOST CONTROL_HOST; do
+    value="${!required_host:-}"
+    [[ -n "$value" && "$value" != example.invalid && "$value" != *.example.invalid ]] || {
+      echo "$required_host must be an operator-owned hostname for the project edge." >&2
+      exit 64
+    }
+  done
 fi
 
 printf 'Host preflight: cpus=%s memory_bytes=%s free_disk_bytes=%s\n' \

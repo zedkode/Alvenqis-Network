@@ -21,8 +21,9 @@ import json
 from pathlib import Path
 import yaml
 root=Path.cwd()
+compose_paths=sorted((root/'compose').glob('*.yaml'))
 yaml_paths=[
- root/'compose.yaml', root/'compose.direct.yaml', root/'installer.compose.yaml',
+ *compose_paths,
  root/'monitoring/prometheus/prometheus.yml', root/'monitoring/prometheus/alerts.yml',
  root/'monitoring/alertmanager/alertmanager.yml', root/'monitoring/blackbox/blackbox.yml',
  root/'monitoring/loki/loki.yml', root/'monitoring/grafana/provisioning/datasources/datasources.yml',
@@ -46,7 +47,8 @@ assert 'alvenqis-metrics-exporter:9101' in prom_yml
 assert 'project: alvenqis-network' in prom_yml
 assert 'veiron' not in prom_yml.lower() and 'vireon' not in prom_yml.lower()
 operational='\n'.join((root/p).read_text() for p in [
- 'compose.yaml','installer.compose.yaml','docker/entrypoint.sh','docker/templates/rpc.toml.template',
+ *[str(path.relative_to(root)) for path in compose_paths],
+ 'docker/entrypoint.sh','docker/templates/rpc.toml.template',
  'docker/ops/app.py','docker/ops/broker.py','docker/ops/templates/index.html',
  'monitoring/prometheus/prometheus.yml','monitoring/prometheus/alerts.yml',
 ])
@@ -56,26 +58,52 @@ for forbidden in ('init: true','DATABASE_URL','postgres-exporter','alvenqis-post
  assert forbidden not in operational, f'forbidden mechanism remains: {forbidden}'
 assert 'value="latest"' not in operational
 assert '${ALVENQIS_VERSION:-latest}' not in operational
-assert '--no-autoupdate' in (root/'compose.yaml').read_text()
+assert '--no-autoupdate' in (root/'compose/cloudflare.yaml').read_text()
 assert not (root/'scripts/update-stack.sh').exists()
 for legacy_path in (
  'install.sh','install-interactive.sh','auto-install.sh','auto-update.sh','health-check.sh',
  'uninstall.sh','nginx','systemd',
 ):
  assert not (root/legacy_path).exists(), f'legacy host deployment path remains: {legacy_path}'
-main=(root/'compose.yaml').read_text(); installer=(root/'installer.compose.yaml').read_text()
+runtime_paths=[
+ root/'compose/node.yaml',
+ root/'compose/rpc.yaml',
+ root/'compose/indexer-explorer.yaml',
+ root/'compose/pool.yaml',
+ root/'compose/project-edge.yaml',
+ root/'compose/project-observability.yaml',
+ root/'compose/cloudflare.yaml',
+]
+service_sources={}
+compose_services={}
+for path in runtime_paths:
+ data=yaml.safe_load(path.read_text()) or {}
+ for name, service in data.get('services', {}).items():
+  assert name not in service_sources, f'duplicate service definition: {name} in {service_sources.get(name)} and {path}'
+  service_sources[name]=path
+  compose_services[name]=service
+main='\n'.join(path.read_text() for path in [root/'compose/base.yaml', *runtime_paths])
+installer=(root/'compose/installer.yaml').read_text()
+assert not (root/'compose.yaml').exists()
+assert not (root/'compose.direct.yaml').exists()
+assert not (root/'installer.compose.yaml').exists()
+roles=json.loads((root/'compose/roles.json').read_text())
+assert set(roles['roles']) == {'node','validator','rpc','indexer','indexer-explorer','explorer','pool','stratum','full-stack'}
+for role in roles['roles'].values():
+ assert role['files'][0] == 'base.yaml'
+ assert len(role['files']) == len(set(role['files']))
 assert ',mode=' not in main
 assert ',mode=' not in installer
 assert main.count('/var/run/docker.sock:/var/run/docker.sock') == 1
 assert installer.count('/var/run/docker.sock:/var/run/docker.sock') == 1
 assert 'alvenqis-mining-rpc:' not in main
 assert 'ALVENQIS_COMPONENT: mining-rpc' not in main
-assert 'profiles: [pool]' in main
-assert 'RPC_ACCESS_MODE: private-mining' in main
-assert 'RPC_EXPOSE_MINING: "true"' in main
+assert 'RPC_ACCESS_MODE: ${RPC_ACCESS_MODE:-private-mining}' in main
+assert 'RPC_EXPOSE_MINING: ${RPC_EXPOSE_MINING:-true}' in main
 assert 'ENABLE_MINING_RPC' not in (root/'.env.example').read_text()
 assert 'working_dir: /app' in main
-assert 'ALVENQIS_STATE_ROOT=/var/lib/alvenqis-control-plane' in (root/'.env.example').read_text()
+assert 'ALVENQIS_OPERATOR_ROLE=node' in (root/'.env.example').read_text()
+assert 'ALVENQIS_STATE_ROOT=/var/lib/alvenqis' in (root/'.env.example').read_text()
 assert 'ALVENQIS_STORAGE_KEY_FILE=/run/secrets/alvenqis_storage_key' in (root/'.env.example').read_text()
 assert 'ALVENQIS_REQUIRE_STORAGE_ENCRYPTION=true' in (root/'.env.example').read_text()
 assert 'ALVENQIS_ALLOW_PLAINTEXT_STORAGE_MIGRATION=false' in (root/'.env.example').read_text()
@@ -134,7 +162,7 @@ assert not (root/'docker/caddy/Caddyfile.template').exists()
 assert not (root/'docker/caddy/caddy-entrypoint.sh').exists()
 assert 'stratum-certbot:' in main
 assert 'certbot/dns-cloudflare:v5.7.0' in main
-assert '${STRATUM_PORT:-3333}:${STRATUM_INTERNAL_PORT:-3333}/tcp' in main
+assert '${STRATUM_BIND_ADDRESS:-0.0.0.0}:${STRATUM_PORT:-3333}:${STRATUM_INTERNAL_PORT:-3333}/tcp' in main
 assert (root/'docker/stratum/certbot-loop.sh').is_file()
 cloudflare_bootstrap=(root/'scripts/cloudflare-bootstrap.sh').read_text()
 assert 'upsert_dns A "$STRATUM_HOST" "$public_ip" false' in cloudflare_bootstrap
@@ -158,7 +186,7 @@ assert 'ALVENQIS_REQUIRE_STORAGE_ENCRYPTION=true is mandatory.' in preflight
 assert 'assert_owner_mode "$STATE_ROOT" "0:0" "750"' in preflight
 assert 'alvenqis_storage_key' in preflight
 assert 'VPS_MIN_FREE_DISK_BYTES:-34359738368' in preflight
-assert 'VPS_MIN_FREE_DISK_BYTES=34359738368' in (root/'.env.example').read_text()
+assert 'VPS_MIN_FREE_DISK_BYTES=17179869184' in (root/'.env.example').read_text()
 assert not any(token in '\n'.join((root/path).read_text() for path in ('scripts/prepare-state.sh','scripts/runtime-preflight.sh','scripts/install-docker-stack.sh')) for token in ('chmod 777','chmod 0777'))
 pool_app=(root/'../../alvenqis-mining-pool/src/app.rs').resolve().read_text()
 assert '.route(\"/api/v1/work\"' not in pool_app
@@ -167,8 +195,7 @@ assert '/data/.alvenqis-mainnet/chain' in operational
 assert '/data/.alvenqis-mainnet/mempool' in operational
 assert 'alvenqis-metrics-exporter' in main
 assert 'veiron' not in main.lower() and 'vireon' not in main.lower()
-compose_data=yaml.safe_load(main)
-for name,service in compose_data['services'].items():
+for name,service in compose_services.items():
  assert service.get('restart') == 'unless-stopped', f'{name} must restart unless-stopped'
  assert 'healthcheck' in service, f'{name} lacks healthcheck'
  assert service.get('mem_limit'), f'{name} lacks mem_limit'
@@ -176,10 +203,10 @@ for name,service in compose_data['services'].items():
  assert service.get('pids_limit'), f'{name} lacks pids_limit'
  assert service.get('logging', {}).get('driver') == 'json-file', f'{name} lacks bounded json logging'
  assert not service.get('privileged', False) or name == 'cadvisor', f'{name} must not be privileged'
-assert compose_data['services']['gateway']['depends_on']['grafana']['condition'] == 'service_started'
-assert compose_data['services']['cadvisor']['privileged'] is True
-assert '/var/run/docker.sock:/var/run/docker.sock' not in str(compose_data['services']['cadvisor'])
-assert compose_data['services']['alvenqis-indexer']['depends_on'] == {'alvenqis-node': {'condition': 'service_healthy'}}
+assert 'grafana' not in compose_services['gateway']['depends_on']
+assert compose_services['cadvisor']['privileged'] is True
+assert '/var/run/docker.sock:/var/run/docker.sock' not in str(compose_services['cadvisor'])
+assert compose_services['alvenqis-indexer']['depends_on'] == {'alvenqis-node': {'condition': 'service_healthy'}}
 prometheus=(root/'monitoring/prometheus/prometheus.yml').read_text()
 for expensive_probe in ('http://alvenqis-rpc:10787/status','http://alvenqis-rpc:10787/indexer/status','http://alvenqis-rpc:10787/p2p/status'):
  assert expensive_probe not in prometheus, f'duplicate heavy blackbox probe remains: {expensive_probe}'
@@ -195,15 +222,24 @@ assert 'alvenqis_chain_height' in (root/'monitoring/grafana/dashboards/alvenqis-
 assert 'alvenqis_indexer_lag_blocks_effective' in (root/'monitoring/grafana/dashboards/alvenqis-chain.json').read_text()
 PY2
 find scripts docker -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
-if grep -R -n --exclude=validate-stack.sh -E 'source[[:space:]]+\.env|docker[[:space:]]+rm|docker[[:space:]]+container[[:space:]]+rm|docker compose down -v' scripts docker compose.yaml installer.compose.yaml; then
+if grep -R -n --exclude=validate-stack.sh -E 'source[[:space:]]+\.env|docker[[:space:]]+rm|docker[[:space:]]+container[[:space:]]+rm|docker compose down -v' scripts docker compose; then
   echo "Unsafe dotenv execution, container deletion, or volume deletion found." >&2
   exit 1
 fi
 echo "Static YAML, JSON, Python, Bash, storage, security and no-auto-update validation passed."
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-  docker compose --env-file .env -f compose.yaml config >/dev/null
-  ALVENQIS_HOST_WORKSPACE="$root" ALVENQIS_HOST_REPO="$(cd ../.. && pwd)" docker compose -f installer.compose.yaml config >/dev/null
-  echo "Docker Compose rendering passed."
+  original_role="${ALVENQIS_OPERATOR_ROLE:-}"
+  original_pool="${ENABLE_POOL:-}"
+  for role in node rpc indexer-explorer pool full-stack; do
+    export ALVENQIS_OPERATOR_ROLE="$role"
+    [[ "$role" == pool ]] && export ENABLE_POOL=true || export ENABLE_POOL=false
+    compose_args "$root/.env.example"
+    "${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" config --quiet
+  done
+  export ALVENQIS_OPERATOR_ROLE="$original_role" ENABLE_POOL="$original_pool"
+  ALVENQIS_HOST_WORKSPACE="$root" ALVENQIS_HOST_REPO="$(cd ../.. && pwd)" \
+    docker compose --project-directory "$root" --env-file .env.example -f compose/installer.yaml config --quiet
+  echo "Docker Compose role rendering passed."
 elif [[ "$require_docker" == true ]]; then
   echo "Docker Compose v2 is required for full validation." >&2; exit 127
 else

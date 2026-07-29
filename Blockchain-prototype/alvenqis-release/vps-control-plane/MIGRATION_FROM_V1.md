@@ -1,5 +1,10 @@
 # Migration from the previous Docker stack
 
+The current runtime uses the overlay set selected by
+`ALVENQIS_OPERATOR_ROLE`. Migration and restore ownership checks require the
+Compose labels to include `compose/base.yaml`; they no longer assume a single
+root `compose.yaml`.
+
 This overlay must be copied over the full Alvenqis repository. It intentionally omits `.env`, runtime state and secret values.
 
 ```bash

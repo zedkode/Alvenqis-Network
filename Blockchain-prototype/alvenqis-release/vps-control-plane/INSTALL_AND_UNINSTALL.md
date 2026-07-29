@@ -62,7 +62,7 @@ The repair path is intentionally non-destructive:
 ```bash
 sudo ./scripts/runtime-preflight.sh
 sudo ./scripts/health-check-docker.sh
-docker compose --env-file .env -f compose.yaml ps
+./scripts/compose.sh ps
 ```
 
 The health script requires every enabled container to be healthy and bounded,

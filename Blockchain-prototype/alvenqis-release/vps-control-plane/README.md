@@ -67,6 +67,45 @@ out immutable release bundle and never pulls a newer Alvenqis source tree.
 The `validator` bootstrap role is a PoW full-validation node that verifies
 blocks and transactions. Alvenqis does not expose a staking-validator role.
 
+## Composable operator roles
+
+`compose/roles.json` is the allowlist used by the installer, health checks,
+backup tooling, broker and generated enrollment commands. Set
+`ALVENQIS_OPERATOR_ROLE` explicitly:
+
+| Role | Runtime overlays |
+|---|---|
+| `node` / `validator` | `base.yaml`, `node.yaml` |
+| `rpc` | node overlays plus `rpc.yaml` |
+| `indexer` | RPC overlays plus `indexer-explorer.yaml` without the explorer profile |
+| `indexer-explorer` / `explorer` | RPC overlays plus `indexer-explorer.yaml` |
+| `pool` / `stratum` | RPC overlays plus `pool.yaml`; requires `ENABLE_POOL=true` |
+| `full-stack` | role overlays plus explicit project edge and observability overlays |
+
+Independent roles do not load the project edge, Cloudflare, website or project
+monitoring overlays. Existing project installations without the new variable
+resolve to `full-stack` for upgrade compatibility; new `.env.example` files
+default to `node`.
+
+Use `./scripts/compose.sh config --quiet`, `./scripts/compose.sh up -d --build`
+and `./scripts/compose.sh ps` instead of assembling `-f` arguments manually.
+
+Fleet enrollment is optional. A standalone node can render and start only its
+selected role:
+
+```bash
+./scripts/enroll-docker-node.sh \
+  --standalone \
+  --role node \
+  --node-name independent-node-1 \
+  --p2p-host node1.example.org \
+  --seed /dns4/seed.example.org/tcp/20787
+```
+
+`MINING_RPC_BIND=docker-internal` is a fail-closed policy marker in G1; the RPC
+capability reconciliation remains a later gate and this split does not publish
+a new mining listener.
+
 The installer creates `state/secrets/alvenqis_storage_key` once. That key is
 part of the storage identity: deleting, regenerating or rotating it without an
 explicit data migration makes the current RocksDB state and its backups

@@ -38,6 +38,10 @@ export STRATUM_PORT="${STRATUM_PORT:-3333}"
 export MAX_P2P_PEERS="${MAX_P2P_PEERS:-64}"
 export RPC_ACCESS_MODE="${RPC_ACCESS_MODE:-public-submit}" RPC_EXPOSE_MINING="${RPC_EXPOSE_MINING:-false}"
 export MINING_RPC_BIND="${MINING_RPC_BIND:-docker-internal}"
+[[ "$MINING_RPC_BIND" == docker-internal ]] || {
+  echo "ERROR: MINING_RPC_BIND must remain docker-internal in the G1 profile contract." >&2
+  exit 64
+}
 [[ "$MAX_P2P_PEERS" =~ ^[0-9]+$ ]] && (( MAX_P2P_PEERS >= 8 && MAX_P2P_PEERS <= 256 )) || {
   echo "ERROR: MAX_P2P_PEERS must be between 8 and 256." >&2
   exit 64

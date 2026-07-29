@@ -4,6 +4,9 @@ This is the corrected Docker-first overlay for Alvenqis Mainnet Candidate / Prot
 
 Implemented corrections:
 
+- runtime definitions are split under `compose/`, and `compose/roles.json`
+  selects an allowlisted operator role without implicitly loading project edge,
+  Cloudflare, pool or observability services;
 - runtime storage is mounted at `/data/.alvenqis-mainnet`, so node paths are `/data/.alvenqis-mainnet/chain`, `/mempool`, `/indexer` and `/node`;
 - an empty chain imports the pinned pre-mined candidate genesis bundled at
   `docs/release/genesis.mainnet-candidate.block.json`; VPS startup never mines

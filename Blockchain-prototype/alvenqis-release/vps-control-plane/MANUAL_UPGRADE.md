@@ -16,8 +16,10 @@ git status
 git fetch --all --tags
 # Review and explicitly check out the chosen commit or tag.
 ./scripts/validate-stack.sh --require-docker
-COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file .env -f compose.yaml --profile cloudflare --profile pool --profile backup up -d --build
-# add --profile pool only when pool is intentionally enabled
+./scripts/compose.sh config --quiet
+COMPOSE_PARALLEL_LIMIT=1 ./scripts/compose.sh up -d --build
+# Overlay selection comes only from ALVENQIS_OPERATOR_ROLE and the explicit
+# ENABLE_POOL/CLOUDFLARE_MODE values in .env.
 ./scripts/health-check-docker.sh
 ./scripts/verify-public-health.sh
 # from any laptop with network:

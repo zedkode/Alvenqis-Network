@@ -371,6 +371,7 @@ def configure(data: dict[str, Any]) -> None:
         "ALVENQIS_EXPLORER_IMAGE": data.get("alvenqis_explorer_image", "ghcr.io/zedkode/alvenqis-explorer"),
         "BASE_DOMAIN": base,
         "PUBLIC_RPC_HOST": hosts["RPC_HOST"],
+        "RPC_PUBLIC_EDGE": "true",
         "P2P_ADVERTISE_HOST": hosts["P2P_HOST"],
         "MINING_RPC_BIND": "docker-internal",
         "WEBSITE_HOST": data.get("website_host") or base,

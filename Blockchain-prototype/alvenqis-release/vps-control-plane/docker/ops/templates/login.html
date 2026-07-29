@@ -16,7 +16,7 @@
   <p class="muted">The setup interface is locked with the unique token generated on first startup.</p>
   <div class="box">
     <p>Run:</p>
-    <code>docker compose -f installer.compose.yaml logs alvenqis-ops</code>
+    <code>docker compose --project-directory . -f compose/installer.yaml logs alvenqis-installer</code>
     <p class="muted">Then open the displayed URL with <code>?token=...</code>.</p>
   </div>
 </main>

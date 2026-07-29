@@ -154,16 +154,14 @@ restart_source_stack() {
     export STATE_ROOT="$source_root"
     load_dotenv .env
     compose_args
-    "${ALVENQIS_COMPOSE_ARGS[@]}" \
-      --profile cloudflare --profile pool --profile backup \
+    "${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" \
       up -d --no-build --force-recreate || true
   fi
 }
 trap restart_source_stack EXIT
 
 echo "Stopping only positively identified project $project for an offline snapshot..."
-"${ALVENQIS_COMPOSE_ARGS[@]}" \
-  --profile cloudflare --profile pool --profile backup stop
+"${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" stop
 stopped=true
 
 echo "Creating offline full-state archive..."
@@ -234,8 +232,7 @@ fi
 compose_args
 
 echo "Starting Alvenqis with release-independent state..."
-"${ALVENQIS_COMPOSE_ARGS[@]}" \
-  --profile cloudflare --profile pool --profile backup \
+"${ALVENQIS_COMPOSE_ARGS[@]}" "${ALVENQIS_PROFILE_ARGS[@]}" \
   up -d --no-build --force-recreate
 
 deadline=$((SECONDS + 420))
