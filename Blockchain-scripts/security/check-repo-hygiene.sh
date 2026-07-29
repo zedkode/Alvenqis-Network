@@ -64,7 +64,6 @@ while IFS= read -r file; do
 
   if [[ "$file" == Blockchain-docs/internal/* \
      || "$file" == Blockchain-docs/ai/rebrand-pack/* \
-     || "$file" == Blockchain-docs/human/source-info/* \
      || "$file" == Blockchain-docs/human/internal/* \
      || "$file" == .review/* \
      || "$file" == .agents/* \

@@ -42,7 +42,7 @@ $forbiddenPatterns = @(
   '(^|/)\.(alvenqis|vireon|veiron)-(dev|testnet|mainnet|local)(/|$)',
   '(^|/)(target|target-msvc|target-msvc-[^/]+|target-miner-test|target-rebrand|target-rebrand-msvc|node_modules|logs|devnet-data|node-data|\.artifacts|coverage)(/|$)',
   '(^|/)(\.review|\.agents|\.codex|\.cursor|\.grok|\.claude)(/|$)',
-  '(^|/)Blockchain-docs/(internal|ai/rebrand-pack|human/source-info|human/internal)(/|$)',
+  '(^|/)Blockchain-docs/(internal|ai/rebrand-pack|human/internal)(/|$)',
   # Control-plane runtime state (monorepo + legacy roots). Only .gitkeep placeholders allowed.
   '(^|/)((Blockchain-prototype/)?)alvenqis-release/vps-control-plane/state/.+',
   '(^|/)chain\.jsonl$',

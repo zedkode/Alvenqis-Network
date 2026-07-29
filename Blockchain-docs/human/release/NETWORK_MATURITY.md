@@ -66,9 +66,9 @@ Still **not** production-complete (non-exhaustive):
 | Gate | Command / doc | Authorizes | Does **not** authorize |
 |---|---|---|---|
 | **G0 — Hygiene** | secret / hygiene / config scanners | Continue development | Deploy, launch |
-| **G1 — Local release gate** | `scripts/release/release-gate.ps1` / `.sh` · `docs/release/RELEASE_GATE.md` | Ship **artifacts** and **docs consistency** for Mainnet Candidate **rehearsal** | Public mainnet; “production ready” claims |
-| **G2 — Mainnet Candidate checklist** | `docs/release/MAINNET_CANDIDATE_CHECKLIST.md` | Operator rehearsal (local / controlled VPS) with candidate configs | Public mainnet |
-| **G3 — Security gate** | `docs/security/SECURITY_GATE.md` | Security baseline for candidate | External audit sign-off |
+| **G1 — Local release gate** | `Blockchain-scripts/release/release-gate.ps1` / `.sh` · `Blockchain-docs/human/release/RELEASE_GATE.md` | Ship **artifacts** and **docs consistency** for Mainnet Candidate **rehearsal** | Public mainnet; “production ready” claims |
+| **G2 — Mainnet Candidate checklist** | `Blockchain-docs/human/release/MAINNET_CANDIDATE_CHECKLIST.md` | Operator rehearsal (local / controlled VPS) with candidate configs | Public mainnet |
+| **G3 — Security gate** | `Blockchain-docs/human/security/SECURITY_GATE.md` | Security baseline for candidate | External audit sign-off |
 | **G4 — Public launch** | §4 below | First public mainnet claim | — |
 
 ### G1 output language
@@ -106,7 +106,7 @@ Until then:
 | `RELEASE_GATE.md` | How to run G1; what pass means |
 | `MAINNET_CANDIDATE_CHECKLIST.md` | G2 operator/config checklist |
 | `GENESIS.md` + review/approval JSON | Genesis pin for candidate only |
-| `docs/security/*` | Security gates and secret policy |
+| `Blockchain-docs/human/security/*` | Security gates, threat model, known limitations, and external-review scope |
 | Root `README.md` | Human-facing status banner linking here |
 | `AGENTS.md` | Allowed public claim statuses for agents |
 | `Blockchain-docs/human/operator/CHAIN_MATURITY_OPS.md` | Task 3 operator drills (SQLite restore, reorg, soak checklist) — **not** G4 approval |
@@ -122,4 +122,6 @@ When readiness improves:
 3. Update root `README.md` status line only if it still matches this file.
 4. Never remove the “not public mainnet” language until G4 is complete.
 
-Last reviewed: 2026-07-19 (FiroPoW CUDA-only miner parity, bounded RPC/index polling, approved SHA-256-verified updater, 1.0.0 candidate preparation; G4 remains incomplete).
+Last reviewed: 2026-07-29 (G1 role-based control-plane packaging and documentation
+rebuild in progress; all decentralization closure claims remain blocked; G4
+remains incomplete).

@@ -1,9 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 if ($args -contains "--help" -or $args -contains "-h" -or $args -contains "-Help") {
-  Write-Host "Usage: scripts/release/release-gate.ps1"
+  Write-Host "Usage: Blockchain-scripts/release/release-gate.ps1"
   Write-Host "Runs G1: local Mainnet Candidate software/hygiene release gate."
-  Write-Host "Passing does NOT approve public Mainnet launch. See docs/release/NETWORK_MATURITY.md."
+  Write-Host "Passing does NOT approve public Mainnet launch. See Blockchain-docs/human/release/NETWORK_MATURITY.md."
   exit 0
 }
 
@@ -53,7 +53,7 @@ function Invoke-NativeChecked {
 }
 
 Write-Host "Running Alvenqis G1 security and release gate (Mainnet Candidate rehearsal only)..."
-Write-Host "This is NOT a public Mainnet launch approval. See docs/release/NETWORK_MATURITY.md"
+Write-Host "This is NOT a public Mainnet launch approval. See Blockchain-docs/human/release/NETWORK_MATURITY.md"
 
 try {
   foreach ($buildArtifact in @(
@@ -72,6 +72,7 @@ try {
   & (Join-Path $repoRoot "Blockchain-scripts\security\check-repo-hygiene.ps1")
   & (Join-Path $repoRoot "Blockchain-scripts\security\check-config-safety.ps1")
   & (Join-Path $repoRoot "Blockchain-scripts\security\check-workflow-pinning.ps1")
+  Invoke-NativeChecked "node.exe" "Blockchain-scripts/docs/audit-docs.mjs"
 
   Assert-PathExists "Blockchain-prototype/configs/mainnet-candidate.toml" "Mainnet-candidate config"
   Assert-PathExists "Blockchain-docs/human/release/MAINNET_CANDIDATE_CHECKLIST.md" "Mainnet-candidate checklist"
@@ -80,6 +81,7 @@ try {
   Assert-PathExists "Blockchain-docs/human/security/SECURITY_GATE.md" "Security gate documentation"
   Assert-PathExists "Blockchain-docs/human/security/SECRET_HANDLING.md" "Secret handling documentation"
   Assert-PathExists "Blockchain-docs/human/release/GENESIS.md" "Genesis documentation"
+  Assert-PathExists "Blockchain-docs/human/source-info/README.md" "Canonical source-information index"
 
   $prototypeRoot = Join-Path $repoRoot "Blockchain-prototype"
   Push-Location $prototypeRoot
@@ -95,6 +97,17 @@ try {
   $explorerPkg = Join-Path $prototypeRoot "alvenqis-explorer\package.json"
   if (Test-Path $explorerPkg) {
     Push-Location (Join-Path $prototypeRoot "alvenqis-explorer")
+    try {
+      Invoke-NativeChecked "npm.cmd" "ci"
+      Invoke-NativeChecked "npm.cmd" "run" "build"
+    } finally {
+      Pop-Location
+    }
+  }
+
+  $websitePkg = Join-Path $prototypeRoot "alvenqis-website\package.json"
+  if (Test-Path $websitePkg) {
+    Push-Location (Join-Path $prototypeRoot "alvenqis-website")
     try {
       Invoke-NativeChecked "npm.cmd" "ci"
       Invoke-NativeChecked "npm.cmd" "run" "build"

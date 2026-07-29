@@ -10,10 +10,10 @@ ideas from being mistaken for current Alvenqis behavior.
 When documents disagree, use this order:
 
 1. validated implementation and consensus tests for current behavior;
-2. `memory/DECISIONS.md` for explicitly accepted decisions;
-3. `memory/OPEN_QUESTIONS.md` for unresolved decisions;
-4. the canonical `docs/source-info/ALVENQIS_00` through `ALVENQIS_05` set;
-5. current specifications under `docs/` and active component READMEs;
+2. `Blockchain-docs/internal/memory/DECISIONS.md` for explicitly accepted decisions;
+3. `Blockchain-docs/internal/memory/OPEN_QUESTIONS.md` for unresolved decisions;
+4. the canonical `source-info/ALVENQIS_00` through `ALVENQIS_05` set;
+5. current specifications under `Blockchain-docs/human/` and active component READMEs;
 6. roadmaps and task plans for future work;
 7. historical reports only as evidence of what was known at their stated date.
 
@@ -31,10 +31,12 @@ written in a source-info, roadmap, audit, or website document.
 | Historical | Time-bound evidence that may describe removed code | No | No |
 | Internal | Agent notes, PR drafts, private planning, or operational scratch data | No | No |
 
-The machine-readable classification rules live in
-`docs/documentation-manifest.json`. The generated
-`docs/DOCUMENTATION_INVENTORY.md` proves that every Markdown file was included
-in the audit, even when it is not eligible for the public site.
+The machine-readable publication rules live in
+`documentation-manifest.json`. The generated
+`DOCUMENTATION_INVENTORY.md` covers the publishable documentation surface and
+tracked component references. Private agent instructions, internal trackers,
+local tooling, build outputs, release staging, and generated artifacts are
+deliberately excluded.
 
 ## Required writing rules
 
@@ -72,8 +74,8 @@ links are resolved through the documentation route.
 Run:
 
 ```bash
-node scripts/docs/audit-docs.mjs --write
-npm --prefix alvenqis-website run build
+node Blockchain-scripts/docs/audit-docs.mjs --write
+npm --prefix Blockchain-prototype/alvenqis-website run build
 ```
 
 The first command checks all repository Markdown files, validates local links

@@ -1,15 +1,28 @@
-# Blockchain-docs
+# Alvenqis Documentation
 
-Documentation for Alvenqis Network.
+Status: Current documentation boundary / mixed implementation maturity
 
-| Path | Audience | Git |
-|------|----------|-----|
-| [`human/`](./human/) | Operators, developers, public docs site sources | Tracked |
+`Blockchain-docs/human/` is the public, version-controlled documentation source.
+It contains protocol, architecture, API, operations, release, security, and
+audit-preparation material. The public source-information set lives under
+`Blockchain-docs/human/source-info/`.
 
-Public entrypoints at repo root:
+`Blockchain-docs/internal/` is a local, private workspace containing the
+canonical task tracker and decision registers. It is intentionally excluded from
+the public repository. `InternalAI/` remains the separate private authority for
+the decentralization gate program and must never be copied into public docs.
 
-- [`../init.md`](../init.md)
-- [`../PROJECT_STRUCTURE.md`](../PROJECT_STRUCTURE.md)
+Public entry points:
+
 - [`../README.md`](../README.md)
+- [`../PROJECT_STRUCTURE.md`](../PROJECT_STRUCTURE.md)
+- [`../init.md`](../init.md)
+- [`human/README.md`](./human/README.md)
+- [`human/release/NETWORK_MATURITY.md`](./human/release/NETWORK_MATURITY.md)
+- [`human/security/README.md`](./human/security/README.md)
 
-Human doc index: [`human/README.md`](./human/README.md) · Setup: [`human/SETUP.md`](./human/SETUP.md)
+Validate documentation with:
+
+```bash
+node Blockchain-scripts/docs/audit-docs.mjs
+```

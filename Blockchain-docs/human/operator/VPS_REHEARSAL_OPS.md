@@ -20,7 +20,8 @@ Typical install path on the controlled host (adjust if different):
 /home/apps/alvenqis-network/alvenqis-release/vps-control-plane
 ```
 
-Public rehearsal RPC (client default): `https://rpcnode.dohotstudio.com`
+Project-operated rehearsal example: `https://rpcnode.dohotstudio.com`. It is
+not an availability or trust dependency for an independent operator.
 
 ---
 
@@ -28,10 +29,11 @@ Public rehearsal RPC (client default): `https://rpcnode.dohotstudio.com`
 
 | Fact | Implication |
 |---|---|
-| Public profile is **submit/read**, not public mining | Desktop mining against public RPC will not get work |
+| Accepted public profile is **submit/read**, not public mining | Desktop solo mining must use a local loopback RPC |
 | Label stays **Mainnet Candidate** | Not live mainnet |
 | Upgrades are **manual only** | `tauri build` on a laptop does **not** update the VPS |
-| Host has no CUDA miner in the standard stack | Mining is client-side (desktop) or optional private mining-RPC/pool profile |
+| Host has no CUDA miner in the standard stack | Mining is client-side (desktop) or uses an explicitly enabled pool role |
+| Public-mining policy and current gateway smoke disagree | Do not treat the public mining surface as release-ready until the blocker in `../security/KNOWN_LIMITATIONS.md` is closed |
 
 ---
 
@@ -45,7 +47,7 @@ test -f .env && echo "has .env"
 test -f VERSION && cat VERSION
 git rev-parse --short HEAD 2>/dev/null || echo "not a git checkout"
 git status -sb 2>/dev/null || true
-docker compose --env-file .env -f compose.yaml ps
+./scripts/compose.sh ps
 ```
 
 Record in the session log (no secrets):
@@ -53,7 +55,7 @@ Record in the session log (no secrets):
 - hostname / public RPC host
 - `VERSION` file
 - git commit if available
-- compose profiles in use (`cloudflare`, `pool`, `backup`)
+- `ALVENQIS_OPERATOR_ROLE` and the rendered files from `compose/roles.json`
 - public `/status` height + tip_hash
 
 From any laptop with network (no SSH required):
@@ -65,12 +67,14 @@ bash Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/smoke-publi
 # powershell -File Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/smoke-public-candidate.ps1
 ```
 
-Expected smoke (evidence 2026-07-26, `smoke-public-candidate.ps1` PASS):
+The health and status assertions remain useful. The mining assertion is not
+closure evidence while the accepted HTTP 410 policy, gateway template, RPC
+profile, and current smoke script disagree:
 
 - `/health` → 200, mode contains `mining disabled` on public profile
 - `/status` → initialized, tip matches pinned genesis while height is 0
   (`0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5`, `index_in_sync=true`)
-- `/mining/template` → **not** publicly available (HTTP 400 observed)
+- `/mining/template` → unresolved repository blocker; accepted policy requires HTTP 410
 
 ---
 
@@ -78,7 +82,7 @@ Expected smoke (evidence 2026-07-26, `smoke-public-candidate.ps1` PASS):
 
 ```bash
 cd /path/to/vps-control-plane
-chmod +x scripts/*.sh docker/*.sh docker/caddy/*.sh docker/backup-scheduler/*.sh 2>/dev/null || true
+chmod +x scripts/*.sh docker/*.sh docker/backup-scheduler/*.sh 2>/dev/null || true
 ./scripts/backup-now.sh
 ls -la state/backups/
 ```
@@ -129,9 +133,7 @@ git fetch --all --tags
 # Explicitly check out the reviewed commit/tag (no auto latest)
 git checkout <reviewed-ref>
 ./scripts/validate-stack.sh --require-docker
-COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file .env -f compose.yaml \
-  --profile cloudflare --profile backup up -d --build
-# add --profile pool only if pool is intentionally enabled
+COMPOSE_PARALLEL_LIMIT=1 ./scripts/compose.sh up -d --build
 ./scripts/health-check-docker.sh
 ./scripts/verify-public-health.sh
 # from laptop:
@@ -149,7 +151,7 @@ COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file .env -f compose.yaml \
 | Inventory recorded | Session log: VERSION, commit, height, tip |
 | Backup succeeded | Path under `state/backups/` + SHA256SUMS |
 | Restore drill once | Health green + tip match after restore |
-| Public smoke green | `smoke-public-candidate` exit 0 |
+| Public smoke green | Health/status assertions plus the mining-policy blocker closed |
 | Memory updated | `Blockchain-docs/internal/memory/*` |
 
 Task 1 does **not** require mining height > 0 (that is Task 2 —

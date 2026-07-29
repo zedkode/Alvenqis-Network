@@ -50,6 +50,8 @@ bash "$scripts_root/security/check-secrets.sh"
 bash "$scripts_root/security/check-repo-hygiene.sh"
 bash "$scripts_root/security/check-config-safety.sh"
 bash "$scripts_root/security/check-workflow-pinning.sh"
+node "$scripts_root/docs/audit-docs.mjs"
+bash "$prototype_root/alvenqis-release/vps-control-plane/scripts/validate-stack.sh"
 
 assert_path_exists "$prototype_root/configs/mainnet-candidate.toml" "Mainnet-candidate config"
 assert_path_exists "$docs_root/release/MAINNET_CANDIDATE_CHECKLIST.md" "Mainnet-candidate checklist"
@@ -58,6 +60,7 @@ assert_path_exists "$docs_root/release/NETWORK_MATURITY.md" "Network maturity do
 assert_path_exists "$docs_root/security/SECURITY_GATE.md" "Security gate documentation"
 assert_path_exists "$docs_root/security/SECRET_HANDLING.md" "Secret handling documentation"
 assert_path_exists "$docs_root/release/GENESIS.md" "Genesis documentation"
+assert_path_exists "$docs_root/source-info/README.md" "Canonical source-information index"
 
 (
   cd "$prototype_root"
@@ -69,7 +72,14 @@ assert_path_exists "$docs_root/release/GENESIS.md" "Genesis documentation"
 
 if [[ -f "$prototype_root/alvenqis-explorer/package.json" ]]; then
   pushd "$prototype_root/alvenqis-explorer" >/dev/null
-  npm install
+  npm ci
+  npm run build
+  popd >/dev/null
+fi
+
+if [[ -f "$prototype_root/alvenqis-website/package.json" ]]; then
+  pushd "$prototype_root/alvenqis-website" >/dev/null
+  npm ci
   npm run build
   popd >/dev/null
 fi

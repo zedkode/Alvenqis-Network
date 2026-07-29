@@ -33,18 +33,23 @@ Recommended product setup:
 2. **Solo against public RPC host alone will fail** while the public profile
    returns HTTP 410 for mining methods. Use local loopback RPC
    (`http://127.0.0.1:10787`) or remote Stratum TLS.
-3. Pool endpoint when live: `stratum+tls://stratum.dohotstudio.com:3333`.
+3. Pool endpoint when independently configured:
+   `stratum+tls://<operator-stratum-host>:3333`.
 4. Backend: `cuda`.
 5. Restart mining after changing the source or selected CUDA devices.
 
-Never publish the internal RPC container directly or bypass the Caddy boundary.
+The current control-plane gateway/RPC/public-smoke policy is internally
+inconsistent. Do not expose public HTTP mining or treat it as supported until
+`../security/KNOWN_LIMITATIONS.md` records closure evidence.
+
+Never publish the internal RPC container directly or bypass the gateway boundary.
 
 The Control Center writes the pool source as:
 
 ```toml
 [source]
 kind = "stratum"
-host = "stratum.dohotstudio.com"
+host = "stratum.operator.example"
 port = 3333
 use_tls = true
 skip_tls_verify = false

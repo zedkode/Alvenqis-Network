@@ -4,7 +4,7 @@ Status: **Draft / Mainnet Candidate / Prototype**
 
 > **This gate is not a public Mainnet launch approval.**  
 > Passing it only means the repository is fit for **Mainnet Candidate rehearsal** (local build quality, hygiene, and docs presence).  
-> See `docs/release/NETWORK_MATURITY.md` for the full maturity ladder (G0–G4).
+> See `Blockchain-docs/human/release/NETWORK_MATURITY.md` for the full maturity ladder (G0–G4).
 
 ---
 
@@ -30,19 +30,19 @@ It is a **software + hygiene** gate. It does **not** certify:
 Windows:
 
 ```powershell
-scripts/release/release-gate.ps1
+Blockchain-scripts/release/release-gate.ps1
 ```
 
 Linux or macOS:
 
 ```bash
-bash scripts/release/release-gate.sh
+bash Blockchain-scripts/release/release-gate.sh
 ```
 
 Help:
 
 ```powershell
-scripts/release/release-gate.ps1 --help
+Blockchain-scripts/release/release-gate.ps1 --help
 ```
 
 ---
@@ -52,11 +52,13 @@ scripts/release/release-gate.ps1 --help
 - Secret scanner (`scripts/security/check-secrets.*`)
 - Repository hygiene scanner
 - Config safety scanner
+- Documentation audit and local-link validation
 - `cargo fmt --all --check`
 - `cargo test --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo build --workspace --release`
-- `npm install` and `npm run build` for `alvenqis-explorer` when present
+- `npm ci` and `npm run build` for the explorer and public documentation website
+- static VPS control-plane validation on the Bash gate
 - Required release and security documentation files
 - Required mainnet-candidate config files
 
@@ -76,10 +78,10 @@ scripts/release/release-gate.ps1 --help
 
 | Gate | Doc |
 |---|---|
-| Maturity source of truth | `docs/release/NETWORK_MATURITY.md` |
-| G2 Mainnet Candidate checklist | `docs/release/MAINNET_CANDIDATE_CHECKLIST.md` |
-| Security | `docs/security/SECURITY_GATE.md` |
-| Genesis (candidate pin only) | `docs/release/GENESIS.md` |
+| Maturity source of truth | `Blockchain-docs/human/release/NETWORK_MATURITY.md` |
+| G2 Mainnet Candidate checklist | `Blockchain-docs/human/release/MAINNET_CANDIDATE_CHECKLIST.md` |
+| Security | `Blockchain-docs/human/security/SECURITY_GATE.md` |
+| Genesis (candidate pin only) | `Blockchain-docs/human/release/GENESIS.md` |
 
 ---
 

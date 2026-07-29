@@ -2,16 +2,18 @@
 
 Status: **Mainnet Candidate / Prototype — not Mainnet Live**
 
-Remote pool mining uses `alvenqis-stratum-v1` over verified TLS. Public HTTP
-template/share endpoints are retired. Local solo mining remains available only
-through a loopback RPC.
+Remote pool mining is designed to use `alvenqis-stratum-v1` over verified TLS.
+Accepted policy retires public HTTP template/share endpoints, and local solo
+mining remains loopback-only. The current gateway, RPC profile, and smoke script
+do not yet enforce one consistent public-mining policy, so this document is a
+target operating contract rather than deployment-closure evidence.
 
 ## Security boundaries
 
 | Surface | Rule |
 |---|---|
-| Public edge | Caddy returns HTTP 410 for every `/mining/*` request |
-| Pool work/share | `stratum+tls://stratum.dohotstudio.com:3333` |
+| Public edge | Accepted policy: the gateway returns HTTP 410 for every `/mining/*` request; repository reconciliation remains open |
+| Pool work/share | `stratum+tls://<operator-stratum-host>:3333` |
 | Pool HTTPS | Read-only status, history, miner and payout views |
 | Solo mining | Loopback RPC only, normally `http://127.0.0.1:10787` |
 | VPS compute | No `alvenqis-miner` binary; no CPU/GPU hashing process |
@@ -24,11 +26,11 @@ through a loopback RPC.
 # .env
 ENABLE_POOL=true
 POOL_ADDRESS=alve1...
-STRATUM_HOST=stratum.dohotstudio.com
+STRATUM_HOST=stratum.operator.example
 STRATUM_PORT=3333
 
 ./scripts/backup-now.sh
-./scripts/install-docker-stack.sh
+./scripts/install-docker-stack.sh --role pool
 ./scripts/health-check-docker.sh
 ./scripts/smoke-private-mining.sh
 ```
@@ -43,13 +45,13 @@ private Docker network. There is no separate `alvenqis-mining-rpc` service.
 The gateway is not a miner, and the VPS runtime Dockerfile intentionally does
 not build or copy `alvenqis-miner`.
 
-## Cloudflare routing
+## TLS and DNS boundary
 
-- `stratum.dohotstudio.com` is an unproxied DNS-only A record to the VPS.
-- Standard Cloudflare Tunnel remains for HTTP services and the website.
-- `dohotstudio.com` and `www.dohotstudio.com` are tunnel hostnames routed to
-  the configured website runtime (`WEBSITE_ORIGIN`).
-- Do not place arbitrary Stratum TCP behind a standard HTTP Tunnel route.
+- The reference pool overlay currently automates certificates through
+  Cloudflare DNS-01 using the operator's own account.
+- That provider-specific certificate path is not proof of infrastructure
+  independence; an operator-supplied certificate path is still required.
+- Do not place arbitrary Stratum TCP behind an HTTP-only tunnel route.
 
 ## Desktop configuration
 
@@ -58,7 +60,7 @@ Both Control Center applications default to:
 ```toml
 [source]
 kind = "stratum"
-host = "stratum.dohotstudio.com"
+host = "stratum.operator.example"
 port = 3333
 use_tls = true
 skip_tls_verify = false
@@ -88,19 +90,19 @@ The desktop backend rejects a non-loopback solo mining RPC.
 ./scripts/smoke-private-mining.sh
 ```
 
-Required evidence:
+Required evidence before this operating contract can be marked implemented:
 
-- public `/mining/template` returns 410;
+- public `/mining/template` returns 410 from the deployed gateway;
 - Stratum certificate validates for the configured hostname;
 - pool `/health` reports `"stratum_tls": true` and
   `"http_mining_api": false`;
 - pool statistics remain reachable through HTTPS;
-- the public edge returns HTTP 410 for `/mining/*`;
+- the public gateway returns HTTP 410 for `/mining/*`;
 - Docker image inspection shows no `alvenqis-miner` binary.
 
 ## Forbidden
 
-- publishing the private RPC container or bypassing the Caddy route boundary;
+- publishing the private RPC container or bypassing the gateway route boundary;
 - remote `stratum+tcp` without TLS;
 - disabling TLS verification on a remote endpoint;
 - CPU/OpenCL fallback or VPS hashing;

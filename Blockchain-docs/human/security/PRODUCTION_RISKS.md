@@ -24,8 +24,10 @@ Status: Mainnet Candidate risk register / not public Mainnet
 - Public HTTPS RPC has application exposure profiles, CORS, request limits, and
   reverse-proxy rate limits; authenticated abuse-tested public policy is not
   complete.
-- The reference public solo-mining endpoints are a deliberately exposed
-  prototype surface and require abuse testing before G4.
+- Accepted policy requires public `/mining/*` routes to return HTTP 410 and
+  keeps solo mining on loopback. The current VPS gateway/RPC/smoke configuration
+  is not yet consistent with that policy; this is an open release blocker, not a
+  supported public mining surface.
 - Peer/miner/hashrate figures are observed local telemetry, not global truth.
 
 ## Wallet and clients

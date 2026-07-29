@@ -23,7 +23,6 @@
 /Blockchain-docs/ai/
 /Blockchain-docs/internal/
 /Blockchain-docs/human/internal/
-/Blockchain-docs/human/source-info/
 
 AGENTS.md
 CLAUDE.md
@@ -299,9 +298,7 @@ docker-compose.override.yaml
 # -----------------------------------------------------------------------------
 AUDIT_ALVENQIS_NETWORK.md
 PLAN_IMBUNATATIRI_ALVENQIS_NETWORK.md
-CLOUDFLARE_DNS_PORTS.md
 ALVENQIS_ARCHITECTURE_REDESIGN.md
 reform.md
 /InternalAI/
-init.md
 00_DECENTRALIZATION_READ_FIRST.md

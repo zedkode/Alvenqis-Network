@@ -353,8 +353,8 @@ def configure(data: dict[str, Any]) -> None:
     env_values = {
         "COMPOSE_PROJECT_NAME": "alvenqis-control-plane",
         "STACK_VERSION": "2.1.0-no-autoupdate",
-        "ALVENQIS_OPERATOR_ROLE": os.environ.get("ALVENQIS_OPERATOR_ROLE", "full-stack"),
-        "ALVENQIS_DEPLOYMENT_ROLE": os.environ.get("ALVENQIS_OPERATOR_ROLE", "full-stack"),
+        "ALVENQIS_OPERATOR_ROLE": os.environ.get("ALVENQIS_OPERATOR_ROLE", "node"),
+        "ALVENQIS_DEPLOYMENT_ROLE": os.environ.get("ALVENQIS_OPERATOR_ROLE", "node"),
         "ALVENQIS_HOST_WORKSPACE": os.environ.get("ALVENQIS_HOST_WORKSPACE", str(WORKSPACE)),
         "ALVENQIS_HOST_REPO": os.environ.get("ALVENQIS_HOST_REPO", str(WORKSPACE)),
         "ALVENQIS_STATE_ROOT": os.environ.get("ALVENQIS_STATE_ROOT", str(STATE_DIR)),

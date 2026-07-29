@@ -57,7 +57,7 @@ cd alvenqis-release/vps-control-plane
 ## Install
 
 ```bash
-./scripts/install-docker-stack.sh
+./scripts/install-docker-stack.sh --role node
 ```
 
 The bootstrap UI binds to loopback. Use the SSH tunnel printed by the script,
@@ -83,9 +83,9 @@ backup tooling, broker and generated enrollment commands. Set
 | `full-stack` | role overlays plus explicit project edge and observability overlays |
 
 Independent roles do not load the project edge, Cloudflare, website or project
-monitoring overlays. Existing project installations without the new variable
-resolve to `full-stack` for upgrade compatibility; new `.env.example` files
-default to `node`.
+monitoring overlays. New installs default to `node`; project-operated
+installations must request `--role full-stack` explicitly. Existing `.env`
+files that already set `ALVENQIS_OPERATOR_ROLE=full-stack` retain that role.
 
 Use `./scripts/compose.sh config --quiet`, `./scripts/compose.sh up -d --build`
 and `./scripts/compose.sh ps` instead of assembling `-f` arguments manually.

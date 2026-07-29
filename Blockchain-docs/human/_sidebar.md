@@ -59,6 +59,9 @@
   - [Secret Handling](security/SECRET_HANDLING.md)
   - [Production Risks](security/PRODUCTION_RISKS.md)
   - [Mining Pool Risks](security/MINING_POOL_RISKS.md)
+  - [Known Limitations](security/KNOWN_LIMITATIONS.md)
+  - [Threat Model](security/THREAT_MODEL.md)
+  - [External Review Scope](security/EXTERNAL_SECURITY_REVIEW_SCOPE.md)
 
 - **Operations**
   - [Local Runbook](operator/LOCAL_RUNBOOK.md)
@@ -67,12 +70,14 @@
   - [Troubleshooting](operator/TROUBLESHOOTING.md)
   - [Mining Troubleshooting](operator/MINING_TROUBLESHOOTING.md)
   - [Linux Desktop](operator/LINUX_DESKTOP.md)
+  - [Independent Node Guide](operator/INDEPENDENT_NODE_OPERATOR_GUIDE.md)
 
 - **Release**
   - [Network Maturity](release/NETWORK_MATURITY.md)
   - [Release Gate](release/RELEASE_GATE.md)
   - [Candidate Checklist](release/MAINNET_CANDIDATE_CHECKLIST.md)
   - [Genesis](release/GENESIS.md)
+  - [Decentralization Readiness](release/DECENTRALIZATION_READINESS.md)
 
 - **Project**
   - [Roadmap](roadmap/README.md)

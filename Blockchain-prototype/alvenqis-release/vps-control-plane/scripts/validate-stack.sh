@@ -72,6 +72,11 @@ project_domain='dohotstudio' + '.com'
 project_ip='144.91.' + '81.81'
 assert project_domain not in independent_inputs
 assert project_ip not in independent_inputs
+assert 'operator_role="${ALVENQIS_OPERATOR_ROLE:-node}"' in (
+ root/'scripts/install-docker-stack.sh'
+).read_text()
+ops_app=(root/'docker/ops/app.py').read_text()
+assert 'os.environ.get("ALVENQIS_OPERATOR_ROLE", "node")' in ops_app
 assert '--no-autoupdate' in (root/'compose/cloudflare.yaml').read_text()
 assert not (root/'scripts/update-stack.sh').exists()
 for legacy_path in (

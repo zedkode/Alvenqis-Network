@@ -2,7 +2,8 @@
 
 Status: Draft / Mainnet Candidate / Prototype
 
-This workspace uses a local security gate before any VPS deployment work.
+This workspace uses a local security gate before any VPS deployment work. It is
+not an external audit and does not claim that no vulnerabilities exist.
 
 Current gate scope:
 - no secrets in repository files;
@@ -14,9 +15,10 @@ Current gate scope:
 Local security commands:
 
 ```powershell
-scripts/security/check-secrets.ps1
-scripts/security/check-repo-hygiene.ps1
-scripts/security/check-config-safety.ps1
+Blockchain-scripts/security/check-secrets.ps1
+Blockchain-scripts/security/check-repo-hygiene.ps1
+Blockchain-scripts/security/check-config-safety.ps1
+node Blockchain-scripts/docs/audit-docs.mjs
 ```
 
 Rules:
@@ -24,3 +26,4 @@ Rules:
 - keep real wallet files outside the repository;
 - keep RPC bound to `127.0.0.1` by default;
 - treat Mainnet Candidate as a local or operator-run prototype until the full release gate passes.
+- treat every item in `KNOWN_LIMITATIONS.md` as open until linked evidence closes it.

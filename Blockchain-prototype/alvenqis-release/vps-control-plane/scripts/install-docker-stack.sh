@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; repo="$(cd "$root/../.." && pwd)"; cd "$root"
-operator_role="${ALVENQIS_OPERATOR_ROLE:-full-stack}"
+operator_role="${ALVENQIS_OPERATOR_ROLE:-node}"
 while (($#)); do
   case "$1" in
     --role) operator_role="${2:-}"; shift 2 ;;
