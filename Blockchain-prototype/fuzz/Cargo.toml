@@ -3,6 +3,7 @@ name = "alvenqis-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
+license = "Apache-2.0"
 
 [package.metadata]
 cargo-fuzz = true
@@ -36,3 +37,8 @@ bench = false
 
 [workspace]
 members = ["."]
+
+[patch.crates-io]
+# Keep the standalone fuzz workspace on the same reviewed fixed Yamux adapter
+# as the main and native-helper workspaces.
+libp2p-yamux = { path = "../third-party/libp2p-yamux" }

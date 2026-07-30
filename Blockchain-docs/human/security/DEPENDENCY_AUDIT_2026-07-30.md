@@ -13,7 +13,8 @@ Reviewed Cargo lockfiles:
 
 - `Blockchain-prototype/Cargo.lock`;
 - `Blockchain-prototype/alvenqis-desktop-v2/src-tauri/Cargo.lock`;
-- `Blockchain-prototype/alvenqis-desktop-v2/native/keystore-helper/Cargo.lock`.
+- `Blockchain-prototype/alvenqis-desktop-v2/native/keystore-helper/Cargo.lock`;
+- `Blockchain-prototype/fuzz/Cargo.lock`.
 
 Tools and advisory data:
 
@@ -41,11 +42,17 @@ Both commands exited 0. No dependency was upgraded during this routine rerun.
 | Duplicate `cpufeatures`, `getrandom`, `rand`, `rand_chacha`, and `rand_core` lines | Cryptographic/key-generation dependencies, with `cpufeatures` also below consensus hashing; the warning is version multiplicity, not a reported vulnerability. | Newer maintained lines already coexist in the lockfile. | Consolidate only through reviewed parent-crate upgrades; do not force versions across incompatible semver lines. |
 | Duplicate `foldhash`, `hashbrown`, `hashlink`, `itertools`, `shlex`, `thiserror`, `thiserror-impl`, `unsigned-varint`, and `windows-sys` lines | General persistence, build, error-handling, platform, and networking support; no direct consensus or cryptographic implementation finding was reported by these checks. | Newer maintained lines already coexist in the lockfile. | Treat as transitive size/policy cleanup, not an emergency bump. |
 
-`cargo deny` additionally emitted eight internal path-dependency wildcard
-warnings, three unused license-allowance warnings, and one
+`cargo deny` additionally emitted internal path-dependency wildcard and
+duplicate-version warnings, unused license-allowance warnings, and one
 `advisory-not-detected` warning because the Tauri-only glib exception does not
 match the main workspace lockfile. These are configuration-hygiene warnings,
 not newly flagged third-party vulnerabilities.
+
+The standalone fuzz workspace initially failed the license policy because its
+local package omitted a license expression and `libfuzzer-sys` includes the
+OSI-approved NCSA license alongside MIT/Apache-2.0. The fuzz package now
+declares the repository's Apache-2.0 license and the shared allowlist includes
+NCSA; this is a license-policy correction, not a dependency upgrade.
 
 Every final `cargo audit` and `cargo deny check` command listed below exited
 with code 0. Warnings and the scoped advisory exception remain documented
@@ -56,8 +63,10 @@ cross-check of the GitHub Advisory Database and the repository's Dependabot
 security-update jobs found the High-severity networking finding
 `ALV-NET-003`, which is not present in the reviewed RustSec snapshot. Commit
 `80dc72b5e54a` removes the affected package from the resolved main and helper
-graphs through a compatibility backport. The exit-code-zero Cargo results do
-not replace the pending GitHub and Dependabot verification.
+graphs through a compatibility backport. A follow-up patch applies the same
+reviewed adapter to the standalone fuzz workspace after Dependabot identified
+its independent lockfile. The exit-code-zero Cargo results do not replace the
+pending GitHub and Dependabot verification.
 
 ## Results by lockfile
 
@@ -66,6 +75,7 @@ not replace the pending GitHub and Dependabot verification.
 | Main Rust workspace | Exit 0; one unmaintained transitive warning (`paste 1.0.15`) | Exit 0; advisories, bans, licenses, and sources checks completed | The prior direct `rustls-pemfile 2.2.0` maintenance error was removed. The resolved graph now contains only fixed `yamux 0.13.10`; duplicate-version, internal path-version, and unmatched-license warnings remain policy cleanup work. |
 | Tauri Control Center | Exit 0; 16 unmaintained warnings and one unsoundness warning | Exit 0 with one narrow, reasoned exception for RUSTSEC-2024-0429 | Tauri 2.11.5 still brings GTK3/glib 0.18 on Linux. `ALV-DESKTOP-001` remains open. |
 | Native keystore helper | Exit 0; one unmaintained transitive warning (`paste 1.0.15`) | Exit 0; advisories, bans, licenses, and sources checks completed | The warning arrives through the node/libp2p Linux network-interface dependency path. The helper workspace now applies the same compatibility backport and resolves only fixed `yamux 0.13.10`. |
+| Standalone fuzz workspace | Exit 0; one unmaintained transitive warning (`paste 1.0.15`) | Exit 0; advisories, bans, licenses, and sources checks completed | Dependabot found that this separately locked workspace still resolved `yamux 0.12.1`. It now applies the same compatibility backport and resolves only fixed `yamux 0.13.10`. |
 
 ### Fixed during this review
 
@@ -118,10 +128,11 @@ backport of the unreleased single-Yamux adapter shape:
 
 - the node still calls `set_max_num_streams(MAX_STREAMS_PER_CONNECTION)` with
   the value 32;
-- both Cargo graphs patch `libp2p-yamux` to the reviewed local adapter and pin
-  its sole Yamux dependency to `=0.13.10`;
+- the main, native-helper, and standalone fuzz graphs patch `libp2p-yamux` to
+  the reviewed local adapter and pin its sole Yamux dependency to `=0.13.10`;
 - `cargo tree -i yamux@0.12.1 --workspace --locked` and the equivalent helper
-  command report that the package does not match any resolved package;
+  and fuzz commands report that the package does not match any resolved
+  package;
 - the exact oversized first `Data|SYN` frame from the advisory is rejected by a
   regression test without producing an inbound stream or panic;
 - the direct-sync and divergent higher-work reorg P2P tests pass, as do the
@@ -175,6 +186,10 @@ cargo deny --manifest-path Cargo.toml --config ../../deny.toml check
 cd ../native/keystore-helper
 cargo audit
 cargo deny --manifest-path Cargo.toml --config ../../../deny.toml check
+
+cd ../../../fuzz
+cargo audit
+cargo deny --manifest-path Cargo.toml --config ../deny.toml check
 ```
 
 ## Follow-up
@@ -182,7 +197,7 @@ cargo deny --manifest-path Cargo.toml --config ../../../deny.toml check
 1. Complete immutable GitHub and Dependabot verification of the
    `ALV-NET-003` backport, and add GitHub Advisory Database coverage alongside
    RustSec in the dependency gate.
-2. Add the three-lockfile audit matrix to CI with the scoped exception visible
+2. Add the four-lockfile audit matrix to CI with the scoped exception visible
    in logs.
 3. Re-check the Tauri GTK3 dependency on every Tauri/Wry release and remove the
    exception as soon as a supported path exists.
