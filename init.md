@@ -120,5 +120,5 @@ folder or UI concept is not treated as implementation.
 
 1. `README.md` — product + legal notice
 2. `PROJECT_STRUCTURE.md` — full tree
-3. `Blockchain-docs/human/SETUP.md` — operator setup
+3. `Blockchain-docs/human/operator/COMMANDS.md` — local operator setup and command reference
 4. `Blockchain-docs/human/release/DECENTRALIZATION_READINESS.md` — current centralization register
