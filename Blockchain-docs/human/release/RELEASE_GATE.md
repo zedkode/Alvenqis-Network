@@ -60,6 +60,8 @@ Blockchain-scripts/release/release-gate.ps1 --help
 - `cargo test --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo build --workspace --release`
+- candidate-genesis checkpoint/proof tests and deterministic multithreaded
+  FiroPoW search tests through the Rust workspace suite
 - `npm ci` and `npm run build` for the explorer and public documentation website
 - static VPS control-plane validation on the Bash gate
 - Required release and security documentation files

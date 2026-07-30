@@ -72,6 +72,7 @@ try {
   & (Join-Path $repoRoot "Blockchain-scripts\security\check-repo-hygiene.ps1")
   & (Join-Path $repoRoot "Blockchain-scripts\security\check-config-safety.ps1")
   & (Join-Path $repoRoot "Blockchain-scripts\security\check-workflow-pinning.ps1")
+  Invoke-NativeChecked "node.exe" "Blockchain-scripts/docs/check-english-content.mjs"
   Invoke-NativeChecked "node.exe" "Blockchain-scripts/docs/audit-docs.mjs"
 
   Assert-PathExists "Blockchain-prototype/configs/mainnet-candidate.toml" "Mainnet-candidate config"
@@ -88,7 +89,7 @@ try {
   try {
     Invoke-NativeChecked $cargo @cargoArgsPrefix fmt --all --check
     Invoke-NativeChecked $cargo @cargoArgsPrefix test --workspace --locked
-    Invoke-NativeChecked $cargo @cargoArgsPrefix clippy --workspace --all-targets --locked -- -D warnings
+    Invoke-NativeChecked $cargo @cargoArgsPrefix clippy --workspace --all-targets --locked "--" "-D" "warnings"
     Invoke-NativeChecked $cargo @cargoArgsPrefix build --workspace --release --locked
   } finally {
     Pop-Location

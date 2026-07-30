@@ -19,12 +19,13 @@ that the project has zero vulnerabilities or is safe for real funds.
 |---|---|---|
 | Documentation | English-content scanner, local-link audit and generated publication inventory | Correct structure does not prove protocol correctness |
 | Repository hygiene | Secret, forbidden-file, config-safety and workflow-pinning scanners | Pattern scanners do not replace credential rotation or human review |
-| Rust workspace | Formatting, workspace tests, strict Clippy and RocksDB feature checks | G1 must be green on one immutable commit |
-| RPC capability model | Profile validation and route tests separate public RPC from local/private mining | Deployed public endpoints require matching runtime probes |
+| Rust workspace | Formatting, workspace tests, strict Clippy, RocksDB feature checks, deterministic FiroPoW search, and frozen candidate-genesis proof validation | G1 must be green on one immutable commit |
+| RPC capability model | Profile validation and route tests separate public RPC from local/private mining; point tip queries and incremental cache-extension tests cover the read path | Deployed public endpoints require matching runtime probes |
+| Indexer synchronization | Append-only incremental indexing is compared with a full rebuild; reorgs retain the full-rebuild fallback | Long-running deployed catch-up and recovery still require runtime evidence |
 | Web products | Explorer and website lint/build/test jobs | Build success does not prove public service availability |
 | VPS control plane | Static validation, Compose role rendering and runtime image build | Independent clean-host and multi-host operation remain later-gate evidence |
 | Desktop | Type checks, unit tests, web build and native Rust tests | Platform packaging and signing remain separate release evidence |
-| Supply chain | GitHub Actions are pinned to full commit SHAs | Maintainer keys and release signing require operational controls |
+| Supply chain | GitHub Actions are pinned to full commit SHAs; the node depends directly on the required rust-libp2p sub-crates and `Cargo.lock` excludes the unused vulnerable Hickory DNS path | Maintainer keys, dependency review, and release signing require operational controls |
 
 ## G1 evidence policy
 

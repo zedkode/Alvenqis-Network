@@ -32,6 +32,14 @@ Resolved deterministic recipient address:
 Deterministic genesis hash (two independent `print-genesis-hash` runs matched):
 - `0000c29213014578ac41a748c2be3489859f1e0b1f3555bd89b7e5301632a4c5`
 
+The canonical runtime path does not re-mine this already reviewed candidate
+block. For the exact frozen recipient, timestamp, difficulty, and network tuple,
+the core loads nonce `88489` and the approved mix hash, validates the FiroPoW
+proof, and derives the pinned hash above. Generic Devnet, Testnet, and
+non-canonical candidate inputs still use nonce search. The native
+multithreaded search returns the lowest valid nonce in its requested range so
+non-frozen searches do not depend on thread scheduling.
+
 Pinned review hash:
 - `3b245dfb0004603200d804996e24375728b12cf209a88ce61ced23e38e5a602c`
 
@@ -50,6 +58,8 @@ Approval note:
 
 - Node refuses accidental Mainnet Candidate chain-root regeneration unless `--force-genesis` is passed explicitly.
 - Node refuses startup when active genesis hash does not match the pinned approval record.
+- Core tests validate both the frozen candidate proof and deterministic
+  multithreaded nonce-search ordering.
 - Changing `Blockchain-prototype/configs/mainnet-candidate.toml` or
   `Blockchain-prototype/configs/genesis.mainnet-candidate.toml` requires
   regenerating review, approval, and block JSON.

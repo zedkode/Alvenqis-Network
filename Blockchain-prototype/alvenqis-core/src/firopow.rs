@@ -654,6 +654,24 @@ mod tests {
     }
 
     #[test]
+    fn multithreaded_search_returns_lowest_valid_nonce() {
+        let header_hash = Hash::from_bytes([0x5a; 32]);
+        let boundary = [0xff; 32];
+        let expected = firopow_search_light(0, &header_hash, &boundary, 0, 64)
+            .expect("single-threaded search")
+            .expect("solution");
+
+        assert_eq!(expected.0, 0);
+        for threads in [1, 2, 4, 8] {
+            let actual = firopow_search_mt(0, &header_hash, &boundary, 0, 64, threads, None)
+                .expect("multi-threaded search")
+                .expect("solution");
+            assert_eq!(actual.0, expected.0);
+            assert_eq!(actual.1, expected.1);
+        }
+    }
+
+    #[test]
     fn native_reports_firopow_094_period_1() {
         assert!(native_available());
         assert_eq!(unsafe { alvenqis_firopow_period_length() }, 1);

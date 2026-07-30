@@ -636,6 +636,23 @@ fn loading_devnet_data_works() {
     assert_eq!(loaded.chain.height(), Some(1));
 }
 
+#[test]
+fn cached_chain_advances_after_tip_extension() {
+    let (temp_dir, config_path, data_dir) = setup_paths();
+    let index_dir = temp_dir.path().join(".alvenqis-dev/indexer");
+    let miner_address = default_miner_address(Network::Devnet);
+    init_devnet(&config_path, &data_dir, &miner_address).expect("init");
+    let state = rpc_state(&data_dir, &index_dir);
+
+    let initial = load_chain(&state).expect("initial load");
+    assert_eq!(initial.chain.height(), Some(0));
+
+    mine_dev_blocks(&config_path, &data_dir, &miner_address, 2).expect("mine");
+    let advanced = load_chain(&state).expect("incremental load");
+    assert_eq!(advanced.blocks.len(), 3);
+    assert_eq!(advanced.chain.height(), Some(2));
+}
+
 #[tokio::test]
 async fn invalid_devnet_data_handling_returns_500() {
     let (temp_dir, _config_path, data_dir) = setup_paths();

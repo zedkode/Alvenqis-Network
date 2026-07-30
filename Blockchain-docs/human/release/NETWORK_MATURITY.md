@@ -52,10 +52,11 @@ Still **not** production-complete (non-exhaustive):
 |---|---|---|
 | Node storage | SQLite canonical block oracle plus RocksDB state/mempool in the VPS profile; transactional tip/reorg changes, integrity checks, encrypted state backups, and legacy migration | Cross-engine consistency contract, independent restore/disk-failure drills, and multi-host soak |
 | Node reorg | `adopt_candidate_chain` + mempool reconcile + P2P staged fork + **header-first**; detached blocks archived transactionally | Durable resume of pre-adoption branches and deep-reorg recovery |
+| P2P transport | Minimal rust-libp2p TCP/Noise/Yamux dependency set; OS-resolved DNS seeds with bounded timeout, cached addresses, periodic refresh, and reconnect backoff | Independent PeerId-pinned seed diversity, active discovery, source-network admission, and multi-host soak |
 | Pool payouts | Confirm requires **on-chain tx lookup** covering each miner amount | Offline/HSM signer, multi-coordinator |
 | Peer scoring | Score + temporary bans (persist `peer-reputation.json`), refuse banned peers | Distributed ban lists, IP-level DDoS edge |
-| Indexer | Transactional SQLite primary store with legacy `index.json` import, tip-hash rebuild, and bounded overview/pagination | Correct RPC cache invalidation, incremental detach, recovery evidence, and continuous daemon product proof |
-| RPC multi-client | In-process request/rate limits, serialized chain-cache refresh, bounded index routes, and `/status` lag fields | Durable cache, authenticated capability policy, and production load/abuse tests |
+| Indexer | Transactional SQLite primary store with legacy `index.json` import, append-only incremental synchronization, sampled parent-link checks, full rebuild on reorg, and bounded overview/pagination | Incremental detach, recovery evidence, and continuous daemon product proof |
+| RPC multi-client | In-process request/rate limits, serialized incremental chain-cache refresh, point-query tip routes, bounded index routes, and `/status` lag fields | Durable cache, authenticated capability policy, and production load/abuse tests |
 | Pool | Immature→Mature after N confs; **Mature re-check on reorg** claws unpaid mature | Shared admission, HSM signer, production storage |
 | Developer surface | `@alvenqis/sdk` read client + examples | Signed-tx helpers without key custody |
 

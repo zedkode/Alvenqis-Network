@@ -1,9 +1,9 @@
 use crate::error::{RpcError, RpcResult};
 use crate::state::RpcState;
 use alvenqis_core::{hash_to_hex, Block, Chain};
-use alvenqis_node::storage;
+use alvenqis_node::{storage, SqliteBlockStore};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
@@ -69,7 +69,7 @@ pub fn load_chain(state: &RpcState) -> RpcResult<LoadedChain> {
     }
 
     let previous_cache = guard.as_ref().cloned();
-    let blocks = storage::load_blocks(chain_path)?;
+    let blocks = load_blocks_from_cache_or_storage(chain_path, previous_cache.as_ref())?;
     if blocks.is_empty() {
         *guard = None;
         return Err(RpcError::Node(
@@ -115,9 +115,43 @@ pub fn load_chain(state: &RpcState) -> RpcResult<LoadedChain> {
     })
 }
 
+fn load_blocks_from_cache_or_storage(
+    chain_path: &Path,
+    previous_cache: Option<&CachedChain>,
+) -> RpcResult<Vec<Block>> {
+    let Some(cached) = previous_cache.filter(|cached| !cached.blocks.is_empty()) else {
+        return storage::load_blocks(chain_path).map_err(RpcError::from);
+    };
+    let next_height = u64::try_from(cached.blocks.len())
+        .map_err(|_| RpcError::Config("cached chain length exceeds u64".to_owned()))?;
+    let suffix = SqliteBlockStore::new(chain_path)
+        .load_blocks_from_height(next_height.saturating_sub(1))
+        .map_err(RpcError::from)?;
+    let extends_cached_tip = suffix
+        .first()
+        .zip(cached.blocks.last())
+        .is_some_and(|(stored_parent, cached_tip)| stored_parent == cached_tip);
+    if !extends_cached_tip {
+        return storage::load_blocks(chain_path).map_err(RpcError::from);
+    }
+
+    let mut blocks = Vec::with_capacity(cached.blocks.len() + suffix.len().saturating_sub(1));
+    blocks.extend(cached.blocks.iter().cloned());
+    blocks.extend(suffix.into_iter().skip(1));
+    Ok(blocks)
+}
+
 pub(crate) async fn load_chain_async(state: &RpcState) -> RpcResult<LoadedChain> {
     let state = state.clone();
     tokio::task::spawn_blocking(move || load_chain(&state))
         .await
         .map_err(|error| RpcError::Config(format!("chain read task failed: {error}")))?
+}
+
+pub(crate) async fn load_tip_block_async(state: &RpcState) -> RpcResult<Option<Block>> {
+    let chain_path = PathBuf::from(&state.config.chain_data_path);
+    tokio::task::spawn_blocking(move || SqliteBlockStore::new(chain_path).load_tip_block())
+        .await
+        .map_err(|error| RpcError::Config(format!("chain tip read task failed: {error}")))?
+        .map_err(RpcError::from)
 }

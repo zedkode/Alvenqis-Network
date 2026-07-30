@@ -71,7 +71,9 @@ fn main() {
         .unwrap_or_else(|| default_index_dir_for_network(cli.network));
     let result = match cli.command {
         Command::IndexChain => json_output(index_chain(&chain_data_dir, &index_dir)),
-        Command::Sync => json_output(sync_index(&chain_data_dir, &index_dir)),
+        Command::Sync => {
+            json_output(sync_index(&chain_data_dir, &index_dir).map(|index| index.summary))
+        }
         Command::Watch {
             interval_seconds,
             max_iterations,

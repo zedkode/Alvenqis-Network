@@ -1340,12 +1340,22 @@ fn acquire_exclusive_lock(path: &Path, label: &str) -> NodeResult<File> {
         Err(error) => return Err(error.into()),
     }
 
-    let lock = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .truncate(false)
-        .open(path)?;
+    let deadline = Instant::now() + LOCK_WAIT_TIMEOUT;
+    let lock = loop {
+        match OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(path)
+        {
+            Ok(lock) => break lock,
+            Err(error) if is_lock_contention(&error) && Instant::now() < deadline => {
+                thread::sleep(LOCK_RETRY_INTERVAL);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
     let metadata = fs::symlink_metadata(path)?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(NodeError::Input(format!(
@@ -1354,14 +1364,13 @@ fn acquire_exclusive_lock(path: &Path, label: &str) -> NodeResult<File> {
         )));
     }
 
-    let deadline = Instant::now() + LOCK_WAIT_TIMEOUT;
     loop {
         match FileExt::try_lock_exclusive(&lock) {
             Ok(()) => return Ok(lock),
-            Err(error) if error.kind() == ErrorKind::WouldBlock && Instant::now() < deadline => {
+            Err(error) if is_lock_contention(&error) && Instant::now() < deadline => {
                 thread::sleep(LOCK_RETRY_INTERVAL);
             }
-            Err(error) if error.kind() == ErrorKind::WouldBlock => {
+            Err(error) if is_lock_contention(&error) => {
                 return Err(NodeError::Input(format!(
                     "timed out waiting for {label} lock: {}",
                     path.display()
@@ -1370,6 +1379,10 @@ fn acquire_exclusive_lock(path: &Path, label: &str) -> NodeResult<File> {
             Err(error) => return Err(error.into()),
         }
     }
+}
+
+fn is_lock_contention(error: &std::io::Error) -> bool {
+    error.kind() == ErrorKind::WouldBlock || matches!(error.raw_os_error(), Some(32 | 33))
 }
 
 fn ensure_separate_storage_paths(data_dir: &Path, backup_repository: &Path) -> NodeResult<()> {

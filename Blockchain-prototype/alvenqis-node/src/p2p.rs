@@ -13,20 +13,25 @@ use crate::storage;
 use alvenqis_core::{cumulative_work, hash_to_hex, Block, Chain, Transaction};
 use atomic_write_file::AtomicWriteFile;
 use futures::StreamExt;
-use libp2p::connection_limits;
-use libp2p::gossipsub;
-use libp2p::identify;
-use libp2p::identity::Keypair;
-use libp2p::ping;
-use libp2p::request_response::{self, ProtocolSupport};
-use libp2p::swarm::dial_opts::DialOpts;
-use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::{noise, yamux, Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder};
+use libp2p_connection_limits as connection_limits;
+use libp2p_core::muxing::StreamMuxerBox;
+use libp2p_core::{upgrade, Transport};
+use libp2p_gossipsub as gossipsub;
+use libp2p_identify as identify;
+use libp2p_identity::{Keypair, PeerId};
+use libp2p_noise as noise;
+use libp2p_ping as ping;
+use libp2p_request_response::{self as request_response, ProtocolSupport};
+use libp2p_swarm::dial_opts::DialOpts;
+use libp2p_swarm::{NetworkBehaviour, StreamProtocol, Swarm, SwarmEvent};
+use libp2p_tcp as tcp;
+use libp2p_yamux as yamux;
+use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU8;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -244,7 +249,7 @@ enum SyncResponse {
 }
 
 #[derive(NetworkBehaviour)]
-#[behaviour(prelude = "libp2p::swarm::derive_prelude")]
+#[behaviour(prelude = "libp2p_swarm::derive_prelude")]
 struct AlvenqisBehaviour {
     sync: request_response::json::Behaviour<SyncRequest, SyncResponse>,
     gossipsub: gossipsub::Behaviour,
@@ -256,9 +261,28 @@ struct AlvenqisBehaviour {
 #[derive(Clone, Debug)]
 struct SeedDialState {
     configured: String,
-    address: Multiaddr,
+    target: SeedTarget,
+    addresses: Vec<Multiaddr>,
     attempts: u32,
     next_attempt: Instant,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum SeedAddressFamily {
+    Any,
+    V4,
+    V6,
+}
+
+#[derive(Clone, Debug)]
+enum SeedTarget {
+    Static(Multiaddr),
+    Dns {
+        host: String,
+        port: u16,
+        family: SeedAddressFamily,
+        suffix: String,
+    },
 }
 
 #[derive(Deserialize)]
@@ -426,47 +450,40 @@ async fn run_p2p_service_async(
         .with_max_established(Some(max_peers));
     let mut yamux_config = yamux::Config::default();
     yamux_config.set_max_num_streams(MAX_STREAMS_PER_CONNECTION);
-    let mut swarm = SwarmBuilder::with_existing_identity(identity)
-        .with_tokio()
-        .with_tcp(
-            libp2p::tcp::Config::default().nodelay(true),
-            noise::Config::new,
-            move || yamux_config.clone(),
+    let transport = tcp::tokio::Transport::new(tcp::Config::default().nodelay(true))
+        .upgrade(upgrade::Version::V1Lazy)
+        .authenticate(
+            noise::Config::new(&identity).map_err(|error| NodeError::P2p(error.to_string()))?,
         )
-        .map_err(|error| NodeError::P2p(error.to_string()))?
-        .with_dns()
-        .map_err(|error| NodeError::P2p(error.to_string()))?
-        .with_behaviour(move |key| {
-            let codec =
-                request_response::json::codec::Codec::<SyncRequest, SyncResponse>::default()
-                    .set_request_size_maximum(256 * 1024)
-                    .set_response_size_maximum(16 * 1024 * 1024);
-            AlvenqisBehaviour {
-                sync: request_response::Behaviour::with_codec(
-                    codec,
-                    [(sync_protocol, ProtocolSupport::Full)],
-                    request_response::Config::default()
-                        .with_request_timeout(Duration::from_secs(45)),
-                ),
-                gossipsub,
-                identify: identify::Behaviour::new(identify::Config::new(
-                    format!("alvenqis/{P2P_PROTOCOL_VERSION}"),
-                    key.public(),
-                )),
-                ping: ping::Behaviour::new(ping::Config::new()),
-                limits: connection_limits::Behaviour::new(connection_limits),
-            }
-        })
-        .map_err(|error| NodeError::P2p(error.to_string()))?
-        .with_swarm_config(|swarm_config| {
-            swarm_config
-                .with_idle_connection_timeout(Duration::from_secs(90))
-                .with_max_negotiating_inbound_streams(MAX_NEGOTIATING_INBOUND_STREAMS)
-                .with_dial_concurrency_factor(
-                    NonZeroU8::new(2).expect("dial concurrency factor is non-zero"),
-                )
-        })
-        .build();
+        .multiplex(yamux_config)
+        .map(|(peer_id, muxer), _| (peer_id, StreamMuxerBox::new(muxer)));
+    let transport =
+        libp2p_core::transport::timeout::TransportTimeout::new(transport, Duration::from_secs(10))
+            .boxed();
+    let codec = request_response::json::codec::Codec::<SyncRequest, SyncResponse>::default()
+        .set_request_size_maximum(256 * 1024)
+        .set_response_size_maximum(16 * 1024 * 1024);
+    let behaviour = AlvenqisBehaviour {
+        sync: request_response::Behaviour::with_codec(
+            codec,
+            [(sync_protocol, ProtocolSupport::Full)],
+            request_response::Config::default().with_request_timeout(Duration::from_secs(45)),
+        ),
+        gossipsub,
+        identify: identify::Behaviour::new(identify::Config::new(
+            format!("alvenqis/{P2P_PROTOCOL_VERSION}"),
+            identity.public(),
+        )),
+        ping: ping::Behaviour::new(ping::Config::new()),
+        limits: connection_limits::Behaviour::new(connection_limits),
+    };
+    let swarm_config = libp2p_swarm::Config::with_tokio_executor()
+        .with_idle_connection_timeout(Duration::from_secs(90))
+        .with_max_negotiating_inbound_streams(MAX_NEGOTIATING_INBOUND_STREAMS)
+        .with_dial_concurrency_factor(
+            NonZeroU8::new(2).expect("dial concurrency factor is non-zero"),
+        );
+    let mut swarm = Swarm::new(transport, behaviour, local_peer_id, swarm_config);
 
     let listen_address = listen_multiaddr(&config)?;
     swarm
@@ -518,6 +535,8 @@ async fn run_p2p_service_async(
     let mut network_miners = BTreeMap::<PeerId, NetworkMinerPresence>::new();
     let mut discovered_peers = BTreeSet::<PeerId>::new();
     let mut published_transactions = BTreeSet::<String>::new();
+    let mut observed_mempool_fingerprint = None;
+    let mut previous_peer_count = 0_usize;
     let now = Instant::now();
     let mut seed_states = config
         .seed_nodes
@@ -525,7 +544,8 @@ async fn run_p2p_service_async(
         .map(|seed| {
             Ok(SeedDialState {
                 configured: seed.clone(),
-                address: seed_multiaddr(seed)?,
+                target: seed_target(seed)?,
+                addresses: Vec::new(),
                 attempts: 0,
                 next_attempt: now,
             })
@@ -537,7 +557,8 @@ async fn run_p2p_service_async(
         &local_peer_id,
         &mut seed_states,
         &mut status,
-    );
+    )
+    .await;
     persist_status(
         &runtime_dir,
         &config,
@@ -576,7 +597,8 @@ async fn run_p2p_service_async(
                     &local_peer_id,
                     &mut seed_states,
                     &mut status,
-                );
+                )
+                .await;
                 if tick_count.is_multiple_of(5) {
                     match local_hello(&config, &data_dir) {
                         Ok(hello) => {
@@ -681,29 +703,47 @@ async fn run_p2p_service_async(
                 if tick_count.is_multiple_of(10) {
                     reputation.persist(&runtime_dir)?;
                 }
-                if let Ok(records) = crate::mempool::load_pending_transactions_for_chain(
-                    &data_dir,
-                    &mempool_dir,
-                ) {
-                    for record in records {
-                        if published_transactions.insert(record.tx_hash.clone()) {
-                            match serde_json::to_vec(&record.transaction) {
-                                Ok(payload) => {
-                                    if let Err(error) = swarm
-                                        .behaviour_mut()
-                                        .gossipsub
-                                        .publish(transaction_topic.clone(), payload)
-                                    {
-                                        status.last_error = Some(format!(
-                                            "transaction gossip failed: {error}"
-                                        ));
+                let peer_count = peers.len();
+                if peer_count == 0 {
+                    published_transactions.clear();
+                    observed_mempool_fingerprint = None;
+                } else {
+                    if peer_count > previous_peer_count {
+                        published_transactions.clear();
+                        observed_mempool_fingerprint = None;
+                    }
+                    let fingerprint =
+                        crate::mempool::mempool_runtime_fingerprint(&data_dir, &mempool_dir);
+                    if observed_mempool_fingerprint != Some(fingerprint) {
+                        if let Ok(records) = crate::mempool::load_pending_transactions_for_chain(
+                            &data_dir,
+                            &mempool_dir,
+                        ) {
+                            for record in records {
+                                if published_transactions.insert(record.tx_hash.clone()) {
+                                    match serde_json::to_vec(&record.transaction) {
+                                        Ok(payload) => {
+                                            if let Err(error) = swarm
+                                                .behaviour_mut()
+                                                .gossipsub
+                                                .publish(transaction_topic.clone(), payload)
+                                            {
+                                                status.last_error = Some(format!(
+                                                    "transaction gossip failed: {error}"
+                                                ));
+                                            }
+                                        }
+                                        Err(error) => {
+                                            status.last_error = Some(error.to_string());
+                                        }
                                     }
                                 }
-                                Err(error) => status.last_error = Some(error.to_string()),
                             }
+                            observed_mempool_fingerprint = Some(fingerprint);
                         }
                     }
                 }
+                previous_peer_count = peer_count;
                 reputation.prune_expired_bans();
                 persist_status(
                     &runtime_dir,
@@ -1959,7 +1999,7 @@ fn process_admin_requests(
     acknowledge_admin_requests(runtime_dir, &request_ids)
 }
 
-fn dial_due_seeds(
+async fn dial_due_seeds(
     swarm: &mut Swarm<AlvenqisBehaviour>,
     config: &NetworkConfig,
     local_peer_id: &PeerId,
@@ -1990,8 +2030,38 @@ fn dial_due_seeds(
             break;
         }
         let attempt = seed.attempts;
+        let refresh_dns = matches!(seed.target, SeedTarget::Dns { .. })
+            && attempt > 0
+            && attempt.is_multiple_of(4);
+        if seed.addresses.is_empty() || refresh_dns {
+            match tokio::time::timeout(Duration::from_secs(5), resolve_seed_target(&seed.target))
+                .await
+            {
+                Ok(Ok(addresses)) => seed.addresses = addresses,
+                Ok(Err(error)) => {
+                    status.last_error = Some(error.to_string());
+                    seed.attempts = seed.attempts.saturating_add(1);
+                    seed.next_attempt =
+                        now + seed_reconnect_delay(&seed.configured, local_peer_id, attempt);
+                    available = available.saturating_sub(1);
+                    continue;
+                }
+                Err(_) => {
+                    status.last_error = Some(format!(
+                        "seed DNS resolution timed out for {}",
+                        seed.configured
+                    ));
+                    seed.attempts = seed.attempts.saturating_add(1);
+                    seed.next_attempt =
+                        now + seed_reconnect_delay(&seed.configured, local_peer_id, attempt);
+                    available = available.saturating_sub(1);
+                    continue;
+                }
+            }
+        }
+        let address_index = usize::try_from(attempt).unwrap_or(usize::MAX) % seed.addresses.len();
         let dial_options = DialOpts::unknown_peer_id()
-            .address(seed.address.clone())
+            .address(seed.addresses[address_index].clone())
             .allocate_new_port()
             .build();
         if let Err(error) = swarm.dial(dial_options) {
@@ -2051,18 +2121,71 @@ fn listen_multiaddr(config: &NetworkConfig) -> NodeResult<Multiaddr> {
         .map_err(|error| NodeError::P2p(format!("invalid listen address: {error}")))
 }
 
-fn seed_multiaddr(seed: &str) -> NodeResult<Multiaddr> {
+fn seed_target(seed: &str) -> NodeResult<SeedTarget> {
     let seed = seed.trim();
     if seed.starts_with('/') {
         let canonical = canonicalize_numeric_dns_multiaddr(seed);
-        return canonical
+        let multiaddr = canonical
             .parse()
-            .map_err(|error| NodeError::P2p(format!("invalid seed multiaddr {seed}: {error}")));
+            .map_err(|error| NodeError::P2p(format!("invalid seed multiaddr {seed}: {error}")))?;
+        let parts = canonical.split('/').collect::<Vec<_>>();
+        if parts.len() >= 5 && matches!(parts[1], "dns" | "dns4" | "dns6") && parts[3] == "tcp" {
+            let port = parse_seed_port(seed, parts[4])?;
+            let family = match parts[1] {
+                "dns4" => SeedAddressFamily::V4,
+                "dns6" => SeedAddressFamily::V6,
+                _ => SeedAddressFamily::Any,
+            };
+            let suffix = if parts.len() > 5 {
+                format!("/{}", parts[5..].join("/"))
+            } else {
+                String::new()
+            };
+            return Ok(SeedTarget::Dns {
+                host: parts[2].to_owned(),
+                port,
+                family,
+                suffix,
+            });
+        }
+        if parts
+            .iter()
+            .any(|part| matches!(*part, "dns" | "dns4" | "dns6" | "dnsaddr"))
+        {
+            return Err(NodeError::ConfigMismatch(format!(
+                "seed DNS multiaddr {seed} must use /dns, /dns4, or /dns6 followed by /tcp/<port>"
+            )));
+        }
+        return Ok(SeedTarget::Static(multiaddr));
     }
     let (host, port) = seed.rsplit_once(':').ok_or_else(|| {
         NodeError::ConfigMismatch(format!("seed node {seed} must be a multiaddr or host:port"))
     })?;
-    let port: u16 = port
+    let port = parse_seed_port(seed, port)?;
+    let host = host.trim_matches(['[', ']']);
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V4(_)) => format!("/ip4/{host}/tcp/{port}")
+            .parse()
+            .map(SeedTarget::Static)
+            .map_err(|error| NodeError::P2p(format!("invalid seed node {seed}: {error}"))),
+        Ok(IpAddr::V6(_)) => format!("/ip6/{host}/tcp/{port}")
+            .parse()
+            .map(SeedTarget::Static)
+            .map_err(|error| NodeError::P2p(format!("invalid seed node {seed}: {error}"))),
+        Err(_) if host.is_empty() => Err(NodeError::ConfigMismatch(format!(
+            "seed node {seed} has an empty host"
+        ))),
+        Err(_) => Ok(SeedTarget::Dns {
+            host: host.to_owned(),
+            port,
+            family: SeedAddressFamily::V4,
+            suffix: String::new(),
+        }),
+    }
+}
+
+fn parse_seed_port(seed: &str, port: &str) -> NodeResult<u16> {
+    let port = port
         .parse()
         .map_err(|_| NodeError::ConfigMismatch(format!("seed node {seed} has an invalid port")))?;
     if port == 0 {
@@ -2070,15 +2193,57 @@ fn seed_multiaddr(seed: &str) -> NodeResult<Multiaddr> {
             "seed node {seed} has an invalid port"
         )));
     }
-    let host = host.trim_matches(['[', ']']);
-    let protocol = match host.parse::<IpAddr>() {
-        Ok(IpAddr::V4(_)) => "ip4",
-        Ok(IpAddr::V6(_)) => "ip6",
-        Err(_) => "dns4",
+    Ok(port)
+}
+
+async fn resolve_seed_target(target: &SeedTarget) -> NodeResult<Vec<Multiaddr>> {
+    let SeedTarget::Dns {
+        host,
+        port,
+        family,
+        suffix,
+    } = target
+    else {
+        let SeedTarget::Static(address) = target else {
+            unreachable!("all seed target variants are covered");
+        };
+        return Ok(vec![address.clone()]);
     };
-    format!("/{protocol}/{host}/tcp/{port}")
-        .parse()
-        .map_err(|error| NodeError::P2p(format!("invalid seed node {seed}: {error}")))
+
+    let resolved = tokio::net::lookup_host((host.as_str(), *port))
+        .await
+        .map_err(|error| {
+            NodeError::P2p(format!("seed DNS resolution failed for {host}: {error}"))
+        })?;
+    let sockets = resolved
+        .filter(|socket| match family {
+            SeedAddressFamily::Any => true,
+            SeedAddressFamily::V4 => socket.is_ipv4(),
+            SeedAddressFamily::V6 => socket.is_ipv6(),
+        })
+        .collect::<BTreeSet<SocketAddr>>();
+    if sockets.is_empty() {
+        return Err(NodeError::P2p(format!(
+            "seed DNS resolution returned no matching addresses for {host}"
+        )));
+    }
+
+    sockets
+        .into_iter()
+        .map(|socket| {
+            let protocol = if socket.is_ipv4() { "ip4" } else { "ip6" };
+            format!(
+                "/{protocol}/{}/tcp/{}{}",
+                socket.ip(),
+                socket.port(),
+                suffix
+            )
+            .parse()
+            .map_err(|error| {
+                NodeError::P2p(format!("invalid resolved seed address for {host}: {error}"))
+            })
+        })
+        .collect()
 }
 
 fn canonicalize_numeric_dns_multiaddr(seed: &str) -> String {
@@ -2205,36 +2370,36 @@ allow_mainnet_candidate = false
         );
     }
 
-    #[test]
-    fn seed_addresses_use_the_correct_transport_protocol() {
-        assert_eq!(
-            seed_multiaddr("127.0.0.1:20787")
-                .expect("IPv4 seed")
-                .to_string(),
-            "/ip4/127.0.0.1/tcp/20787"
-        );
-        assert_eq!(
-            seed_multiaddr("[::1]:20787")
-                .expect("IPv6 seed")
-                .to_string(),
-            "/ip6/::1/tcp/20787"
-        );
-        assert_eq!(
-            seed_multiaddr("seed.alvenqis.example:20787")
-                .expect("DNS seed")
-                .to_string(),
-            "/dns4/seed.alvenqis.example/tcp/20787"
-        );
+    #[tokio::test]
+    async fn seed_addresses_use_the_correct_transport_protocol() {
+        let ipv4 = resolve_seed_target(&seed_target("127.0.0.1:20787").expect("IPv4 seed"))
+            .await
+            .expect("resolve IPv4");
+        assert_eq!(ipv4[0].to_string(), "/ip4/127.0.0.1/tcp/20787");
+
+        let ipv6 = resolve_seed_target(&seed_target("[::1]:20787").expect("IPv6 seed"))
+            .await
+            .expect("resolve IPv6");
+        assert_eq!(ipv6[0].to_string(), "/ip6/::1/tcp/20787");
+
+        let localhost =
+            resolve_seed_target(&seed_target("localhost:20787").expect("DNS seed target"))
+                .await
+                .expect("resolve DNS seed");
+        assert!(!localhost.is_empty());
+        assert!(localhost
+            .iter()
+            .all(|address| address.to_string().starts_with("/ip4/")));
     }
 
-    #[test]
-    fn legacy_numeric_dns_seed_is_canonicalized() {
-        assert_eq!(
-            seed_multiaddr("/dns4/127.0.0.1/tcp/20787")
-                .expect("legacy IPv4 seed")
-                .to_string(),
-            "/ip4/127.0.0.1/tcp/20787"
-        );
+    #[tokio::test]
+    async fn legacy_numeric_dns_seed_is_canonicalized() {
+        let addresses = resolve_seed_target(
+            &seed_target("/dns4/127.0.0.1/tcp/20787").expect("legacy IPv4 seed"),
+        )
+        .await
+        .expect("resolve canonicalized seed");
+        assert_eq!(addresses[0].to_string(), "/ip4/127.0.0.1/tcp/20787");
     }
 
     #[test]

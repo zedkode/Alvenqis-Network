@@ -25,6 +25,5 @@ See `../DOCUMENTATION_POLICY.md` for the workspace-wide documentation rules.
 5. `ALVENQIS_04_AGENTS_AND_GOVERNANCE.md` — change and claim governance
 6. `ALVENQIS_05_RECOMMENDED_DECISIONS.md` — accepted decisions versus recommendations
 
-The filenames remain stable to avoid breaking existing links. Their content is
-English, and the legacy Romanian words in three filenames do not imply a second
-or alternate source set.
+The filenames are stable and English-only to preserve existing links and keep
+this directory as the single canonical source set.

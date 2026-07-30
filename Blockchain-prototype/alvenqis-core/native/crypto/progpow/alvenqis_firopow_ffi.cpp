@@ -189,11 +189,8 @@ int alvenqis_firopow_search_mt(
         if ((size_t)t > iterations)
             t = (int)iterations;
 
-        std::atomic<bool> found{false};
+        std::atomic<uint64_t> best_index{static_cast<uint64_t>(iterations)};
         std::atomic<uint64_t> done{0};
-        uint64_t win_nonce = 0;
-        alvenqis_firopow_result win{};
-        std::mutex win_mu;
 
         auto worker = [&](int tid) {
             size_t chunk = (iterations + (size_t)t - 1) / (size_t)t;
@@ -205,7 +202,7 @@ int alvenqis_firopow_search_mt(
                 end = iterations;
             uint64_t local_done = 0;
             for (size_t i = begin; i < end; ++i) {
-                if (found.load(std::memory_order_relaxed))
+                if (static_cast<uint64_t>(i) >= best_index.load(std::memory_order_relaxed))
                     break;
                 if (cancel_flag && *cancel_flag)
                     break;
@@ -225,13 +222,14 @@ int alvenqis_firopow_search_mt(
                     }
                 }
                 if (ok) {
-                    bool expected = false;
-                    if (found.compare_exchange_strong(expected, true)) {
-                        std::lock_guard<std::mutex> lock(win_mu);
-                        win_nonce = nonce;
-                        std::memcpy(win.final_hash, r.final_hash.bytes, 32);
-                        std::memcpy(win.mix_hash, r.mix_hash.bytes, 32);
-                    }
+                    uint64_t candidate = static_cast<uint64_t>(i);
+                    uint64_t current = best_index.load(std::memory_order_relaxed);
+                    while (candidate < current &&
+                           !best_index.compare_exchange_weak(
+                               current,
+                               candidate,
+                               std::memory_order_relaxed,
+                               std::memory_order_relaxed)) {}
                     break;
                 }
             }
@@ -248,9 +246,13 @@ int alvenqis_firopow_search_mt(
         if (hashes_done)
             *hashes_done = done.load();
 
-        if (found.load()) {
-            *found_nonce = win_nonce;
-            *out = win;
+        const uint64_t winner = best_index.load(std::memory_order_relaxed);
+        if (winner < static_cast<uint64_t>(iterations)) {
+            const uint64_t nonce = start_nonce + winner;
+            const auto result = progpow::hash(*light, block_number, hh, nonce);
+            *found_nonce = nonce;
+            std::memcpy(out->final_hash, result.final_hash.bytes, 32);
+            std::memcpy(out->mix_hash, result.mix_hash.bytes, 32);
             return 1;
         }
         return 0;

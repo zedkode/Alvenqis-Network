@@ -186,6 +186,10 @@ fn ensure_index_rebuilds_when_chain_tip_advances() {
     let advanced = ensure_index_matches_chain(&data_dir, &index_dir).expect("reindex");
     assert_eq!(advanced.summary.indexed_height, Some(3));
     assert_ne!(advanced.summary.tip_hash, first.summary.tip_hash);
+
+    let rebuilt =
+        index_devnet(&data_dir, &index_dir.with_file_name("full-index")).expect("full rebuild");
+    assert_eq!(advanced, rebuilt);
 }
 
 #[test]

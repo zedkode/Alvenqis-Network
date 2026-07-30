@@ -1,9 +1,10 @@
 use crate::error::{IndexerError, IndexerResult};
 use crate::storage;
 use alvenqis_core::{
-    block_fee_summary, hash_to_hex, Amount, Chain, Network, Transaction, MAX_SUPPLY_ATOMIC,
+    block_fee_summary, block_reward, hash_to_hex, Amount, Chain, Network, Transaction,
+    MAX_SUPPLY_ATOMIC,
 };
-use alvenqis_node::storage as node_storage;
+use alvenqis_node::{storage as node_storage, SqliteBlockStore};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -146,12 +147,11 @@ pub fn default_index_dir() -> PathBuf {
 
 /// Observe current chain tip without building a full index.
 pub fn observe_chain_tip(chain_data_dir: &Path) -> IndexerResult<(Option<u64>, Option<String>)> {
-    let blocks = node_storage::load_blocks(chain_data_dir)?;
-    let tip = blocks.last();
-    let tip_hash = match tip {
-        Some(block) => Some(hash_to_hex(&block.hash()?)),
-        None => None,
-    };
+    let tip = SqliteBlockStore::new(chain_data_dir).load_tip_block()?;
+    let tip_hash = tip
+        .as_ref()
+        .map(|block| block.hash().map(|hash| hash_to_hex(&hash)))
+        .transpose()?;
     Ok((tip.map(|block| block.header.height), tip_hash))
 }
 
@@ -332,8 +332,7 @@ pub fn ensure_index_matches_chain(
     }
 }
 
-/// When the live chain is a pure extension of the indexed tip, index only the new blocks
-/// and refresh ledger balances from a full chain state pass.
+/// When the live chain is a pure extension of the indexed tip, index only the new blocks.
 fn try_append_index(
     existing: &IndexData,
     chain_data_dir: &Path,
@@ -344,11 +343,12 @@ fn try_append_index(
     let Some(indexed_tip) = existing.summary.tip_hash.as_ref() else {
         return Ok(None);
     };
-    let chain_blocks = node_storage::load_blocks(chain_data_dir)?;
+    let chain_blocks =
+        SqliteBlockStore::new(chain_data_dir).load_blocks_from_height(indexed_height)?;
     if chain_blocks.is_empty() {
         return Ok(None);
     }
-    let Some(on_disk_at_index) = chain_blocks.get(indexed_height as usize) else {
+    let Some(on_disk_at_index) = chain_blocks.first() else {
         return Ok(None);
     };
     if on_disk_at_index.header.height != indexed_height {
@@ -358,15 +358,7 @@ fn try_append_index(
         // Reorg at or below indexed tip — caller must full rebuild.
         return Ok(None);
     }
-    if chain_blocks.len() as u64 == indexed_height.saturating_add(1) {
-        // Already at tip (len = height+1 for 0-based heights).
-        return Ok(Some(existing.clone()));
-    }
-    if (chain_blocks.len() as u64) <= indexed_height.saturating_add(1) {
-        // Chain shorter than index → reorg rewind.
-        return Ok(None);
-    }
-    let new_slice = &chain_blocks[(indexed_height as usize + 1)..];
+    let new_slice = &chain_blocks[1..];
     if new_slice.is_empty() {
         return Ok(Some(existing.clone()));
     }
@@ -380,51 +372,38 @@ fn try_append_index(
         }
     }
 
-    let first_block = chain_blocks.first().ok_or_else(|| {
-        alvenqis_node::NodeError::ChainNotInitialized(node_storage::chain_file_path(chain_data_dir))
-    })?;
-    let network = first_block.network()?;
-    let chain = Chain::from_blocks(network, chain_blocks.iter().cloned())?;
-
     let mut index = existing.clone();
+    let mut emitted_supply = Amount::from_atomic(existing.summary.supply.emitted_supply_atomic);
     for block in new_slice {
         append_block_to_index_maps(&mut index, block)?;
+        emitted_supply = emitted_supply.checked_add(block_reward(block.header.height))?;
     }
 
-    // Refresh balances / supply from the full validated chain state.
-    for activity in index.addresses.values_mut() {
-        activity.exists_in_ledger = false;
-        activity.balance_atomic = 0;
-    }
-    for (address, balance) in chain.state().balances() {
-        let entry = index
-            .addresses
-            .entry(address.clone())
-            .or_insert_with(|| empty_address_activity(address));
-        entry.exists_in_ledger = true;
-        entry.balance_atomic = balance.as_atomic();
-    }
-
-    let tip_hash = chain.tip_hash()?.map(|hash| hash_to_hex(&hash));
-    let indexed_height = chain.height();
-    let latest_block_timestamp = indexed_height
-        .and_then(|height| index.blocks_by_height.get(&height))
-        .map(|block| block.timestamp);
+    let tip = new_slice.last().expect("append slice must be non-empty");
+    let network = tip.network()?;
+    let tip_hash = Some(hash_to_hex(&tip.hash()?));
+    let indexed_height = Some(tip.header.height);
+    let latest_block_timestamp = Some(tip.header.timestamp);
+    let indexed_block_count = existing
+        .summary
+        .indexed_block_count
+        .checked_add(new_slice.len())
+        .ok_or(alvenqis_core::AlvenqisError::AmountOverflow)?;
     index.summary = IndexSummary {
         mode: INDEXER_MODE.to_owned(),
         network: network.network_id().to_owned(),
         status: network.status_label().to_owned(),
         indexed_height,
-        indexed_block_count: chain_blocks.len(),
+        indexed_block_count,
         transaction_count: index.transactions_by_hash.len(),
         address_count: index.addresses.len(),
         tip_hash: tip_hash.clone(),
         latest_block_hash: tip_hash,
         latest_block_timestamp,
         supply: SupplySummary {
-            emitted_supply_atomic: chain.emitted_supply().as_atomic(),
+            emitted_supply_atomic: emitted_supply.as_atomic(),
             max_supply_atomic: MAX_SUPPLY_ATOMIC,
-            remaining_supply_atomic: MAX_SUPPLY_ATOMIC - chain.emitted_supply().as_atomic(),
+            remaining_supply_atomic: MAX_SUPPLY_ATOMIC - emitted_supply.as_atomic(),
         },
     };
     Ok(Some(index))
@@ -466,6 +445,13 @@ fn append_block_to_index_maps(
                 .addresses
                 .entry(sender.clone())
                 .or_insert_with(|| empty_address_activity(sender));
+            let debit = transaction
+                .amount
+                .checked_add(Amount::from_atomic(indexed_tx.effective_fee_atomic))?;
+            sender_entry.balance_atomic = Amount::from_atomic(sender_entry.balance_atomic)
+                .checked_sub(debit)?
+                .as_atomic();
+            sender_entry.exists_in_ledger = true;
             sender_entry.sent_tx_hashes.push(tx_hash.clone());
             sender_entry.transaction_hashes.push(tx_hash.clone());
             sender_entry.total_sent_atomic = sender_entry
@@ -477,6 +463,10 @@ fn append_block_to_index_maps(
             .addresses
             .entry(indexed_tx.to.clone())
             .or_insert_with(|| empty_address_activity(&indexed_tx.to));
+        recipient_entry.balance_atomic = Amount::from_atomic(recipient_entry.balance_atomic)
+            .checked_add(transaction.amount)?
+            .as_atomic();
+        recipient_entry.exists_in_ledger = true;
         recipient_entry.received_tx_hashes.push(tx_hash.clone());
         recipient_entry.transaction_hashes.push(tx_hash.clone());
         recipient_entry.total_received_atomic = recipient_entry
@@ -528,7 +518,9 @@ fn index_parent_links_match_chain(index: &IndexData, chain_data_dir: &Path) -> I
     let Some(tip_height) = index.summary.indexed_height else {
         return Ok(index.summary.tip_hash.is_none());
     };
-    let chain_blocks = node_storage::load_blocks(chain_data_dir)?;
+    let sample_start = tip_height.saturating_sub(16).saturating_sub(1);
+    let chain_blocks =
+        SqliteBlockStore::new(chain_data_dir).load_blocks_from_height(sample_start)?;
     if chain_blocks.is_empty() {
         return Ok(false);
     }
@@ -549,17 +541,22 @@ fn index_parent_links_match_chain(index: &IndexData, chain_data_dir: &Path) -> I
         let Some(indexed) = index.blocks_by_height.get(&height) else {
             return Ok(false);
         };
-        let Some(on_chain) = chain_blocks.get(height as usize) else {
+        let Some(on_chain) = chain_blocks
+            .iter()
+            .find(|block| block.header.height == height)
+        else {
             return Ok(false);
         };
-        if on_chain.header.height != height {
-            return Ok(false);
-        }
         if indexed.hash != hash_to_hex(&on_chain.hash()?) {
             return Ok(false);
         }
         if height > 0 {
-            let parent = &chain_blocks[(height - 1) as usize];
+            let Some(parent) = chain_blocks
+                .iter()
+                .find(|block| block.header.height == height - 1)
+            else {
+                return Ok(false);
+            };
             if indexed.previous_hash != hash_to_hex(&parent.hash()?) {
                 return Ok(false);
             }

@@ -4,6 +4,7 @@ use crate::consensus::{
 };
 use crate::crypto::Hash;
 use crate::errors::{AlvenqisError, Result};
+use crate::firopow::FiroPow;
 use crate::network::Network;
 use crate::transaction::Transaction;
 
@@ -11,6 +12,16 @@ pub const DEVNET_STATUS_WARNING: &str =
     "Internal test profile only. The operator-facing network is Mainnet Candidate.";
 pub const DEVNET_GENESIS_TIMESTAMP: u64 = 1_720_000_000;
 pub const DEVNET_DIFFICULTY_LEADING_ZERO_BITS: u8 = 8;
+
+const MAINNET_CANDIDATE_GENESIS_RECIPIENT: &str =
+    "alve1qr4y5mrru2w9yz4774g8kyewchue23mk46ltu7ujgg0w56g5gmfzcnfqv0q";
+const MAINNET_CANDIDATE_GENESIS_TIMESTAMP: u64 = 1_720_000_000;
+const MAINNET_CANDIDATE_GENESIS_DIFFICULTY_LEADING_ZERO_BITS: u8 = 16;
+const MAINNET_CANDIDATE_GENESIS_NONCE: u64 = 88_489;
+const MAINNET_CANDIDATE_GENESIS_MIX_HASH: [u8; 32] = [
+    130, 241, 68, 4, 33, 28, 133, 191, 38, 57, 131, 251, 77, 100, 190, 247, 41, 198, 239, 216, 205,
+    43, 129, 234, 170, 246, 109, 99, 43, 39, 81, 57,
+];
 
 pub fn devnet_genesis(recipient: &str) -> Result<Block> {
     devnet_genesis_with_difficulty(recipient, DEVNET_DIFFICULTY_LEADING_ZERO_BITS)
@@ -58,6 +69,16 @@ pub fn genesis_with_timestamp_for_network(
         difficulty_leading_zero_bits,
         vec![coinbase],
     )?;
+    if network == Network::MainnetCandidate
+        && recipient == MAINNET_CANDIDATE_GENESIS_RECIPIENT
+        && timestamp == MAINNET_CANDIDATE_GENESIS_TIMESTAMP
+        && difficulty_leading_zero_bits == MAINNET_CANDIDATE_GENESIS_DIFFICULTY_LEADING_ZERO_BITS
+    {
+        block.header.nonce = MAINNET_CANDIDATE_GENESIS_NONCE;
+        block.header.mix_hash = Hash::from_bytes(MAINNET_CANDIDATE_GENESIS_MIX_HASH);
+        FiroPow.ensure_valid(&block)?;
+        return Ok(block);
+    }
     mine_block(&mut block);
     Ok(block)
 }

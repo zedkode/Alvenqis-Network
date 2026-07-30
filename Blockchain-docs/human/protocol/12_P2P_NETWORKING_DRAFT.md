@@ -8,6 +8,12 @@ The current implementation provides:
 
 - persistent ed25519 node identity stored beside chain runtime data;
 - explicit seed multiaddresses or `host:port` entries;
+- DNS seed resolution through Tokio's operating-system resolver with a
+  five-second timeout, cached numeric addresses, periodic re-resolution, and
+  the existing bounded reconnect backoff;
+- only the required rust-libp2p TCP, Noise, Yamux, swarm, and behavior
+  sub-crates in the dependency graph; the unused DNS meta-transport and its
+  Hickory dependency are not present in `Cargo.lock`;
 - bounded request/response block batches;
 - periodic tip exchange and direct-extension block synchronization;
 - signed pending-transaction propagation through gossipsub;

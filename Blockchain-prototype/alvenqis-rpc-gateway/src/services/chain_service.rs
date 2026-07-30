@@ -1,4 +1,4 @@
-use crate::cache::load_chain_async;
+use crate::cache::{load_chain_async, load_tip_block_async};
 use crate::error::RpcError;
 use crate::models::{
     address_account_response, address_balance_response, address_response, block_response,
@@ -147,22 +147,20 @@ pub(crate) async fn sync_status(
 pub(crate) async fn chain_tip(
     State(state): State<RpcState>,
 ) -> Result<Json<ChainTipResponse>, RpcError> {
-    let loaded = load_chain_async(&state).await?;
-    let height = loaded
-        .height
+    let block = load_tip_block_async(&state)
+        .await?
         .ok_or_else(|| RpcError::NotFound("no chain tip available".to_owned()))?;
-    let hash = loaded
-        .tip_hash
-        .ok_or_else(|| RpcError::NotFound("no chain tip available".to_owned()))?;
+    let height = block.header.height;
+    let hash = hash_to_hex(&block.hash()?);
     Ok(Json(ChainTipResponse { height, hash }))
 }
 
 pub(crate) async fn chain_height(
     State(state): State<RpcState>,
 ) -> Result<Json<ChainHeightResponse>, RpcError> {
-    let loaded = load_chain_async(&state).await?;
-    let height = loaded
-        .height
+    let height = load_tip_block_async(&state)
+        .await?
+        .map(|block| block.header.height)
         .ok_or_else(|| RpcError::NotFound("no chain height available".to_owned()))?;
     Ok(Json(ChainHeightResponse { height }))
 }
@@ -170,12 +168,10 @@ pub(crate) async fn chain_height(
 pub(crate) async fn blocks_latest(
     State(state): State<RpcState>,
 ) -> Result<Json<BlockResponse>, RpcError> {
-    let loaded = load_chain_async(&state).await?;
-    let block = loaded
-        .blocks
-        .last()
+    let block = load_tip_block_async(&state)
+        .await?
         .ok_or_else(|| RpcError::NotFound("latest block not found".to_owned()))?;
-    Ok(Json(block_response(block)?))
+    Ok(Json(block_response(&block)?))
 }
 
 pub(crate) async fn addresses(

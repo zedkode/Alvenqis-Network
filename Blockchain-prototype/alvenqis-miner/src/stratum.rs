@@ -72,7 +72,7 @@ pub struct StratumWorkSource {
 
 enum StreamKind {
     Plain(TcpStream),
-    Tls(native_tls::TlsStream<TcpStream>),
+    Tls(Box<native_tls::TlsStream<TcpStream>>),
 }
 
 impl StreamKind {
@@ -218,7 +218,7 @@ impl StratumWorkSource {
             let tls = connector
                 .connect(&self.endpoint.host, tcp)
                 .map_err(|e| MinerError::Rpc(format!("stratum tls handshake: {e}")))?;
-            StreamKind::Tls(tls)
+            StreamKind::Tls(Box::new(tls))
         } else {
             StreamKind::Plain(tcp)
         };
