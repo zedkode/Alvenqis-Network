@@ -1,7 +1,7 @@
 use crate::config::NetworkConfig;
 use crate::domain::chain::{
-    build_validated_chain, ensure_network_storage_path, load_validated_chain,
-    persist_validated_chain_state, prototype_mode, summarize_validated_blocks, ChainSummary,
+    load_validated_chain, persist_validated_chain_state, prototype_mode,
+    summarize_validated_blocks, ChainSummary,
 };
 use crate::domain::transactions::mempool_status;
 use crate::error::{NodeError, NodeResult};
@@ -210,16 +210,19 @@ pub fn submit_mined_block(
     mempool_dir: &Path,
     candidate: &Block,
 ) -> NodeResult<SubmittedMinedBlock> {
-    let config = NetworkConfig::load_from_path(config_path)?;
-    ensure_network_storage_path(config.network, data_dir)?;
     let store = SqliteBlockStore::new(data_dir);
+    let (config, mut canonical_blocks, mut validated_chain) =
+        load_validated_chain(config_path, data_dir)?;
+    let expected_tip = canonical_blocks
+        .last()
+        .map(|block| block.hash().map(|hash| hash_to_hex(&hash)))
+        .transpose()?
+        .ok_or_else(|| NodeError::ChainNotInitialized(storage::chain_file_path(data_dir)))?;
     let (canonical_blocks, validated_chain) =
-        store.append_validated(candidate, |blocks, candidate| {
-            let mut chain = build_validated_chain(config_path, &config, blocks)?;
-            chain.append_block(candidate.clone())?;
-            let mut canonical_blocks = blocks.to_vec();
+        store.append_validated(&expected_tip, candidate, |candidate| {
+            validated_chain.append_block(candidate.clone())?;
             canonical_blocks.push(candidate.clone());
-            Ok((canonical_blocks, chain))
+            Ok((canonical_blocks, validated_chain))
         })?;
     persist_validated_chain_state(data_dir, &canonical_blocks, &validated_chain)?;
 

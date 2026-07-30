@@ -115,6 +115,9 @@ folder or UI concept is not treated as implementation.
 4. Do not mine/re-mine genesis on the RPC hot path.
 5. Do not describe the network as decentralized, audited, or public Mainnet
    without the evidence and approvals in `NETWORK_MATURITY.md`.
+6. Security testing is defensive and limited to project-owned code, local test
+   environments, or separately authorized project staging systems. Follow
+   `Blockchain-docs/human/security/DEFENSIVE_SECURITY_SCOPE.md`.
 
 ## Next reading
 

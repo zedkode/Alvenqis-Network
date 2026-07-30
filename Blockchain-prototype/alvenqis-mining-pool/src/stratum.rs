@@ -7,11 +7,10 @@ use crate::app::{get_work_for_peer, submit_share_for_peer, PoolState};
 use crate::config::StratumConfig;
 use crate::{PoolError, Result};
 use alvenqis_miner::{MiningSubmitRequest, MiningTemplate, SubmitStatus};
-use rustls_pemfile::{certs, private_key};
+use rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::fs::File;
-use std::io::BufReader as StdBufReader;
+use std::fs;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
@@ -520,19 +519,19 @@ fn load_tls_acceptor(config: &StratumConfig) -> Result<TlsAcceptor> {
     // The workspace also enables rustls through reqwest, so both crypto providers can
     // otherwise be present. Select one explicitly before constructing any TLS config.
     let _ = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
-    let cert_file = File::open(&config.tls_cert_file).map_err(|error| {
+    let certificate_pem = fs::read(&config.tls_cert_file).map_err(|error| {
         PoolError::Config(format!(
             "cannot open Stratum TLS certificate {}: {error}",
             config.tls_cert_file.display()
         ))
     })?;
-    let key_file = File::open(&config.tls_key_file).map_err(|error| {
+    let private_key_pem = fs::read(&config.tls_key_file).map_err(|error| {
         PoolError::Config(format!(
             "cannot open Stratum TLS private key {}: {error}",
             config.tls_key_file.display()
         ))
     })?;
-    let certificate_chain = certs(&mut StdBufReader::new(cert_file))
+    let certificate_chain = CertificateDer::pem_slice_iter(&certificate_pem)
         .collect::<std::result::Result<Vec<_>, _>>()
         .map_err(|error| PoolError::Config(format!("invalid Stratum certificate: {error}")))?;
     if certificate_chain.is_empty() {
@@ -540,9 +539,8 @@ fn load_tls_acceptor(config: &StratumConfig) -> Result<TlsAcceptor> {
             "Stratum TLS certificate chain is empty".to_owned(),
         ));
     }
-    let key = private_key(&mut StdBufReader::new(key_file))
-        .map_err(|error| PoolError::Config(format!("invalid Stratum private key: {error}")))?
-        .ok_or_else(|| PoolError::Config("Stratum TLS private key is missing".to_owned()))?;
+    let key = PrivateKeyDer::from_pem_slice(&private_key_pem)
+        .map_err(|error| PoolError::Config(format!("invalid Stratum private key: {error}")))?;
     let tls = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certificate_chain, key)

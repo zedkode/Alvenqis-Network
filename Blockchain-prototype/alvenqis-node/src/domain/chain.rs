@@ -348,17 +348,7 @@ pub(crate) fn load_validated_chain(
     } else {
         restore_or_replay_validated_chain(config_path, &config, data_dir, &blocks)?
     };
-    cache
-        .lock()
-        .map_err(|_| NodeError::Input("validated chain cache lock poisoned".to_owned()))?
-        .insert(
-            data_dir.to_path_buf(),
-            CachedValidatedChain {
-                fingerprint,
-                blocks: blocks.clone(),
-                chain: chain.clone(),
-            },
-        );
+    cache_validated_chain(data_dir, fingerprint, &blocks, &chain)?;
     Ok((config, blocks, chain))
 }
 
@@ -369,14 +359,41 @@ pub(crate) fn persist_validated_chain_state(
 ) -> NodeResult<()> {
     #[cfg(feature = "storage-rocksdb")]
     {
-        crate::state_store::persist_chain_state(data_dir, blocks, chain)
+        crate::state_store::persist_chain_state(data_dir, blocks, chain)?;
     }
 
     #[cfg(not(feature = "storage-rocksdb"))]
     {
         let _ = (data_dir, blocks, chain);
-        Ok(())
     }
+
+    cache_validated_chain(
+        data_dir,
+        storage::chain_storage_fingerprint(data_dir),
+        blocks,
+        chain,
+    )
+}
+
+fn cache_validated_chain(
+    data_dir: &Path,
+    fingerprint: storage::ChainStorageFingerprint,
+    blocks: &[Block],
+    chain: &Chain,
+) -> NodeResult<()> {
+    VALIDATED_CHAIN_CACHE
+        .get_or_init(|| Mutex::new(BTreeMap::new()))
+        .lock()
+        .map_err(|_| NodeError::Input("validated chain cache lock poisoned".to_owned()))?
+        .insert(
+            data_dir.to_path_buf(),
+            CachedValidatedChain {
+                fingerprint,
+                blocks: blocks.to_vec(),
+                chain: chain.clone(),
+            },
+        );
+    Ok(())
 }
 
 fn restore_or_replay_validated_chain(
@@ -571,5 +588,60 @@ mod storage_path_tests {
                 })
                 .expect("at least one allowlisted root pattern must pass");
         }
+    }
+}
+
+#[cfg(test)]
+mod validated_chain_cache_tests {
+    use super::{persist_validated_chain_state, VALIDATED_CHAIN_CACHE};
+    use crate::storage;
+    use alvenqis_core::{devnet_child_block, devnet_genesis, Address, Chain, Network, PrivateKey};
+
+    #[test]
+    fn persisted_append_refreshes_the_validated_chain_cache_fingerprint() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let data_dir = root.path().join(".alvenqis-local").join("chain");
+        let miner = Address::from_public_key_for_network(
+            &PrivateKey::from_bytes([42; 32]).public_key(),
+            Network::Devnet,
+        )
+        .to_string();
+        let genesis = devnet_genesis(&miner).expect("genesis");
+        storage::append_block(&data_dir, &genesis).expect("persist genesis");
+        let mut blocks = vec![genesis.clone()];
+        let mut chain =
+            Chain::from_blocks(Network::Devnet, blocks.clone()).expect("validated genesis");
+        persist_validated_chain_state(&data_dir, &blocks, &chain).expect("cache genesis");
+        let genesis_fingerprint = VALIDATED_CHAIN_CACHE
+            .get()
+            .expect("cache")
+            .lock()
+            .expect("cache lock")
+            .get(&data_dir)
+            .expect("genesis cache entry")
+            .fingerprint;
+
+        let child = devnet_child_block(
+            &genesis,
+            &miner,
+            genesis.header.timestamp.saturating_add(60),
+            vec![],
+        )
+        .expect("child");
+        chain.append_block(child.clone()).expect("validate child");
+        storage::append_block(&data_dir, &child).expect("persist child");
+        blocks.push(child);
+        let committed_fingerprint = storage::chain_storage_fingerprint(&data_dir);
+        assert_ne!(genesis_fingerprint, committed_fingerprint);
+
+        persist_validated_chain_state(&data_dir, &blocks, &chain).expect("refresh cache");
+        let cache = VALIDATED_CHAIN_CACHE
+            .get()
+            .expect("cache")
+            .lock()
+            .expect("cache lock");
+        let cached = cache.get(&data_dir).expect("refreshed cache entry");
+        assert_eq!(cached.fingerprint, committed_fingerprint);
+        assert_eq!(cached.blocks, blocks);
     }
 }

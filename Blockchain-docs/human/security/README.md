@@ -4,6 +4,11 @@ Threat models, review notes, audit preparation and secure development guidance.
 
 Status: Current Mainnet Candidate security index
 
+All security work is limited by
+[Defensive Security Engineering Scope](DEFENSIVE_SECURITY_SCOPE.md): project-owned
+code and explicitly authorized environments, prevention and remediation goals,
+bounded testing, and no testing of unrelated systems.
+
 Start with [Verification and Audit Status](AUDIT_STATUS.md) for the current
 evidence boundary and the explicit statement that no external audit is claimed.
 
@@ -30,6 +35,7 @@ Remaining boundaries:
 
 Audit and risk entry points:
 
+- `DEFENSIVE_SECURITY_SCOPE.md` — authorization boundary and defensive testing rules;
 - `AUDIT_STATUS.md` - current verification evidence and claim boundary;
 
 - `KNOWN_LIMITATIONS.md` — open findings and required closure evidence;
@@ -38,5 +44,9 @@ Audit and risk entry points:
 - `WALLET_KEY_MANAGEMENT.md` — custody, keystore, and recovery boundary;
 - `RPC_STRATUM_POOL_ABUSE_MODEL.md` — public API and mining abuse model;
 - `SUPPLY_CHAIN_AND_ARTIFACTS.md` — SBOM, signing, and provenance requirements;
+- `DEPENDENCY_AUDIT_2026-07-30.md` — dated Cargo audit, deny-policy results,
+  critical dependency review, remediation, and retained findings;
+- `UNSAFE_CODE_INVENTORY_2026-07-30.md` — dated inventory of Rust unsafe
+  boundaries and missing or partial safety justifications;
 - `RESPONSIBLE_DISCLOSURE.md` — private reporting expectations;
 - `../release/DECENTRALIZATION_READINESS.md` — row-by-row centralization register.

@@ -306,6 +306,31 @@ struct MiningPresenceAnnouncement {
     updated_at_unix_seconds: u64,
 }
 
+/// Fuzz-only entry points that exercise the exact JSON message types used by
+/// the libp2p request/response and gossipsub paths.
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub mod fuzzing {
+    use super::{MiningPresenceAnnouncement, P2pHandshake, SyncRequest, SyncResponse};
+    use serde::{Deserialize, Serialize};
+
+    fn decode_and_round_trip<T>(data: &[u8])
+    where
+        T: for<'de> Deserialize<'de> + Serialize,
+    {
+        if let Ok(value) = serde_json::from_slice::<T>(data) {
+            let _ = std::hint::black_box(serde_json::to_vec(&value));
+        }
+    }
+
+    pub fn decode_message_payloads(data: &[u8]) {
+        decode_and_round_trip::<SyncRequest>(data);
+        decode_and_round_trip::<SyncResponse>(data);
+        decode_and_round_trip::<P2pHandshake>(data);
+        decode_and_round_trip::<MiningPresenceAnnouncement>(data);
+    }
+}
+
 pub fn local_p2p_handshake(config: &NetworkConfig) -> P2pHandshake {
     P2pHandshake {
         network_id: config.network_id.clone(),
@@ -1150,20 +1175,25 @@ fn handle_sync_request(
     match request {
         SyncRequest::Hello(_) => SyncResponse::HelloAccepted(local),
         SyncRequest::FindAncestor { locator, .. } => {
-            let local_blocks = match storage::load_blocks(data_dir) {
-                Ok(blocks) => blocks,
-                Err(error) => {
-                    return SyncResponse::Rejected {
-                        reason: error.to_string(),
+            let store = storage::SqliteBlockStore::new(data_dir);
+            let mut ancestor = None;
+            for entry in locator {
+                let local = match store.load_block_at_height(entry.height) {
+                    Ok(block) => block,
+                    Err(error) => {
+                        return SyncResponse::Rejected {
+                            reason: error.to_string(),
+                        }
                     }
-                }
-            };
-            let ancestor = locator.into_iter().find(|entry| {
-                local_blocks
-                    .get(entry.height as usize)
+                };
+                if local
                     .and_then(|block| block.hash().ok())
                     .is_some_and(|hash| hash_to_hex(&hash) == entry.hash)
-            });
+                {
+                    ancestor = Some(entry);
+                    break;
+                }
+            }
             match ancestor {
                 Some(entry) => SyncResponse::CommonAncestor {
                     hello: local,
@@ -1179,27 +1209,28 @@ fn handle_sync_request(
             max_headers,
             ..
         } => {
-            let headers = storage::load_blocks(data_dir)
-                .ok()
-                .map(|blocks| {
-                    blocks
-                        .into_iter()
-                        .filter(|block| block.header.height >= start_height)
-                        .take(max_headers.min(MAX_SYNC_HEADERS))
-                        .filter_map(|block| {
-                            let hash = block.hash().ok()?;
-                            Some(HeaderSummary {
-                                height: block.header.height,
-                                hash: hash_to_hex(&hash),
-                                previous_hash: hash_to_hex(&block.header.previous_hash),
-                                difficulty_leading_zero_bits: block
-                                    .header
-                                    .difficulty_leading_zero_bits,
-                            })
-                        })
-                        .collect()
+            let store = storage::SqliteBlockStore::new(data_dir);
+            let blocks =
+                match store.load_blocks_range(start_height, max_headers.min(MAX_SYNC_HEADERS)) {
+                    Ok(blocks) => blocks,
+                    Err(error) => {
+                        return SyncResponse::Rejected {
+                            reason: error.to_string(),
+                        }
+                    }
+                };
+            let headers = blocks
+                .into_iter()
+                .filter_map(|block| {
+                    let hash = block.hash().ok()?;
+                    Some(HeaderSummary {
+                        height: block.header.height,
+                        hash: hash_to_hex(&hash),
+                        previous_hash: hash_to_hex(&block.header.previous_hash),
+                        difficulty_leading_zero_bits: block.header.difficulty_leading_zero_bits,
+                    })
                 })
-                .unwrap_or_default();
+                .collect();
             SyncResponse::Headers {
                 hello: local,
                 headers,
@@ -1210,15 +1241,16 @@ fn handle_sync_request(
             max_blocks,
             ..
         } => {
-            let blocks = storage::load_blocks(data_dir)
-                .map(|blocks| {
-                    blocks
-                        .into_iter()
-                        .filter(|block| block.header.height >= start_height)
-                        .take(max_blocks.min(MAX_SYNC_BLOCKS))
-                        .collect()
-                })
-                .unwrap_or_default();
+            let store = storage::SqliteBlockStore::new(data_dir);
+            let blocks =
+                match store.load_blocks_range(start_height, max_blocks.min(MAX_SYNC_BLOCKS)) {
+                    Ok(blocks) => blocks,
+                    Err(error) => {
+                        return SyncResponse::Rejected {
+                            reason: error.to_string(),
+                        }
+                    }
+                };
             SyncResponse::Blocks {
                 hello: local,
                 blocks,
@@ -1290,8 +1322,8 @@ fn handle_sync_response(
                 return Ok(());
             }
             remember_sync_target(status, &hello);
-            let local_blocks = storage::load_blocks(data_dir)?;
-            if local_blocks.get(height as usize).is_none() {
+            let store = storage::SqliteBlockStore::new(data_dir);
+            if store.load_block_at_height(height)?.is_none() {
                 return Err(NodeError::P2p(format!(
                     "peer selected unavailable ancestor height {height}"
                 )));
@@ -1520,30 +1552,34 @@ fn remote_has_more_work(remote: &PeerHello, local: &PeerHello) -> NodeResult<boo
 /// Caps size for bandwidth and always ends at genesis when the chain is non-empty.
 fn block_locator(data_dir: &Path) -> NodeResult<Vec<BlockLocatorEntry>> {
     const MAX_LOCATOR_ENTRIES: usize = 32;
-    let blocks = storage::load_blocks(data_dir)?;
-    if blocks.is_empty() {
+    let store = storage::SqliteBlockStore::new(data_dir);
+    let Some(tip) = store.load_tip_block()? else {
         return Ok(Vec::new());
-    }
+    };
     let mut locator = Vec::new();
-    let mut index = blocks.len().saturating_sub(1);
+    let mut height = tip.header.height;
     let mut step = 1_usize;
     let mut seen_heights = BTreeSet::new();
     loop {
-        if locator.len() >= MAX_LOCATOR_ENTRIES.saturating_sub(1) && index != 0 {
+        if locator.len() >= MAX_LOCATOR_ENTRIES.saturating_sub(1) && height != 0 {
             // Reserve the last slot for genesis.
-            index = 0;
+            height = 0;
         }
-        let block = &blocks[index];
+        let block = store.load_block_at_height(height)?.ok_or_else(|| {
+            NodeError::P2p(format!(
+                "canonical block missing at locator height {height}"
+            ))
+        })?;
         if seen_heights.insert(block.header.height) {
             locator.push(BlockLocatorEntry {
                 height: block.header.height,
                 hash: hash_to_hex(&block.hash()?),
             });
         }
-        if index == 0 {
+        if height == 0 {
             break;
         }
-        index = index.saturating_sub(step);
+        height = height.saturating_sub(step as u64);
         // After the first 8 tip steps, double the stride (exponential back-off).
         if locator.len() > 8 {
             step = step.saturating_mul(2).max(1);
@@ -1613,10 +1649,9 @@ fn validate_header_chain(
     if headers.is_empty() {
         return Err(NodeError::P2p("peer returned empty headers".to_owned()));
     }
-    let local_blocks = storage::load_blocks(data_dir)?;
     let mut prev_hash = if branch.headers.is_empty() {
-        let ancestor = local_blocks
-            .get(branch.ancestor_height as usize)
+        let ancestor = storage::SqliteBlockStore::new(data_dir)
+            .load_block_at_height(branch.ancestor_height)?
             .ok_or_else(|| NodeError::P2p("ancestor missing for header validation".to_owned()))?;
         hash_to_hex(&ancestor.hash()?)
     } else {

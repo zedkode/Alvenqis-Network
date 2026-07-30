@@ -9,7 +9,9 @@ all-features = true
 [advisories]
 unmaintained = "workspace"
 unsound = "all"
-ignore = []
+ignore = [
+    { id = "RUSTSEC-2024-0429", reason = "Tauri 2.11.5 Linux transitively requires GTK3/glib 0.18; repository and resolved Tauri/GTK source scans find no use of the affected VariantStrIter API. Tracked as ALV-DESKTOP-001 until upstream removes GTK3 or provides a compatible fix." },
+]
 
 [licenses]
 confidence-threshold = 0.8

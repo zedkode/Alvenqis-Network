@@ -50,9 +50,16 @@ pub struct StoredChainIdentity {
 pub trait BlockStore {
     fn load_blocks(&self) -> NodeResult<Vec<Block>>;
 
-    fn append_validated<R, F>(&self, candidate: &Block, validate: F) -> NodeResult<R>
+    /// Validates a candidate against the caller's already-validated chain view, then
+    /// commits it only if SQLite still has the same tip.
+    fn append_validated<R, F>(
+        &self,
+        expected_tip: &str,
+        candidate: &Block,
+        validate: F,
+    ) -> NodeResult<R>
     where
-        F: FnOnce(&[Block], &Block) -> NodeResult<R>;
+        F: FnOnce(&Block) -> NodeResult<R>;
 
     fn replace_validated<R, F>(
         &self,
@@ -186,6 +193,30 @@ impl SqliteBlockStore {
         load_tip_block_from_connection(&connection, &chain_database_path(&self.data_dir))
     }
 
+    pub fn load_block_at_height(&self, height: u64) -> NodeResult<Option<Block>> {
+        let connection = self.open_read_connection()?;
+        let mut blocks = load_blocks_range_from_connection(
+            &connection,
+            &chain_database_path(&self.data_dir),
+            height,
+            1,
+        )?;
+        Ok(blocks.pop())
+    }
+
+    pub fn load_blocks_range(&self, start_height: u64, limit: usize) -> NodeResult<Vec<Block>> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let connection = self.open_read_connection()?;
+        load_blocks_range_from_connection(
+            &connection,
+            &chain_database_path(&self.data_dir),
+            start_height,
+            limit,
+        )
+    }
+
     pub fn load_blocks_from_height(&self, start_height: u64) -> NodeResult<Vec<Block>> {
         let connection = self.open_read_connection()?;
         load_blocks_from_height_from_connection(
@@ -227,16 +258,31 @@ impl BlockStore for SqliteBlockStore {
         load_blocks_from_connection(&connection, &chain_database_path(&self.data_dir), false)
     }
 
-    fn append_validated<R, F>(&self, candidate: &Block, validate: F) -> NodeResult<R>
+    fn append_validated<R, F>(
+        &self,
+        expected_tip: &str,
+        candidate: &Block,
+        validate: F,
+    ) -> NodeResult<R>
     where
-        F: FnOnce(&[Block], &Block) -> NodeResult<R>,
+        F: FnOnce(&Block) -> NodeResult<R>,
     {
+        let result = validate(candidate)?;
         let mut connection = self.open_write_connection()?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let blocks =
-            load_blocks_from_connection(&transaction, &chain_database_path(&self.data_dir), false)?;
-        let result = validate(&blocks, candidate)?;
-        verify_tip_extension(blocks.last(), candidate)?;
+        let tip =
+            load_tip_block_from_connection(&transaction, &chain_database_path(&self.data_dir))?;
+        let actual_tip = match tip.as_ref() {
+            Some(block) => hash_to_hex(&block.hash()?),
+            None => "none".to_owned(),
+        };
+        if actual_tip != expected_tip {
+            return Err(NodeError::StaleChainTip {
+                expected: expected_tip.to_owned(),
+                actual: actual_tip,
+            });
+        }
+        verify_tip_extension(tip.as_ref(), candidate)?;
         insert_canonical_block(&transaction, candidate)?;
         transaction.commit()?;
         Ok(result)
@@ -447,19 +493,34 @@ fn load_validated_canonical_rows_from_height(
     database_path: &Path,
     start_height: i64,
     cached_hashes: &BTreeMap<i64, Vec<u8>>,
+    row_limit: Option<usize>,
 ) -> NodeResult<Vec<ValidatedCanonicalBlockRow>> {
-    let mut statement = connection.prepare(
+    let mut statement = connection.prepare(if row_limit.is_some() {
         "SELECT height, hash, previous_hash, network_id, block_json
          FROM canonical_blocks
          WHERE height >= ?1
-         ORDER BY height ASC",
-    )?;
-    let rows = statement.query_map(params![start_height], stored_canonical_block_row)?;
+         ORDER BY height ASC
+         LIMIT ?2"
+    } else {
+        "SELECT height, hash, previous_hash, network_id, block_json
+         FROM canonical_blocks
+         WHERE height >= ?1
+         ORDER BY height ASC"
+    })?;
+    let mut rows = match row_limit {
+        Some(limit) => {
+            let limit = i64::try_from(limit).map_err(|_| {
+                NodeError::Input("block range limit exceeds SQLite bounds".to_owned())
+            })?;
+            statement.query(params![start_height, limit])?
+        }
+        None => statement.query(params![start_height])?,
+    };
     let mut previous_stored_hash: Option<Vec<u8>> = None;
     let mut expected_height = start_height;
     let mut validated_rows = Vec::new();
-    for row in rows {
-        let stored = row?;
+    while let Some(row) = rows.next()? {
+        let stored = stored_canonical_block_row(row)?;
         let hash_was_validated = cached_hashes
             .get(&stored.height)
             .is_some_and(|cached| cached == &stored.hash);
@@ -529,10 +590,45 @@ fn load_blocks_from_height_from_connection(
         database_path,
         query_start_height,
         &BTreeMap::new(),
+        None,
     )?;
     Ok(rows
         .into_iter()
         .filter(|row| row.height >= start_height)
+        .map(|row| row.block)
+        .collect())
+}
+
+fn load_blocks_range_from_connection(
+    connection: &Connection,
+    database_path: &Path,
+    start_height: u64,
+    limit: usize,
+) -> NodeResult<Vec<Block>> {
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+    let start_height = height_to_i64(start_height)?;
+    let include_predecessor = start_height > 0;
+    let query_start_height = if include_predecessor {
+        start_height - 1
+    } else {
+        0
+    };
+    let row_limit = limit
+        .checked_add(usize::from(include_predecessor))
+        .ok_or_else(|| NodeError::Input("block range limit overflow".to_owned()))?;
+    let rows = load_validated_canonical_rows_from_height(
+        connection,
+        database_path,
+        query_start_height,
+        &BTreeMap::new(),
+        Some(row_limit),
+    )?;
+    Ok(rows
+        .into_iter()
+        .filter(|row| row.height >= start_height)
+        .take(limit)
         .map(|row| row.block)
         .collect())
 }
@@ -564,8 +660,13 @@ fn load_blocks_from_connection(
         .get(database_path)
         .cloned()
         .unwrap_or_default();
-    let rows =
-        load_validated_canonical_rows_from_height(connection, database_path, 0, &cached_hashes)?;
+    let rows = load_validated_canonical_rows_from_height(
+        connection,
+        database_path,
+        0,
+        &cached_hashes,
+        None,
+    )?;
     let mut validated_hashes = BTreeMap::new();
     let mut blocks = Vec::with_capacity(rows.len());
     for row in rows {
@@ -1090,6 +1191,56 @@ mod tests {
     }
 
     #[test]
+    fn bounded_range_and_point_queries_do_not_load_the_full_suffix() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        let child = linked_child(&genesis);
+        let grandchild = linked_child(&child);
+        store.append_with_tip_link(&genesis).expect("genesis");
+        store.append_with_tip_link(&child).expect("child");
+        store.append_with_tip_link(&grandchild).expect("grandchild");
+
+        assert_eq!(
+            store.load_block_at_height(1).expect("point"),
+            Some(child.clone())
+        );
+        assert_eq!(
+            store.load_blocks_range(1, 1).expect("bounded range"),
+            vec![child.clone()]
+        );
+        assert!(store
+            .load_blocks_range(1, 0)
+            .expect("zero-length range")
+            .is_empty());
+        assert_eq!(
+            store.load_blocks_range(2, 8).expect("short tail"),
+            vec![grandchild]
+        );
+        assert_eq!(store.load_block_at_height(3).expect("missing"), None);
+
+        let connection = store.open_write_connection().expect("open");
+        connection
+            .execute(
+                "UPDATE canonical_blocks
+                 SET network_id = 'tampered-beyond-range'
+                 WHERE height = 2",
+                [],
+            )
+            .expect("tamper beyond bounded range");
+        assert_eq!(
+            store
+                .load_blocks_range(1, 1)
+                .expect("bounded query must stop before tampered row"),
+            vec![child]
+        );
+        let error = store
+            .load_blocks_from_height(1)
+            .expect_err("unbounded suffix must still validate every row");
+        assert!(matches!(error, NodeError::InvalidChainDatabase { .. }));
+    }
+
+    #[test]
     fn tip_append_rejects_stale_parent_without_mutation() {
         let dir = tempfile::tempdir().expect("temp");
         let store = SqliteBlockStore::new(dir.path());
@@ -1104,6 +1255,28 @@ mod tests {
         assert!(matches!(error, NodeError::StaleChainTip { .. }));
         assert_eq!(store.canonical_block_count().expect("count"), 1);
         assert_eq!(store.load_tip_block().expect("tip"), Some(genesis));
+    }
+
+    #[test]
+    fn validated_tip_append_rejects_concurrent_tip_change_without_mutation() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        let child = linked_child(&genesis);
+        let grandchild = linked_child(&child);
+        store.append_with_tip_link(&genesis).expect("genesis");
+        let expected_tip = hash_to_hex(&genesis.hash().expect("genesis hash"));
+        store
+            .append_with_tip_link(&child)
+            .expect("concurrent child");
+
+        let error = store
+            .append_validated(&expected_tip, &grandchild, |_| Ok(()))
+            .expect_err("changed tip must fail");
+
+        assert!(matches!(error, NodeError::StaleChainTip { .. }));
+        assert_eq!(store.canonical_block_count().expect("count"), 2);
+        assert_eq!(store.load_tip_block().expect("tip"), Some(child));
     }
 
     #[test]

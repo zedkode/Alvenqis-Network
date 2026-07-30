@@ -1,0 +1,38 @@
+[package]
+name = "alvenqis-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+alvenqis-core = { path = "../alvenqis-core" }
+alvenqis-node = { path = "../alvenqis-node", features = ["fuzzing"] }
+libfuzzer-sys = "0.4"
+serde_json = "1"
+
+[[bin]]
+name = "decode_block"
+path = "fuzz_targets/decode_block.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_transaction"
+path = "fuzz_targets/decode_transaction.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_p2p_message"
+path = "fuzz_targets/decode_p2p_message.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

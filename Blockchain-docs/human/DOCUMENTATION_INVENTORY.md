@@ -12,10 +12,10 @@ excluded by policy.
 
 | Class | Documents |
 |---|---:|
-| Component reference | 19 |
+| Component reference | 20 |
 | Historical | 2 |
-| Public | 118 |
-| **Total** | **139** |
+| Public | 121 |
+| **Total** | **143** |
 
 ## Complete inventory
 
@@ -96,6 +96,8 @@ excluded by policy.
 | `Blockchain-docs/human/release/RELEASE_GATE.md` | Public | **Draft / Mainnet Candidate / Prototype** | Release Gate (G1) |
 | `Blockchain-docs/human/roadmap/README.md` | Public | Draft | Roadmap Docs |
 | `Blockchain-docs/human/security/AUDIT_STATUS.md` | Public | **Current internal verification record / no external audit** | Verification and Audit Status |
+| `Blockchain-docs/human/security/DEFENSIVE_SECURITY_SCOPE.md` | Public | Authorized project-owned defensive engineering policy | Defensive Security Engineering Scope |
+| `Blockchain-docs/human/security/DEPENDENCY_AUDIT_2026-07-30.md` | Public | Dated Rust dependency review / open findings retained | Dependency Security Review — 2026-07-30 |
 | `Blockchain-docs/human/security/EXTERNAL_SECURITY_REVIEW_SCOPE.md` | Public | Draft audit package / not yet ready for external sign-off | External Security Review Scope |
 | `Blockchain-docs/human/security/KNOWN_LIMITATIONS.md` | Public | Open risk register / Mainnet Candidate / not an audit result | Known Limitations and Open Security Findings |
 | `Blockchain-docs/human/security/MINING_POOL_RISKS.md` | Public | Draft / Mainnet Candidate / Prototype | Mining Pool Security Risks |
@@ -107,6 +109,7 @@ excluded by policy.
 | `Blockchain-docs/human/security/SECURITY_GATE.md` | Public | Draft / Mainnet Candidate / Prototype | Security Gate |
 | `Blockchain-docs/human/security/SUPPLY_CHAIN_AND_ARTIFACTS.md` | Public | Draft / candidate checksums exist / publisher signing incomplete | Supply Chain, SBOM, and Artifact Verification |
 | `Blockchain-docs/human/security/THREAT_MODEL.md` | Public | Draft / pre-audit / Mainnet Candidate | Alvenqis Network Threat Model |
+| `Blockchain-docs/human/security/UNSAFE_CODE_INVENTORY_2026-07-30.md` | Public | Point-in-time source inventory | Unsafe Code Inventory — 2026-07-30 |
 | `Blockchain-docs/human/security/WALLET_KEY_MANAGEMENT.md` | Public | Implemented candidate storage / recovery and external review incomplete | Wallet Key Management and Recovery |
 | `Blockchain-docs/human/source-info/ALVENQIS_00_READ_FIRST_OPEN_DECISIONS.md` | Public | Canonical read-first register | Alvenqis 00 — Read First: Decisions and Critical Gaps |
 | `Blockchain-docs/human/source-info/ALVENQIS_01_SOURCE_INFO_MASTER.md` | Public | Canonical identity and launch-facts summary | Alvenqis 01 — Source Information Master |
@@ -151,6 +154,7 @@ excluded by policy.
 | `Blockchain-prototype/alvenqis-website/DEPLOYMENT.md` | Component reference | Not stated | Alvenqis Web Deployment |
 | `Blockchain-prototype/alvenqis-website/README.md` | Public | Not stated | Alvenqis Network Website |
 | `Blockchain-prototype/alvenqis-website/server/README.md` | Component reference | Not stated | Alvenqis Network Server |
+| `Blockchain-prototype/fuzz/README.md` | Component reference | Not stated | Alvenqis parser fuzz targets |
 | `Blockchain-prototype/README.md` | Component reference | Not stated | Blockchain-prototype |
 | `Blockchain-prototype/shared/brand/README.md` | Public | Not stated | Alvenqis brand assets |
 | `Blockchain-prototype/shared/constants/README.md` | Public | Draft | Shared Constants |

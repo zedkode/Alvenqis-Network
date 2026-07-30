@@ -3,6 +3,8 @@
 > Independent Rust L1 Proof-of-Work blockchain (FiroPoW 0.9.4, account-based, unit ALVE).
 > Status: Mainnet Candidate / Experimental Prototype. ALVE is not real money at this stage.
 > Full agent briefing: see `llms.md`. This file is the short, spec-format pointer version.
+> Security work is defensive and restricted to project-owned code and explicitly authorized
+> environments; see `Blockchain-docs/human/security/DEFENSIVE_SECURITY_SCOPE.md`.
 
 ## Start here
 
@@ -10,6 +12,8 @@
   rules, coding conventions. Read this before anything else.
 - [init.md](./init.md): human-oriented orientation to the monorepo layout.
 - [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md): full public repository tree.
+- [Defensive security scope](./Blockchain-docs/human/security/DEFENSIVE_SECURITY_SCOPE.md):
+  authorization boundary for reviews, fuzzing, resilience tests, and security reports.
 
 ## Official execution plan
 
