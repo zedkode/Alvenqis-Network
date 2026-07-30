@@ -48,10 +48,20 @@ jobs:
         with:
           enablement: true
 
+      - name: Archive documentation artifact
+        run: >-
+          tar --dereference --hard-dereference
+          --directory Blockchain-docs/human
+          --create --file "${RUNNER_TEMP}/artifact.tar"
+          --exclude=.git --exclude=.github .
+
       - name: Upload documentation artifact
-        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          path: Blockchain-docs/human
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
 
   deploy:
     name: Publish documentation
