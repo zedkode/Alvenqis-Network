@@ -12,10 +12,10 @@ excluded by policy.
 
 | Class | Documents |
 |---|---:|
-| Component reference | 21 |
+| Component reference | 22 |
 | Historical | 2 |
-| Public | 126 |
-| **Total** | **149** |
+| Public | 127 |
+| **Total** | **151** |
 
 ## Complete inventory
 
@@ -116,6 +116,7 @@ excluded by policy.
 | `Blockchain-docs/human/security/THREAT_MODEL.md` | Public | Draft / pre-audit / Mainnet Candidate | Alvenqis Network Threat Model |
 | `Blockchain-docs/human/security/UNSAFE_CODE_INVENTORY_2026-07-30.md` | Public | Point-in-time source inventory | Unsafe Code Inventory — 2026-07-30 |
 | `Blockchain-docs/human/security/WALLET_KEY_MANAGEMENT.md` | Public | Implemented candidate storage / recovery and external review incomplete | Wallet Key Management and Recovery |
+| `Blockchain-docs/human/security/YAMUX_BACKPORT_EVIDENCE_2026-07-30.md` | Public | Local remediation verified / immutable GitHub verification pending | Yamux Compatibility Backport Evidence — 2026-07-30 |
 | `Blockchain-docs/human/source-info/ALVENQIS_00_READ_FIRST_OPEN_DECISIONS.md` | Public | Canonical read-first register | Alvenqis 00 — Read First: Decisions and Critical Gaps |
 | `Blockchain-docs/human/source-info/ALVENQIS_01_SOURCE_INFO_MASTER.md` | Public | Canonical identity and launch-facts summary | Alvenqis 01 — Source Information Master |
 | `Blockchain-docs/human/source-info/ALVENQIS_02_ARCHITECTURE_AND_PRODUCT_LAYERS.md` | Public | Canonical architecture summary | Alvenqis 02 — Architecture and Product Layers |
@@ -166,6 +167,7 @@ excluded by policy.
 | `Blockchain-prototype/shared/constants/README.md` | Public | Draft | Shared Constants |
 | `Blockchain-prototype/shared/README.md` | Public | Draft | Shared |
 | `Blockchain-prototype/shared/schemas/README.md` | Public | Draft | Shared Schemas |
+| `Blockchain-prototype/third-party/libp2p-yamux/UPSTREAM.md` | Component reference | temporary reviewed dependency backport | libp2p-yamux security backport |
 | `Blockchain-scripts/README.md` | Component reference | Not stated | Blockchain-scripts |
 | `init.md` | Component reference | Not stated | Alvenqis Network — init |
 | `PROJECT_STRUCTURE.md` | Component reference | Not stated | Alvenqis Network — project structure |
