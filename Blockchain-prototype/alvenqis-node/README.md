@@ -59,11 +59,28 @@ count, and active bans.
 
 - tip growth and validated reorganization use SQLite ACID transactions with
   WAL, `synchronous=FULL`, a versioned strict schema, and a 30-second busy timeout;
+- schema v2 stores transaction hash to canonical block height/position entries
+  in the same transaction as block append/reorg; schema v1 is backfilled
+  atomically on first open;
+- duplicate transaction admission, mined-transaction RPC lookup, and
+  data-directory-backed mempool sanitation/template/reorg paths use the
+  canonical transaction-location index instead of scanning every block body;
 - reorganization archives detached blocks in `orphaned_blocks` before changing
   the canonical chain in the same transaction;
 - legacy `chain.jsonl` data is structurally validated and migrated atomically to
   `chain.sqlite3`; the original JSONL remains untouched as rollback evidence;
 - online backups use SQLite's backup API and are integrity-checked before success;
+- canonical block loads bind the validation cache to both the stored block hash
+  and serialized body, and always recompute each block's transaction Merkle root;
+- `verify-chain-database` performs SQLite page and foreign-key checks, recomputes
+  canonical block hashes and transaction Merkle roots, validates the transaction
+  index, and emits a diagnostic block-hash Merkle commitment;
+- `start-node` runs that deep verification at startup and every six hours by
+  default, records the latest result under the node runtime directory, and stops
+  the P2P worker if a periodic check detects corruption;
+- the operator Drill A creates an isolated restore, compares backup/copy
+  SHA-256, requires restored chain identity to match the source, and writes
+  JSON evidence plus a terminal transcript;
 - the database must live on a local filesystem with correct locking and sync
   semantics; NFS/network-share placement is unsupported;
 - candidate genesis review/approval and height-zero checkpoint are mandatory;
@@ -74,6 +91,16 @@ count, and active bans.
 - `SqliteBlockStore` is the accepted cross-platform node backend. Independent
   backup/restore, disk-failure, and multi-host soak evidence remains required
   before G4.
+
+The reproducible local cold-rebuild benchmark is:
+
+```text
+cargo run -p alvenqis-node --example long_chain_rebuild --release -- --blocks 1000
+```
+
+It uses an isolated temporary Devnet and reports rebuild time, SQLite size, and
+Linux peak RSS. See
+`Blockchain-docs/human/engineering/LONG_CHAIN_REBUILD_BENCHMARK_2026-07-30.md`.
 
 ## Mining integration
 
@@ -90,6 +117,12 @@ timestamp, difficulty, transactions, or network identity.
 - `print-genesis-hash`, `export-genesis-review`, `approve-genesis`,
   `genesis-approval-status`;
 - operator/test block helpers documented by the CLI.
+
+The periodic deep-check cadence can be changed with
+`start-node --storage-integrity-interval-seconds <seconds>`. Values below 60
+seconds are rejected to prevent an accidental continuous full-chain scan. The
+diagnostic Merkle commitment is operational evidence only; it is not part of
+consensus or block validity.
 
 `configs/mainnet-candidate.toml` is the default product/operator configuration.
 Devnet/Testnet configurations are internal test profiles.

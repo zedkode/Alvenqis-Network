@@ -50,7 +50,7 @@ Still **not** production-complete (non-exhaustive):
 
 | Area | Candidate-class now | Still open for G4 |
 |---|---|---|
-| Node storage | SQLite canonical block oracle plus RocksDB state/mempool in the VPS profile; transactional tip/reorg changes, integrity checks, encrypted state backups, and legacy migration | Cross-engine consistency contract, independent restore/disk-failure drills, and multi-host soak |
+| Node storage | SQLite canonical block oracle plus RocksDB state/mempool in the VPS profile; transactional tip/reorg changes, deep startup/periodic canonical integrity reports, encrypted state backups, and legacy migration | Cross-engine consistency contract, quarantine/repair workflow, independent restore/disk-failure drills, and multi-host soak |
 | Node reorg | `adopt_candidate_chain` + mempool reconcile + P2P staged fork + **header-first**; detached blocks archived transactionally | Durable resume of pre-adoption branches and deep-reorg recovery |
 | P2P transport | Minimal rust-libp2p TCP/Noise/Yamux dependency set; OS-resolved DNS seeds with bounded timeout, cached addresses, periodic refresh, and reconnect backoff | Independent PeerId-pinned seed diversity, active discovery, source-network admission, and multi-host soak |
 | Pool payouts | Confirm requires **on-chain tx lookup** covering each miner amount | Offline/HSM signer, multi-coordinator |

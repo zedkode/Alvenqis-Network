@@ -14,8 +14,8 @@ excluded by policy.
 |---|---:|
 | Component reference | 20 |
 | Historical | 2 |
-| Public | 121 |
-| **Total** | **143** |
+| Public | 124 |
+| **Total** | **146** |
 
 ## Complete inventory
 
@@ -46,6 +46,9 @@ excluded by policy.
 | `Blockchain-docs/human/architecture/STORAGE_CONSISTENCY_AND_RECOVERY.md` | Public | Draft audit contract / Mainnet Candidate | Storage Consistency and Recovery |
 | `Blockchain-docs/human/DOCUMENTATION_INVENTORY.md` | Public | Generated audit inventory | Alvenqis Documentation Inventory |
 | `Blockchain-docs/human/DOCUMENTATION_POLICY.md` | Public | Accepted workspace policy | Alvenqis Documentation Policy |
+| `Blockchain-docs/human/engineering/BACKUP_RESTORE_DRILL_2026-07-30.md` | Public | Point-in-time local recovery evidence / `TM-308` remains In Progress | SQLite Backup and Restore Drill — 2026-07-30 |
+| `Blockchain-docs/human/engineering/DATA_INTEGRITY_VERIFICATION_2026-07-30.md` | Public | Local G1 engineering evidence / `TM-307` remains In Progress | Canonical SQLite Data-Integrity Verification — 2026-07-30 |
+| `Blockchain-docs/human/engineering/LONG_CHAIN_REBUILD_BENCHMARK_2026-07-30.md` | Public | Point-in-time engineering measurement / `TM-205` remains In Progress | Long-Chain Rebuild Benchmark — 2026-07-30 |
 | `Blockchain-docs/human/engineering/WORKSPACE_AND_LINTS.md` | Public | Draft / engineering hygiene | Workspace Scope and Rust Lint Policy |
 | `Blockchain-docs/human/legal/LICENSING_POLICY.md` | Public | Draft / Accepted Repository Policy | Alvenqis Licensing Policy |
 | `Blockchain-docs/human/legal/README.md` | Public | Draft | Legal Docs |

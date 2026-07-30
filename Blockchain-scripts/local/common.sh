@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Implemented monorepo workspace (Cargo.toml lives here).
 WORKSPACE_ROOT="$REPO_ROOT/Blockchain-prototype"
+SIDECAR_DIR="$REPO_ROOT/bin"
 default_local_root="$REPO_ROOT/.alvenqis-local"
 if [[ -z "${ALVENQIS_LOCAL_ROOT:-}" && -d "$REPO_ROOT/.alvenqis-local" && ! -e "$default_local_root" ]]; then
   default_local_root="$REPO_ROOT/.alvenqis-local"
@@ -20,15 +21,15 @@ fi
 SIGNED_TX_DIR="$WALLET_DIR/signed-txs"
 LOG_DIR="$LOCAL_ROOT/logs"
 BACKUP_DIR="$LOCAL_ROOT/backups"
-BUILD_DIR="$LOCAL_ROOT/build/target"
-LOCAL_NODE_CONFIG="$WORKSPACE_ROOT/configs/local.toml"
+BUILD_DIR="${ALVENQIS_BUILD_DIR:-$LOCAL_ROOT/build/target}"
+LOCAL_NODE_CONFIG="${ALVENQIS_LOCAL_NODE_CONFIG:-$WORKSPACE_ROOT/configs/local.toml}"
 LOCAL_RPC_CONFIG="$WORKSPACE_ROOT/configs/rpc.local.toml"
 EXPLORER_DIR="$WORKSPACE_ROOT/alvenqis-explorer"
 RPC_URL="http://127.0.0.1:10787"
 EXPLORER_URL="http://127.0.0.1:4173"
 CARGO_BIN="${CARGO:-cargo}"
 PACKAGED="false"
-if [[ -x "$REPO_ROOT/bin/alvenqis-node" ]]; then
+if [[ -x "$SIDECAR_DIR/alvenqis-node" ]]; then
   PACKAGED="true"
 fi
 
@@ -74,7 +75,7 @@ run_in_workspace() {
 
 run_node() {
   if [[ "$PACKAGED" == "true" ]]; then
-    (cd "$WORKSPACE_ROOT" && "$WORKSPACE_ROOT/bin/alvenqis-node" --config "$LOCAL_NODE_CONFIG" --data-dir "$CHAIN_DIR" --mempool-dir "$MEMPOOL_DIR" "$@")
+    (cd "$WORKSPACE_ROOT" && "$SIDECAR_DIR/alvenqis-node" --config "$LOCAL_NODE_CONFIG" --data-dir "$CHAIN_DIR" --mempool-dir "$MEMPOOL_DIR" "$@")
   else
     run_in_workspace "$CARGO_BIN" run -p alvenqis-node -- --config "$LOCAL_NODE_CONFIG" --data-dir "$CHAIN_DIR" --mempool-dir "$MEMPOOL_DIR" "$@"
   fi
@@ -86,7 +87,7 @@ run_wallet() {
 
 run_indexer() {
   if [[ "$PACKAGED" == "true" ]]; then
-    (cd "$WORKSPACE_ROOT" && "$WORKSPACE_ROOT/bin/alvenqis-indexer" --network mainnet-candidate --chain-data-dir "$CHAIN_DIR" --index-dir "$INDEX_DIR" "$@")
+    (cd "$WORKSPACE_ROOT" && "$SIDECAR_DIR/alvenqis-indexer" --network mainnet-candidate --chain-data-dir "$CHAIN_DIR" --index-dir "$INDEX_DIR" "$@")
   else
     run_in_workspace "$CARGO_BIN" run -p alvenqis-indexer -- --network mainnet-candidate --chain-data-dir "$CHAIN_DIR" --index-dir "$INDEX_DIR" "$@"
   fi
@@ -94,7 +95,7 @@ run_indexer() {
 
 node_start_command() {
   if [[ "$PACKAGED" == "true" ]]; then
-    printf 'cd %q && %q --config %q --data-dir %q --mempool-dir %q start-node' "$WORKSPACE_ROOT" "$WORKSPACE_ROOT/bin/alvenqis-node" "$LOCAL_NODE_CONFIG" "$CHAIN_DIR" "$MEMPOOL_DIR"
+    printf 'cd %q && %q --config %q --data-dir %q --mempool-dir %q start-node' "$WORKSPACE_ROOT" "$SIDECAR_DIR/alvenqis-node" "$LOCAL_NODE_CONFIG" "$CHAIN_DIR" "$MEMPOOL_DIR"
   else
     printf 'cd %q && env CARGO_TARGET_DIR=%q %q run -p alvenqis-node -- --config %q --data-dir %q --mempool-dir %q start-node' "$WORKSPACE_ROOT" "$BUILD_DIR" "$CARGO_BIN" "$LOCAL_NODE_CONFIG" "$CHAIN_DIR" "$MEMPOOL_DIR"
   fi
@@ -102,7 +103,7 @@ node_start_command() {
 
 rpc_start_command() {
   if [[ "$PACKAGED" == "true" ]]; then
-    printf 'cd %q && env ALVENQIS_LOCAL_ROOT=%q %q --config %q' "$WORKSPACE_ROOT" "$LOCAL_ROOT" "$WORKSPACE_ROOT/bin/alvenqis-rpc-gateway" "$LOCAL_RPC_CONFIG"
+    printf 'cd %q && env ALVENQIS_LOCAL_ROOT=%q %q --config %q' "$WORKSPACE_ROOT" "$LOCAL_ROOT" "$SIDECAR_DIR/alvenqis-rpc-gateway" "$LOCAL_RPC_CONFIG"
   else
     printf 'cd %q && env ALVENQIS_LOCAL_ROOT=%q CARGO_TARGET_DIR=%q %q run -p alvenqis-rpc-gateway -- --config %q' "$WORKSPACE_ROOT" "$LOCAL_ROOT" "$BUILD_DIR" "$CARGO_BIN" "$LOCAL_RPC_CONFIG"
   fi

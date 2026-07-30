@@ -57,7 +57,8 @@ Reserved folders and website concepts do not make these implemented features.
 The node uses SQLite as the canonical block oracle and RocksDB for state/mempool
 in the VPS profile. SQLite provides a strict versioned schema, WAL plus full
 synchronous durability, transactional canonical updates, detached-block
-archival, integrity checks, online backup, and one-way legacy import. The
-indexer now uses transactional SQLite; pool persistence still requires a
-production redesign. Cross-engine consistency, restore drills, disk-failure
-exercises, and multi-host soak remain G4 blockers.
+archival, deep startup/periodic canonical integrity reports, online backup, and
+one-way legacy import. The indexer now uses transactional SQLite; pool
+persistence still requires a production redesign. Cross-engine consistency,
+repair/quarantine workflows, restore drills, disk-failure exercises, and
+multi-host soak remain G4 blockers.

@@ -199,6 +199,21 @@ Start node:
 cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-node -- --config Blockchain-prototype/configs/local.toml --data-dir .alvenqis-local/chain --mempool-dir .alvenqis-local/mempool start-node
 ```
 
+`start-node` performs a deep canonical SQLite check before P2P starts and every
+six hours thereafter. To change the cadence, pass
+`--storage-integrity-interval-seconds <seconds>` after `start-node`; values below
+60 seconds are rejected.
+
+Run the same deep check once:
+
+```powershell
+cargo --manifest-path Blockchain-prototype/Cargo.toml run -p alvenqis-node -- --config Blockchain-prototype/configs/local.toml --data-dir .alvenqis-local/chain verify-chain-database
+```
+
+The output includes the checked block/transaction counts, tip hash, and a
+diagnostic block-hash Merkle commitment. This commitment is not a consensus
+field.
+
 Node status:
 
 ```powershell

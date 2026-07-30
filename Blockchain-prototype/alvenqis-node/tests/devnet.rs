@@ -728,10 +728,11 @@ fn invalid_merkle_root_is_rejected() {
     storage::append_block(&data_dir, &child).expect("append invalid child");
 
     let error = validate_chain(&config_path, &data_dir).expect_err("invalid merkle root");
-    assert!(matches!(
-        error,
-        NodeError::Core(AlvenqisError::InvalidMerkleRoot)
-    ));
+    assert!(
+        matches!(error, NodeError::InvalidChainDatabase { .. })
+            || matches!(error, NodeError::Core(AlvenqisError::InvalidMerkleRoot)),
+        "unexpected error: {error}"
+    );
 }
 
 #[test]

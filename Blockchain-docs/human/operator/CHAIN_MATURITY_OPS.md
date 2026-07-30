@@ -26,6 +26,7 @@ Related:
 - [PRIVATE_MINING_OPS.md](PRIVATE_MINING_OPS.md) (Task 2)
 - [CHAIN_HEALTH.md](CHAIN_HEALTH.md) (continuous health probes)
 - [LOCAL_RUNBOOK.md](LOCAL_RUNBOOK.md)
+- [BACKUP_RESTORE_DRILL_2026-07-30.md](../engineering/BACKUP_RESTORE_DRILL_2026-07-30.md)
 
 ---
 
@@ -48,13 +49,23 @@ What it does:
 2. `backup-chain-database` into
    `.alvenqis-local/maturity-evidence/sqlite-restore-<UTC>/online-backup/chain.sqlite3`
 3. Copies backup into a **fresh isolated** data dir
-4. `verify-chain-database` + optional `validate-chain` on the restore
-5. Writes `evidence.json` (paths, tip height if known, pass/fail — no secrets)
+4. `verify-chain-database` on the restore
+5. compares backup and restored-file SHA-256 values
+6. runs `validate-chain` on the restore and requires network ID, height, block
+   count, and tip hash to match the source
+7. writes `evidence.json` plus a complete `drill.log` transcript
+
+For an isolated fixture or non-default build cache, set
+`ALVENQIS_LOCAL_ROOT`, `ALVENQIS_LOCAL_NODE_CONFIG`, and
+`ALVENQIS_BUILD_DIR`. These overrides do not relax the node's storage-path
+allowlist.
 
 Success criteria:
 
 - Online backup file exists and integrity_check = ok
 - Restored DB integrity_check = ok
+- Backup and restored-file SHA-256 values match
+- Source and restored network ID, height, block count, and tip hash match
 - Restored tip hash matches pre-backup tip when chain was non-empty
 
 If there is no local chain yet, initialize via [LOCAL_RUNBOOK.md](LOCAL_RUNBOOK.md)

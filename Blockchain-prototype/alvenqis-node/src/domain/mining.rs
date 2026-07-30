@@ -149,8 +149,12 @@ pub fn create_block_template(
         .min(config.max_mempool_transactions)
         .min(consensus_user_tx_cap);
     // Prefer higher effective priority fees (multi-pass, nonce-safe).
-    let (selected, skipped_tx_hashes) =
-        crate::mempool::select_pending_for_template(&chain, pending_records, limit)?;
+    let (selected, skipped_tx_hashes) = crate::mempool::select_pending_for_template_for_chain(
+        data_dir,
+        &chain,
+        pending_records,
+        limit,
+    )?;
     let included_tx_hashes = selected
         .iter()
         .map(|record| record.tx_hash.clone())

@@ -1,4 +1,5 @@
 use crate::error::{NodeError, NodeResult};
+use crate::storage;
 use alvenqis_core::{
     apply_transaction, hash_to_hex, next_base_fee, validate_transaction_against_state, Address,
     Chain, LedgerState, Network, Transaction,
@@ -229,7 +230,8 @@ pub fn reconcile_after_reorg_for_chain(
             }
         }
 
-        let (mut valid, dropped, _) = sanitize_pending_transactions(chain, records)?;
+        let (mut valid, dropped, _) =
+            sanitize_pending_transactions_for_chain(data_dir, chain, records)?;
         valid.truncate(max_transactions);
         write_pending_transactions_for_chain_in_lock(data_dir, mempool_dir, &valid)?;
         Ok(dropped)
@@ -310,9 +312,37 @@ pub fn sanitize_pending_transactions_with_age(
     records: Vec<PendingTransactionRecord>,
     max_age_seconds: u64,
 ) -> NodeResult<(Vec<PendingTransactionRecord>, Vec<String>, LedgerState)> {
+    let mined_hashes = mined_transaction_hashes(chain);
+    sanitize_pending_transactions_with_mined_hashes(chain, records, max_age_seconds, &mined_hashes)
+}
+
+pub fn sanitize_pending_transactions_for_chain(
+    data_dir: &Path,
+    chain: &Chain,
+    records: Vec<PendingTransactionRecord>,
+) -> NodeResult<(Vec<PendingTransactionRecord>, Vec<String>, LedgerState)> {
+    let hashes = records
+        .iter()
+        .map(|record| record.tx_hash.clone())
+        .collect::<Vec<_>>();
+    let mined_hashes = storage::existing_transaction_hashes(data_dir, &hashes)?;
+    sanitize_pending_transactions_with_mined_hashes(
+        chain,
+        records,
+        DEFAULT_MEMPOOL_MAX_AGE_SECONDS,
+        &mined_hashes,
+    )
+}
+
+fn sanitize_pending_transactions_with_mined_hashes(
+    chain: &Chain,
+    records: Vec<PendingTransactionRecord>,
+    max_age_seconds: u64,
+    mined_hashes: &BTreeSet<String>,
+) -> NodeResult<(Vec<PendingTransactionRecord>, Vec<String>, LedgerState)> {
     let anticipated_base_fee = next_base_fee(chain.blocks().last());
     let (candidates, early_dropped) =
-        filter_pending_candidates(chain, records, max_age_seconds, anticipated_base_fee);
+        filter_pending_candidates(records, max_age_seconds, mined_hashes);
     // Nonce-safe admission: process lower nonces first within each sender, then by fee.
     let mut ordered = candidates;
     sort_pending_for_admission(&mut ordered, anticipated_base_fee);
@@ -344,16 +374,36 @@ pub fn select_pending_for_template(
     records: Vec<PendingTransactionRecord>,
     limit: usize,
 ) -> NodeResult<(Vec<PendingTransactionRecord>, Vec<String>)> {
+    let mined_hashes = mined_transaction_hashes(chain);
+    select_pending_for_template_with_mined_hashes(chain, records, limit, &mined_hashes)
+}
+
+pub fn select_pending_for_template_for_chain(
+    data_dir: &Path,
+    chain: &Chain,
+    records: Vec<PendingTransactionRecord>,
+    limit: usize,
+) -> NodeResult<(Vec<PendingTransactionRecord>, Vec<String>)> {
+    let hashes = records
+        .iter()
+        .map(|record| record.tx_hash.clone())
+        .collect::<Vec<_>>();
+    let mined_hashes = storage::existing_transaction_hashes(data_dir, &hashes)?;
+    select_pending_for_template_with_mined_hashes(chain, records, limit, &mined_hashes)
+}
+
+fn select_pending_for_template_with_mined_hashes(
+    chain: &Chain,
+    records: Vec<PendingTransactionRecord>,
+    limit: usize,
+    mined_hashes: &BTreeSet<String>,
+) -> NodeResult<(Vec<PendingTransactionRecord>, Vec<String>)> {
     if limit == 0 {
         return Ok((Vec::new(), Vec::new()));
     }
     let anticipated_base_fee = next_base_fee(chain.blocks().last());
-    let (mut candidates, early_dropped) = filter_pending_candidates(
-        chain,
-        records,
-        DEFAULT_MEMPOOL_MAX_AGE_SECONDS,
-        anticipated_base_fee,
-    );
+    let (mut candidates, early_dropped) =
+        filter_pending_candidates(records, DEFAULT_MEMPOOL_MAX_AGE_SECONDS, mined_hashes);
     // Fee-first ordering for selection attempts.
     sort_pending_by_fee_desc(&mut candidates, anticipated_base_fee);
 
@@ -402,12 +452,10 @@ pub fn select_pending_for_template(
 }
 
 fn filter_pending_candidates(
-    chain: &Chain,
     records: Vec<PendingTransactionRecord>,
     max_age_seconds: u64,
-    _anticipated_base_fee: alvenqis_core::Amount,
+    mined_hashes: &BTreeSet<String>,
 ) -> (Vec<PendingTransactionRecord>, Vec<String>) {
-    let mined_hashes = mined_transaction_hashes(chain);
     let mut seen_pending_hashes = BTreeSet::new();
     let now = current_unix_seconds();
     let mut candidates = Vec::new();
@@ -559,7 +607,64 @@ fn mined_transaction_hashes(chain: &Chain) -> BTreeSet<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alvenqis_core::{devnet_genesis, Address, PrivateKey};
+    use alvenqis_core::{
+        devnet_child_block_with_difficulty, devnet_genesis, hash_to_hex, Address, Amount,
+        PrivateKey, BLOCK_TIME_SECONDS,
+    };
+
+    #[test]
+    fn chain_backed_sanitizer_uses_transaction_index() {
+        let dir = tempfile::tempdir().expect("temp");
+        let miner = PrivateKey::generate();
+        let miner_address =
+            Address::from_public_key_for_network(&miner.public_key(), Network::Devnet).to_string();
+        let recipient = Address::from_public_key_for_network(
+            &PrivateKey::generate().public_key(),
+            Network::Devnet,
+        )
+        .to_string();
+        let genesis = devnet_genesis(&miner_address).expect("genesis");
+        let base_fee = next_base_fee(Some(&genesis));
+        let transaction = Transaction::new_signed(
+            1,
+            1,
+            Network::Devnet,
+            &miner,
+            recipient,
+            Amount::from_atomic(1),
+            Amount::from_atomic(base_fee.as_atomic() + 1),
+            Amount::from_atomic(1),
+            None,
+        )
+        .expect("transaction");
+        let transaction_hash = hash_to_hex(&transaction.tx_hash());
+        let child = devnet_child_block_with_difficulty(
+            &genesis,
+            &miner_address,
+            genesis.header.timestamp + BLOCK_TIME_SECONDS,
+            vec![transaction.clone()],
+            4,
+        )
+        .expect("child");
+        storage::append_block_unchecked(dir.path(), &genesis).expect("persist genesis");
+        storage::append_block_unchecked(dir.path(), &child).expect("persist child");
+
+        let mut stale_chain_view = Chain::new(Network::Devnet);
+        stale_chain_view
+            .append_block(genesis)
+            .expect("append genesis only");
+        let record = PendingTransactionRecord {
+            tx_hash: transaction_hash.clone(),
+            received_at_unix_seconds: current_unix_seconds(),
+            transaction,
+        };
+
+        let (valid, dropped, _) =
+            sanitize_pending_transactions_for_chain(dir.path(), &stale_chain_view, vec![record])
+                .expect("sanitize from index");
+        assert!(valid.is_empty());
+        assert_eq!(dropped, vec![transaction_hash]);
+    }
 
     #[test]
     fn age_eviction_drops_stale_pending_records() {

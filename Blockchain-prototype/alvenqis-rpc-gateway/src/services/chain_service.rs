@@ -1,4 +1,4 @@
-use crate::cache::{load_chain_async, load_tip_block_async};
+use crate::cache::{load_chain_async, load_tip_block_async, load_transaction_by_hash_async};
 use crate::error::RpcError;
 use crate::models::{
     address_account_response, address_balance_response, address_response, block_response,
@@ -8,7 +8,7 @@ use crate::models::{
 };
 use crate::services::{cached_indexer_status_async, load_mempool_transactions};
 use crate::state::RpcState;
-use alvenqis_core::{hash_to_hex, next_base_fee};
+use alvenqis_core::{hash_to_hex, next_base_fee, Hash};
 use alvenqis_node::{load_p2p_status, runtime_dir_for_data_dir, NetworkConfig};
 use axum::extract::{Path, State};
 use axum::Json;
@@ -262,8 +262,13 @@ pub(crate) async fn transactions_by_hash(
     State(state): State<RpcState>,
     Path(hash): Path<String>,
 ) -> Result<Json<TransactionResponse>, RpcError> {
-    let loaded = load_chain_async(&state).await?;
-    let anticipated_base_fee = next_base_fee(loaded.blocks.last());
+    if Hash::from_hex(&hash).is_err() {
+        return Err(RpcError::NotFound(format!(
+            "transaction with hash {hash} not found"
+        )));
+    }
+    let tip = load_tip_block_async(&state).await?;
+    let anticipated_base_fee = next_base_fee(tip.as_ref());
     let pending_transactions = load_mempool_transactions(&state)?;
     if let Some(record) = pending_transactions
         .iter()
@@ -278,21 +283,14 @@ pub(crate) async fn transactions_by_hash(
         )));
     }
 
-    for block in loaded.blocks.iter() {
-        let block_hash = hash_to_hex(&block.hash()?);
-        if let Some(transaction) = block
-            .transactions
-            .iter()
-            .find(|transaction| hash_to_hex(&transaction.tx_hash()) == hash)
-        {
-            return Ok(Json(transaction_response(
-                transaction,
-                "mined",
-                Some(block.header.height),
-                Some(&block_hash),
-                alvenqis_core::Amount::from_atomic(block.header.base_fee_atomic),
-            )));
-        }
+    if let Some(indexed) = load_transaction_by_hash_async(&state, &hash).await? {
+        return Ok(Json(transaction_response(
+            &indexed.transaction,
+            "mined",
+            Some(indexed.block_height),
+            Some(&indexed.block_hash),
+            alvenqis_core::Amount::from_atomic(indexed.block_base_fee_atomic),
+        )));
     }
 
     Err(RpcError::NotFound(format!(

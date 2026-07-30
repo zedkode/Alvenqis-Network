@@ -1,9 +1,12 @@
 use crate::error::{NodeError, NodeResult};
-use alvenqis_core::{cumulative_work, hash_to_hex, Block};
+use alvenqis_core::{
+    blake3_hash, cumulative_work, hash_to_hex, Block, Hash, Transaction as CoreTransaction,
+};
 use fs2::FileExt;
 use rusqlite::{
     params, Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior, MAIN_DB,
 };
+use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader};
@@ -17,15 +20,15 @@ pub const LEGACY_CHAIN_FILE_NAME: &str = "chain.jsonl";
 pub const CHAIN_FILE_NAME: &str = CHAIN_DATABASE_FILE_NAME;
 pub const CHAIN_LOCK_FILE_NAME: &str = "chain.lock";
 
-const STORAGE_SCHEMA_VERSION: i64 = 1;
+const STORAGE_SCHEMA_VERSION: i64 = 2;
 const STORAGE_APPLICATION_ID: i64 = 0x5649_5245; // "ALVE"
 const MINIMUM_SAFE_SQLITE_VERSION: i32 = 3_051_003;
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
-type ValidatedBlockHashes = BTreeMap<i64, Vec<u8>>;
-type ValidatedBlockHashCache = BTreeMap<PathBuf, ValidatedBlockHashes>;
+type ValidatedBlockTokens = BTreeMap<i64, Vec<u8>>;
+type ValidatedBlockTokenCache = BTreeMap<PathBuf, ValidatedBlockTokens>;
 
-static VALIDATED_BLOCK_HASH_CACHE: OnceLock<Mutex<ValidatedBlockHashCache>> = OnceLock::new();
+static VALIDATED_BLOCK_TOKEN_CACHE: OnceLock<Mutex<ValidatedBlockTokenCache>> = OnceLock::new();
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FileFingerprint {
@@ -45,6 +48,28 @@ pub struct StoredChainIdentity {
     pub best_height: u64,
     pub best_hash: String,
     pub cumulative_work: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoredTransaction {
+    pub tx_hash: String,
+    pub block_height: u64,
+    pub transaction_position: usize,
+    pub block_hash: String,
+    pub block_base_fee_atomic: u64,
+    pub transaction: CoreTransaction,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct StorageIntegrityReport {
+    pub schema_version: i64,
+    pub canonical_block_count: u64,
+    pub canonical_transaction_count: u64,
+    pub genesis_hash: Option<String>,
+    pub tip_hash: Option<String>,
+    /// Diagnostic-only commitment over canonical block hashes. This is not a
+    /// consensus field and never changes block validity.
+    pub block_hash_merkle_root: Option<String>,
 }
 
 pub trait BlockStore {
@@ -168,23 +193,47 @@ impl SqliteBlockStore {
 
     fn open_read_connection(&self) -> NodeResult<Connection> {
         self.prepare_database(false)?;
-        let connection = Connection::open_with_flags(
-            chain_database_path(&self.data_dir),
+        let database_path = chain_database_path(&self.data_dir);
+        let mut connection = Connection::open_with_flags(
+            &database_path,
             OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )?;
         configure_read_connection(&connection)?;
-        validate_schema(&connection, &chain_database_path(&self.data_dir))?;
+        let user_version: i64 =
+            connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if user_version != STORAGE_SCHEMA_VERSION {
+            drop(connection);
+            self.migrate_database()?;
+            connection = Connection::open_with_flags(
+                &database_path,
+                OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            )?;
+            configure_read_connection(&connection)?;
+        }
+        validate_schema(&connection, &database_path)?;
         Ok(connection)
     }
 
-    fn open_write_connection(&self) -> NodeResult<Connection> {
-        self.prepare_database(true)?;
-        let connection = Connection::open_with_flags(
+    fn migrate_database(&self) -> NodeResult<()> {
+        let _lock = self.open_exclusive_lock()?;
+        let database_path = chain_database_path(&self.data_dir);
+        let mut connection = Connection::open_with_flags(
             chain_database_path(&self.data_dir),
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )?;
         configure_connection(&connection, true)?;
-        validate_schema(&connection, &chain_database_path(&self.data_dir))?;
+        migrate_schema_if_needed(&mut connection, &database_path)
+    }
+
+    fn open_write_connection(&self) -> NodeResult<Connection> {
+        self.prepare_database(true)?;
+        let database_path = chain_database_path(&self.data_dir);
+        let mut connection = Connection::open_with_flags(
+            &database_path,
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )?;
+        configure_connection(&connection, true)?;
+        migrate_schema_if_needed(&mut connection, &database_path)?;
         Ok(connection)
     }
 
@@ -231,6 +280,37 @@ impl SqliteBlockStore {
         canonical_block_count_from_connection(&connection, &chain_database_path(&self.data_dir))
     }
 
+    pub fn load_transaction_by_hash(&self, tx_hash: &str) -> NodeResult<Option<StoredTransaction>> {
+        let requested_hash = Hash::from_hex(tx_hash).map_err(NodeError::Input)?;
+        let connection = self.open_read_connection()?;
+        let database_path = chain_database_path(&self.data_dir);
+        load_transaction_by_hash_from_connection(&connection, &database_path, &requested_hash)
+    }
+
+    pub fn existing_transaction_hashes(
+        &self,
+        tx_hashes: &[String],
+    ) -> NodeResult<BTreeSet<String>> {
+        let connection = self.open_read_connection()?;
+        let database_path = chain_database_path(&self.data_dir);
+        let mut existing = BTreeSet::new();
+        for tx_hash in tx_hashes {
+            let Ok(requested_hash) = Hash::from_hex(tx_hash) else {
+                continue;
+            };
+            if load_transaction_by_hash_from_connection(
+                &connection,
+                &database_path,
+                &requested_hash,
+            )?
+            .is_some()
+            {
+                existing.insert(tx_hash.clone());
+            }
+        }
+        Ok(existing)
+    }
+
     fn append_with_tip_link(&self, block: &Block) -> NodeResult<()> {
         let mut connection = self.open_write_connection()?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -250,6 +330,76 @@ impl SqliteBlockStore {
         transaction.commit()?;
         Ok(())
     }
+}
+
+fn load_transaction_by_hash_from_connection(
+    connection: &Connection,
+    database_path: &Path,
+    requested_hash: &Hash,
+) -> NodeResult<Option<StoredTransaction>> {
+    let location: Option<(i64, i64)> = connection
+        .query_row(
+            "SELECT block_height, tx_position
+             FROM canonical_transactions
+             WHERE tx_hash = ?1
+             ORDER BY block_height ASC, tx_position ASC
+             LIMIT 1",
+            params![requested_hash.as_bytes().as_slice()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    let Some((block_height, transaction_position)) = location else {
+        return Ok(None);
+    };
+    let block_height = u64::try_from(block_height).map_err(|_| {
+        invalid_database(
+            database_path,
+            format!("negative transaction index height {block_height}"),
+        )
+    })?;
+    let transaction_position = usize::try_from(transaction_position).map_err(|_| {
+        invalid_database(
+            database_path,
+            format!("negative transaction index position {transaction_position}"),
+        )
+    })?;
+    let block = load_blocks_range_from_connection(connection, database_path, block_height, 1)?
+        .pop()
+        .ok_or_else(|| {
+            invalid_database(
+                database_path,
+                format!("transaction index references missing block height {block_height}"),
+            )
+        })?;
+    let transaction = block
+        .transactions
+        .get(transaction_position)
+        .cloned()
+        .ok_or_else(|| {
+            invalid_database(
+                database_path,
+                format!(
+                    "transaction index position {transaction_position} is outside block height {block_height}"
+                ),
+            )
+        })?;
+    let actual_hash = transaction.tx_hash();
+    if actual_hash != *requested_hash {
+        return Err(invalid_database(
+            database_path,
+            format!(
+                "transaction index hash mismatch at height {block_height} position {transaction_position}"
+            ),
+        ));
+    }
+    Ok(Some(StoredTransaction {
+        tx_hash: hash_to_hex(&actual_hash),
+        block_height,
+        transaction_position,
+        block_hash: hash_to_hex(&block.hash()?),
+        block_base_fee_atomic: block.header.base_fee_atomic,
+        transaction,
+    }))
 }
 
 impl BlockStore for SqliteBlockStore {
@@ -384,6 +534,26 @@ fn insert_canonical_block(connection: &Connection, block: &Block) -> NodeResult<
             block_json
         ],
     )?;
+    index_block_transactions(connection, block)?;
+    Ok(())
+}
+
+fn index_block_transactions(connection: &Connection, block: &Block) -> NodeResult<()> {
+    let block_height = height_to_i64(block.header.height)?;
+    for (position, transaction) in block.transactions.iter().enumerate() {
+        let position = i64::try_from(position).map_err(|_| {
+            NodeError::Input(format!(
+                "transaction position {position} exceeds SQLite range"
+            ))
+        })?;
+        let tx_hash = transaction.tx_hash();
+        connection.execute(
+            "INSERT INTO canonical_transactions
+             (block_height, tx_position, tx_hash)
+             VALUES (?1, ?2, ?3)",
+            params![block_height, position, tx_hash.as_bytes().as_slice()],
+        )?;
+    }
     Ok(())
 }
 
@@ -429,6 +599,7 @@ struct ValidatedCanonicalBlockRow {
     height: i64,
     hash: Vec<u8>,
     previous_hash: Vec<u8>,
+    validation_token: Vec<u8>,
     block: Block,
 }
 
@@ -456,6 +627,7 @@ fn validate_stored_canonical_block_row(
         network_id,
         block_json,
     } = stored;
+    let validation_token = block_validation_token(&hash, &block_json);
     if height < 0 || hash.len() != 32 || previous_hash.len() != 32 {
         return Err(invalid_database(
             database_path,
@@ -468,6 +640,18 @@ fn validate_stored_canonical_block_row(
             format!("cannot decode block at height {height}: {error}"),
         )
     })?;
+    let recomputed_merkle_root = block.recompute_merkle_root().map_err(|error| {
+        invalid_database(
+            database_path,
+            format!("cannot recompute transaction Merkle root at height {height}: {error}"),
+        )
+    })?;
+    if recomputed_merkle_root != block.header.merkle_root {
+        return Err(invalid_database(
+            database_path,
+            format!("transaction Merkle root mismatch at height {height}"),
+        ));
+    }
     let block_height = height_to_i64(block.header.height)?;
     let hash_matches = hash_was_validated || hash.as_slice() == block.hash()?.as_bytes();
     if block_height != height
@@ -484,15 +668,24 @@ fn validate_stored_canonical_block_row(
         height,
         hash,
         previous_hash,
+        validation_token,
         block,
     })
+}
+
+fn block_validation_token(stored_hash: &[u8], block_json: &[u8]) -> Vec<u8> {
+    let body_hash = blake3_hash(block_json);
+    let mut token = Vec::with_capacity(stored_hash.len() + body_hash.as_bytes().len());
+    token.extend_from_slice(stored_hash);
+    token.extend_from_slice(body_hash.as_bytes());
+    token
 }
 
 fn load_validated_canonical_rows_from_height(
     connection: &Connection,
     database_path: &Path,
     start_height: i64,
-    cached_hashes: &BTreeMap<i64, Vec<u8>>,
+    cached_tokens: &BTreeMap<i64, Vec<u8>>,
     row_limit: Option<usize>,
 ) -> NodeResult<Vec<ValidatedCanonicalBlockRow>> {
     let mut statement = connection.prepare(if row_limit.is_some() {
@@ -521,9 +714,9 @@ fn load_validated_canonical_rows_from_height(
     let mut validated_rows = Vec::new();
     while let Some(row) = rows.next()? {
         let stored = stored_canonical_block_row(row)?;
-        let hash_was_validated = cached_hashes
-            .get(&stored.height)
-            .is_some_and(|cached| cached == &stored.hash);
+        let hash_was_validated = cached_tokens.get(&stored.height).is_some_and(|cached| {
+            cached == &block_validation_token(&stored.hash, &stored.block_json)
+        });
         let validated =
             validate_stored_canonical_block_row(stored, database_path, hash_was_validated)?;
         if validated.height != expected_height {
@@ -653,8 +846,8 @@ fn load_blocks_from_connection(
     database_path: &Path,
     allow_empty: bool,
 ) -> NodeResult<Vec<Block>> {
-    let validation_cache = VALIDATED_BLOCK_HASH_CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let cached_hashes = validation_cache
+    let validation_cache = VALIDATED_BLOCK_TOKEN_CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let cached_tokens = validation_cache
         .lock()
         .map_err(|_| NodeError::Input("block validation cache lock poisoned".to_owned()))?
         .get(database_path)
@@ -664,13 +857,13 @@ fn load_blocks_from_connection(
         connection,
         database_path,
         0,
-        &cached_hashes,
+        &cached_tokens,
         None,
     )?;
-    let mut validated_hashes = BTreeMap::new();
+    let mut validated_tokens = BTreeMap::new();
     let mut blocks = Vec::with_capacity(rows.len());
     for row in rows {
-        validated_hashes.insert(row.height, row.hash);
+        validated_tokens.insert(row.height, row.validation_token);
         blocks.push(row.block);
     }
 
@@ -680,7 +873,7 @@ fn load_blocks_from_connection(
     validation_cache
         .lock()
         .map_err(|_| NodeError::Input("block validation cache lock poisoned".to_owned()))?
-        .insert(database_path.to_path_buf(), validated_hashes);
+        .insert(database_path.to_path_buf(), validated_tokens);
     Ok(blocks)
 }
 
@@ -732,6 +925,15 @@ fn initialize_schema(connection: &Connection) -> NodeResult<()> {
            network_id TEXT NOT NULL,
            block_json BLOB NOT NULL CHECK(length(block_json) > 0)
          ) STRICT;
+         CREATE TABLE canonical_transactions (
+           block_height INTEGER NOT NULL CHECK(block_height >= 0),
+           tx_position INTEGER NOT NULL CHECK(tx_position >= 0),
+           tx_hash BLOB NOT NULL CHECK(length(tx_hash) = 32),
+           PRIMARY KEY(block_height, tx_position),
+           FOREIGN KEY(block_height) REFERENCES canonical_blocks(height) ON DELETE CASCADE
+         ) STRICT;
+         CREATE INDEX canonical_transactions_hash_idx
+           ON canonical_transactions(tx_hash);
          CREATE TABLE orphaned_blocks (
            hash BLOB PRIMARY KEY NOT NULL CHECK(length(hash) = 32),
            height INTEGER NOT NULL CHECK(height >= 0),
@@ -743,12 +945,86 @@ fn initialize_schema(connection: &Connection) -> NodeResult<()> {
          ) STRICT;
          CREATE INDEX orphaned_blocks_height_idx ON orphaned_blocks(height);
          PRAGMA application_id = 1447645765;
-         PRAGMA user_version = 1;
-         INSERT INTO storage_metadata(key, value) VALUES ('schema_version', '1');
+         PRAGMA user_version = 2;
+         INSERT INTO storage_metadata(key, value) VALUES ('schema_version', '2');
          INSERT INTO storage_metadata(key, value) VALUES ('backend', 'sqlite');
          COMMIT;",
     )?;
     validate_schema(connection, Path::new(CHAIN_DATABASE_FILE_NAME))
+}
+
+fn migrate_schema_if_needed(connection: &mut Connection, database_path: &Path) -> NodeResult<()> {
+    let application_id: i64 =
+        connection.pragma_query_value(None, "application_id", |row| row.get(0))?;
+    let user_version: i64 =
+        connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    let metadata_version: Option<String> = connection
+        .query_row(
+            "SELECT value FROM storage_metadata WHERE key = 'schema_version'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if application_id == STORAGE_APPLICATION_ID
+        && user_version == STORAGE_SCHEMA_VERSION
+        && metadata_version.as_deref() == Some("2")
+    {
+        return Ok(());
+    }
+    if application_id != STORAGE_APPLICATION_ID
+        || user_version != 1
+        || metadata_version.as_deref() != Some("1")
+    {
+        return validate_schema(connection, database_path);
+    }
+
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    transaction.execute_batch(
+        "CREATE TABLE canonical_transactions (
+           block_height INTEGER NOT NULL CHECK(block_height >= 0),
+           tx_position INTEGER NOT NULL CHECK(tx_position >= 0),
+           tx_hash BLOB NOT NULL CHECK(length(tx_hash) = 32),
+           PRIMARY KEY(block_height, tx_position),
+           FOREIGN KEY(block_height) REFERENCES canonical_blocks(height) ON DELETE CASCADE
+         ) STRICT;
+         CREATE INDEX canonical_transactions_hash_idx
+           ON canonical_transactions(tx_hash);",
+    )?;
+    backfill_transaction_index(&transaction, database_path)?;
+    set_metadata(&transaction, "schema_version", "2")?;
+    transaction.pragma_update(None, "user_version", STORAGE_SCHEMA_VERSION)?;
+    transaction.commit()?;
+    validate_schema(connection, database_path)
+}
+
+fn backfill_transaction_index(connection: &Connection, database_path: &Path) -> NodeResult<()> {
+    let mut statement = connection
+        .prepare("SELECT height, block_json FROM canonical_blocks ORDER BY height ASC")?;
+    let rows = statement.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+    })?;
+    for row in rows {
+        let (stored_height, block_json) = row?;
+        let block: Block = serde_json::from_slice(&block_json).map_err(|error| {
+            invalid_database(
+                database_path,
+                format!(
+                    "cannot decode block at height {stored_height} while migrating transaction index: {error}"
+                ),
+            )
+        })?;
+        if height_to_i64(block.header.height)? != stored_height {
+            return Err(invalid_database(
+                database_path,
+                format!(
+                    "stored block height mismatch while migrating transaction index: row={stored_height}, block={}",
+                    block.header.height
+                ),
+            ));
+        }
+        index_block_transactions(connection, &block)?;
+    }
+    Ok(())
 }
 
 fn validate_schema(connection: &Connection, database_path: &Path) -> NodeResult<()> {
@@ -765,7 +1041,7 @@ fn validate_schema(connection: &Connection, database_path: &Path) -> NodeResult<
         .optional()?;
     if application_id != STORAGE_APPLICATION_ID
         || user_version != STORAGE_SCHEMA_VERSION
-        || metadata_version.as_deref() != Some("1")
+        || metadata_version.as_deref() != Some("2")
     {
         return Err(invalid_database(
             database_path,
@@ -875,6 +1151,20 @@ pub fn load_blocks(data_dir: &Path) -> NodeResult<Vec<Block>> {
     SqliteBlockStore::new(data_dir).load_blocks()
 }
 
+pub fn load_transaction_by_hash(
+    data_dir: &Path,
+    tx_hash: &str,
+) -> NodeResult<Option<StoredTransaction>> {
+    SqliteBlockStore::new(data_dir).load_transaction_by_hash(tx_hash)
+}
+
+pub fn existing_transaction_hashes(
+    data_dir: &Path,
+    tx_hashes: &[String],
+) -> NodeResult<BTreeSet<String>> {
+    SqliteBlockStore::new(data_dir).existing_transaction_hashes(tx_hashes)
+}
+
 pub fn load_stored_chain_identity(data_dir: &Path) -> NodeResult<StoredChainIdentity> {
     let store = SqliteBlockStore::new(data_dir);
     let connection = store.open_read_connection()?;
@@ -963,7 +1253,7 @@ pub fn backup_chain_database(data_dir: &Path, destination: &Path) -> NodeResult<
     Ok(())
 }
 
-pub fn verify_database_integrity(data_dir: &Path) -> NodeResult<()> {
+pub fn verify_database_integrity(data_dir: &Path) -> NodeResult<StorageIntegrityReport> {
     let store = SqliteBlockStore::new(data_dir);
     let connection = store.open_read_connection()?;
     verify_database_integrity_connection(&connection, &chain_database_path(data_dir))
@@ -972,15 +1262,180 @@ pub fn verify_database_integrity(data_dir: &Path) -> NodeResult<()> {
 fn verify_database_integrity_connection(
     connection: &Connection,
     database_path: &Path,
-) -> NodeResult<()> {
-    let result: String = connection.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
-    if result != "ok" {
+) -> NodeResult<StorageIntegrityReport> {
+    let mut integrity_statement = connection.prepare("PRAGMA integrity_check")?;
+    let integrity_rows = integrity_statement.query_map([], |row| row.get::<_, String>(0))?;
+    let mut integrity_results = Vec::new();
+    for result in integrity_rows {
+        integrity_results.push(result?);
+        if integrity_results.len() >= 20 {
+            break;
+        }
+    }
+    if integrity_results.as_slice() != ["ok"] {
         return Err(invalid_database(
             database_path,
-            format!("SQLite integrity_check failed: {result}"),
+            format!(
+                "SQLite integrity_check failed: {}",
+                integrity_results.join("; ")
+            ),
         ));
     }
-    Ok(())
+
+    let mut foreign_key_statement = connection.prepare("PRAGMA foreign_key_check")?;
+    let mut foreign_key_rows = foreign_key_statement.query([])?;
+    if let Some(row) = foreign_key_rows.next()? {
+        let table: String = row.get(0)?;
+        let row_id: Option<i64> = row.get(1)?;
+        let parent: String = row.get(2)?;
+        return Err(invalid_database(
+            database_path,
+            format!(
+                "SQLite foreign_key_check failed: table={table} row_id={row_id:?} parent={parent}"
+            ),
+        ));
+    }
+
+    let canonical_rows = load_validated_canonical_rows_from_height(
+        connection,
+        database_path,
+        0,
+        &BTreeMap::new(),
+        None,
+    )?;
+    let mut block_hashes = Vec::with_capacity(canonical_rows.len());
+    let mut genesis_hash = None;
+    let mut tip_hash = None;
+    for row in &canonical_rows {
+        let block_hash_bytes: [u8; 32] = row.hash.as_slice().try_into().map_err(|_| {
+            invalid_database(
+                database_path,
+                format!("invalid canonical block hash at height {}", row.height),
+            )
+        })?;
+        let block_hash = Hash::from_bytes(block_hash_bytes);
+        let block_hash_hex = hash_to_hex(&block_hash);
+        genesis_hash.get_or_insert_with(|| block_hash_hex.clone());
+        tip_hash = Some(block_hash_hex);
+        block_hashes.push(block_hash);
+    }
+
+    let canonical_transaction_count =
+        verify_transaction_index_connection(connection, database_path)?;
+    let schema_version: i64 =
+        connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    Ok(StorageIntegrityReport {
+        schema_version,
+        canonical_block_count: u64::try_from(canonical_rows.len()).map_err(|_| {
+            invalid_database(
+                database_path,
+                "canonical block count exceeds report range".to_owned(),
+            )
+        })?,
+        canonical_transaction_count,
+        genesis_hash,
+        tip_hash,
+        block_hash_merkle_root: diagnostic_block_hash_merkle_root(&block_hashes)
+            .map(|root| hash_to_hex(&root)),
+    })
+}
+
+fn verify_transaction_index_connection(
+    connection: &Connection,
+    database_path: &Path,
+) -> NodeResult<u64> {
+    let actual_count: i64 =
+        connection.query_row("SELECT COUNT(*) FROM canonical_transactions", [], |row| {
+            row.get(0)
+        })?;
+    let mut expected_count = 0_i64;
+    let mut statement = connection
+        .prepare("SELECT height, block_json FROM canonical_blocks ORDER BY height ASC")?;
+    let rows = statement.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+    })?;
+    for row in rows {
+        let (height, block_json) = row?;
+        let block: Block = serde_json::from_slice(&block_json).map_err(|error| {
+            invalid_database(
+                database_path,
+                format!("cannot decode block at height {height} while verifying index: {error}"),
+            )
+        })?;
+        for (position, transaction) in block.transactions.iter().enumerate() {
+            let position = i64::try_from(position).map_err(|_| {
+                invalid_database(
+                    database_path,
+                    format!("transaction position {position} exceeds SQLite range"),
+                )
+            })?;
+            let indexed_hash: Option<Vec<u8>> = connection
+                .query_row(
+                    "SELECT tx_hash FROM canonical_transactions
+                     WHERE block_height = ?1 AND tx_position = ?2",
+                    params![height, position],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if indexed_hash.as_deref() != Some(transaction.tx_hash().as_bytes().as_slice()) {
+                return Err(invalid_database(
+                    database_path,
+                    format!("transaction index mismatch at height {height} position {position}"),
+                ));
+            }
+            expected_count = expected_count.checked_add(1).ok_or_else(|| {
+                invalid_database(database_path, "transaction index count overflow".to_owned())
+            })?;
+        }
+    }
+    if actual_count != expected_count {
+        return Err(invalid_database(
+            database_path,
+            format!(
+                "transaction index row count mismatch: expected {expected_count}, found {actual_count}"
+            ),
+        ));
+    }
+    u64::try_from(expected_count).map_err(|_| {
+        invalid_database(
+            database_path,
+            format!("invalid canonical transaction count {expected_count}"),
+        )
+    })
+}
+
+fn diagnostic_block_hash_merkle_root(block_hashes: &[Hash]) -> Option<Hash> {
+    if block_hashes.is_empty() {
+        return None;
+    }
+
+    let mut level = block_hashes
+        .iter()
+        .enumerate()
+        .map(|(height, block_hash)| {
+            let mut leaf = Vec::with_capacity(45);
+            leaf.extend_from_slice(b"alve-storage-leaf-v1");
+            leaf.extend_from_slice(&(height as u64).to_le_bytes());
+            leaf.extend_from_slice(block_hash.as_bytes());
+            blake3_hash(&leaf)
+        })
+        .collect::<Vec<_>>();
+    while level.len() > 1 {
+        if level.len() % 2 == 1 {
+            level.push(*level.last().expect("non-empty Merkle level"));
+        }
+        level = level
+            .chunks_exact(2)
+            .map(|pair| {
+                let mut branch = Vec::with_capacity(86);
+                branch.extend_from_slice(b"alve-storage-branch-v1");
+                branch.extend_from_slice(pair[0].as_bytes());
+                branch.extend_from_slice(pair[1].as_bytes());
+                blake3_hash(&branch)
+            })
+            .collect();
+    }
+    level.pop()
 }
 
 fn load_legacy_blocks_from_path(chain_path: &Path) -> NodeResult<Vec<Block>> {
@@ -1074,7 +1529,10 @@ pub fn reset_data_dir(data_dir: &Path) -> NodeResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alvenqis_core::{devnet_genesis, Address, PrivateKey};
+    use alvenqis_core::{
+        devnet_child_block_with_difficulty, devnet_genesis, hash_to_hex, Address, PrivateKey,
+        BLOCK_TIME_SECONDS,
+    };
 
     fn miner_address() -> String {
         Address::from_public_key_for_network(
@@ -1149,6 +1607,258 @@ mod tests {
             .expect("tamper tip");
         let error = store.load_tip_block().expect_err("tip must be validated");
         assert!(matches!(error, NodeError::InvalidChainDatabase { .. }));
+    }
+
+    #[test]
+    fn cached_load_rejects_tampered_block_body() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        store.append_with_tip_link(&genesis).expect("genesis");
+        store.load_blocks().expect("warm validation cache");
+
+        let connection = store.open_write_connection().expect("open");
+        let block_json: Vec<u8> = connection
+            .query_row(
+                "SELECT block_json FROM canonical_blocks WHERE height = 0",
+                [],
+                |row| row.get(0),
+            )
+            .expect("stored block");
+        let mut tampered: Block = serde_json::from_slice(&block_json).expect("decode block");
+        tampered.header.timestamp = tampered.header.timestamp.saturating_add(1);
+        connection
+            .execute(
+                "UPDATE canonical_blocks SET block_json = ?1 WHERE height = 0",
+                params![serde_json::to_vec(&tampered).expect("encode tampered block")],
+            )
+            .expect("tamper block body");
+        drop(connection);
+
+        let error = store
+            .load_blocks()
+            .expect_err("cached validation must not hide block-body corruption");
+        assert!(matches!(error, NodeError::InvalidChainDatabase { .. }));
+    }
+
+    #[test]
+    fn integrity_check_rejects_merkle_root_mismatch_when_stored_hash_matches() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        store.append_with_tip_link(&genesis).expect("genesis");
+
+        let mut tampered = genesis;
+        tampered.header.merkle_root = Hash::zero();
+        let tampered_hash = tampered.hash().expect("tampered block hash");
+        let connection = store.open_write_connection().expect("open");
+        connection
+            .execute(
+                "UPDATE canonical_blocks
+                 SET hash = ?1, block_json = ?2
+                 WHERE height = 0",
+                params![
+                    tampered_hash.as_bytes().as_slice(),
+                    serde_json::to_vec(&tampered).expect("encode tampered block")
+                ],
+            )
+            .expect("tamper merkle commitment");
+        drop(connection);
+
+        let error = verify_database_integrity(dir.path())
+            .expect_err("integrity check must recompute transaction Merkle roots");
+        assert!(matches!(error, NodeError::InvalidChainDatabase { .. }));
+    }
+
+    #[test]
+    fn integrity_report_commits_canonical_block_order() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        store.append_with_tip_link(&genesis).expect("genesis");
+        let genesis_report = verify_database_integrity(dir.path()).expect("genesis report");
+
+        let child = linked_child(&genesis);
+        store.append_with_tip_link(&child).expect("child");
+        let child_report = verify_database_integrity(dir.path()).expect("child report");
+
+        assert_eq!(genesis_report.canonical_block_count, 1);
+        assert_eq!(genesis_report.canonical_transaction_count, 1);
+        assert_eq!(child_report.canonical_block_count, 2);
+        assert_eq!(child_report.canonical_transaction_count, 2);
+        assert_eq!(
+            child_report.tip_hash,
+            Some(hash_to_hex(&child.hash().expect("child hash")))
+        );
+        assert_ne!(
+            genesis_report.block_hash_merkle_root,
+            child_report.block_hash_merkle_root
+        );
+    }
+
+    #[test]
+    fn transaction_index_follows_append_and_reorg() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        let child = devnet_child_block_with_difficulty(
+            &genesis,
+            &miner_address(),
+            genesis.header.timestamp + BLOCK_TIME_SECONDS,
+            vec![],
+            4,
+        )
+        .expect("child");
+        let child_transaction = child.transactions[0].clone();
+        let child_transaction_hash = hash_to_hex(&child_transaction.tx_hash());
+        let child_block_hash = hash_to_hex(&child.hash().expect("child hash"));
+        store.append_with_tip_link(&genesis).expect("genesis");
+        store.append_with_tip_link(&child).expect("child");
+
+        let indexed = store
+            .load_transaction_by_hash(&child_transaction_hash)
+            .expect("lookup")
+            .expect("indexed transaction");
+        assert_eq!(indexed.block_height, 1);
+        assert_eq!(indexed.transaction_position, 0);
+        assert_eq!(indexed.block_hash, child_block_hash);
+        assert_eq!(indexed.transaction, child_transaction);
+        let existing = store
+            .existing_transaction_hashes(&[
+                child_transaction_hash.clone(),
+                hash_to_hex(&Hash::zero()),
+                "malformed".to_owned(),
+            ])
+            .expect("batch lookup");
+        assert_eq!(existing, BTreeSet::from([child_transaction_hash.clone()]));
+
+        store
+            .replace_validated(
+                &child_block_hash,
+                std::slice::from_ref(&genesis),
+                |_current, _candidate| Ok(()),
+            )
+            .expect("replace");
+        assert!(store
+            .load_transaction_by_hash(&child_transaction_hash)
+            .expect("lookup after reorg")
+            .is_none());
+        assert!(store
+            .existing_transaction_hashes(&[child_transaction_hash])
+            .expect("batch lookup after reorg")
+            .is_empty());
+    }
+
+    #[test]
+    fn schema_v1_migration_backfills_transaction_index() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        let transaction_hash = hash_to_hex(&genesis.transactions[0].tx_hash());
+        store.append_with_tip_link(&genesis).expect("genesis");
+
+        let connection = store.open_write_connection().expect("open");
+        connection
+            .execute_batch(
+                "DROP TABLE canonical_transactions;
+                 PRAGMA user_version = 1;
+                 UPDATE storage_metadata SET value = '1' WHERE key = 'schema_version';",
+            )
+            .expect("downgrade schema fixture");
+        drop(connection);
+
+        let indexed = store
+            .load_transaction_by_hash(&transaction_hash)
+            .expect("migrate and lookup")
+            .expect("backfilled transaction");
+        assert_eq!(indexed.block_height, 0);
+        assert_eq!(indexed.transaction_position, 0);
+        let connection = store.open_read_connection().expect("open migrated");
+        let schema_version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("schema version");
+        assert_eq!(schema_version, STORAGE_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn transaction_lookup_rejects_inconsistent_index_position() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        let transaction_hash = genesis.transactions[0].tx_hash();
+        store.append_with_tip_link(&genesis).expect("genesis");
+
+        let connection = store.open_write_connection().expect("open");
+        connection
+            .execute(
+                "UPDATE canonical_transactions SET tx_position = 99 WHERE tx_hash = ?1",
+                params![transaction_hash.as_bytes().as_slice()],
+            )
+            .expect("tamper index");
+        drop(connection);
+
+        let error = store
+            .load_transaction_by_hash(&hash_to_hex(&transaction_hash))
+            .expect_err("inconsistent index must fail");
+        assert!(matches!(error, NodeError::InvalidChainDatabase { .. }));
+        let integrity_error =
+            verify_database_integrity(dir.path()).expect_err("integrity check must fail");
+        assert!(matches!(
+            integrity_error,
+            NodeError::InvalidChainDatabase { .. }
+        ));
+    }
+
+    #[test]
+    fn transaction_index_lookup_does_not_load_unrelated_suffix() {
+        let dir = tempfile::tempdir().expect("temp");
+        let store = SqliteBlockStore::new(dir.path());
+        let genesis = devnet_genesis(&miner_address()).expect("genesis");
+        let child = devnet_child_block_with_difficulty(
+            &genesis,
+            &miner_address(),
+            genesis.header.timestamp + BLOCK_TIME_SECONDS,
+            vec![],
+            4,
+        )
+        .expect("child");
+        let grandchild = devnet_child_block_with_difficulty(
+            &child,
+            &miner_address(),
+            child.header.timestamp + BLOCK_TIME_SECONDS,
+            vec![],
+            4,
+        )
+        .expect("grandchild");
+        let child_transaction_hash = hash_to_hex(&child.transactions[0].tx_hash());
+        store.append_with_tip_link(&genesis).expect("genesis");
+        store.append_with_tip_link(&child).expect("child");
+        store.append_with_tip_link(&grandchild).expect("grandchild");
+
+        let connection = store.open_write_connection().expect("open");
+        connection
+            .execute(
+                "UPDATE canonical_blocks
+                 SET network_id = 'tampered-beyond-indexed-block'
+                 WHERE height = 2",
+                [],
+            )
+            .expect("tamper unrelated suffix");
+        drop(connection);
+
+        let indexed = store
+            .load_transaction_by_hash(&child_transaction_hash)
+            .expect("bounded transaction lookup")
+            .expect("indexed transaction");
+        assert_eq!(indexed.block_height, 1);
+        assert_eq!(indexed.transaction, child.transactions[0]);
+        let full_chain_error = store
+            .load_blocks()
+            .expect_err("full chain load must still detect unrelated corruption");
+        assert!(matches!(
+            full_chain_error,
+            NodeError::InvalidChainDatabase { .. }
+        ));
     }
 
     #[test]

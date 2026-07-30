@@ -1,7 +1,7 @@
 use crate::error::{RpcError, RpcResult};
 use crate::state::RpcState;
 use alvenqis_core::{hash_to_hex, Block, Chain};
-use alvenqis_node::{storage, SqliteBlockStore};
+use alvenqis_node::{storage, SqliteBlockStore, StoredTransaction};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -154,4 +154,18 @@ pub(crate) async fn load_tip_block_async(state: &RpcState) -> RpcResult<Option<B
         .await
         .map_err(|error| RpcError::Config(format!("chain tip read task failed: {error}")))?
         .map_err(RpcError::from)
+}
+
+pub(crate) async fn load_transaction_by_hash_async(
+    state: &RpcState,
+    tx_hash: &str,
+) -> RpcResult<Option<StoredTransaction>> {
+    let chain_path = PathBuf::from(&state.config.chain_data_path);
+    let tx_hash = tx_hash.to_owned();
+    tokio::task::spawn_blocking(move || {
+        SqliteBlockStore::new(chain_path).load_transaction_by_hash(&tx_hash)
+    })
+    .await
+    .map_err(|error| RpcError::Config(format!("transaction index read task failed: {error}")))?
+    .map_err(RpcError::from)
 }

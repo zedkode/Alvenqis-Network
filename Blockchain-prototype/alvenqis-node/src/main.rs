@@ -8,7 +8,7 @@ use alvenqis_node::{
     mine_block, mine_pending_block, node_status, peers, print_chain, queue_peer_ban,
     queue_peer_unban, runtime_dir_for_data_dir, shutdown, start_node, state, status,
     submit_transaction, validate_chain, verify_database_integrity, write_genesis_review_manifest,
-    NetworkConfig, DEFAULT_CONFIG_PATH,
+    NetworkConfig, DEFAULT_CONFIG_PATH, DEFAULT_STORAGE_INTEGRITY_INTERVAL_SECONDS,
 };
 #[cfg(feature = "storage-rocksdb")]
 use alvenqis_node::{
@@ -56,6 +56,9 @@ enum Command {
     StartNode {
         #[arg(long, default_value_t = false)]
         force_genesis: bool,
+        /// Deep SQLite, block-hash, transaction-Merkle, and index verification cadence.
+        #[arg(long, default_value_t = DEFAULT_STORAGE_INTEGRITY_INTERVAL_SECONDS)]
+        storage_integrity_interval_seconds: u64,
     },
     NodeStatus,
     MineBlock,
@@ -171,16 +174,24 @@ fn main() {
         .unwrap_or_else(|| default_miner_address(configured_network));
 
     let result = match cli.command {
-        Command::StartNode { force_genesis } => {
-            start_node(&config_path, &data_dir, &mempool_dir, force_genesis).map(|_| {
-                format!(
-                    "stopped network_id={} data_dir={} mempool_dir={}",
-                    configured_network.network_id(),
-                    data_dir.display(),
-                    mempool_dir.display()
-                )
-            })
-        }
+        Command::StartNode {
+            force_genesis,
+            storage_integrity_interval_seconds,
+        } => start_node(
+            &config_path,
+            &data_dir,
+            &mempool_dir,
+            force_genesis,
+            storage_integrity_interval_seconds,
+        )
+        .map(|_| {
+            format!(
+                "stopped network_id={} data_dir={} mempool_dir={}",
+                configured_network.network_id(),
+                data_dir.display(),
+                mempool_dir.display()
+            )
+        }),
         Command::NodeStatus => {
             node_status(&config_path, &data_dir, &mempool_dir).and_then(|summary| {
                 serde_json::to_string_pretty(&summary).map_err(alvenqis_node::NodeError::from)
@@ -288,10 +299,15 @@ fn main() {
                 )
             })
         }
-        Command::VerifyChainDatabase => verify_database_integrity(&data_dir).map(|_| {
+        Command::VerifyChainDatabase => verify_database_integrity(&data_dir).map(|report| {
             format!(
-                "valid SQLite chain database data_dir={}",
-                data_dir.display()
+                "valid SQLite chain database data_dir={} schema={} blocks={} transactions={} tip_hash={} block_hash_merkle_root={}",
+                data_dir.display(),
+                report.schema_version,
+                report.canonical_block_count,
+                report.canonical_transaction_count,
+                report.tip_hash.as_deref().unwrap_or("none"),
+                report.block_hash_merkle_root.as_deref().unwrap_or("none")
             )
         }),
         #[cfg(feature = "storage-rocksdb")]

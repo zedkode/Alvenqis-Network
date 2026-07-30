@@ -1060,6 +1060,29 @@ async fn transaction_submission_and_mempool_endpoints_work() {
 }
 
 #[tokio::test]
+async fn malformed_transaction_hash_is_not_found() {
+    let (temp_dir, config_path, data_dir) = setup_paths();
+    let index_dir = temp_dir.path().join(".alvenqis-dev/indexer");
+    let miner = PrivateKey::generate();
+    let miner_address =
+        Address::from_public_key_for_network(&miner.public_key(), Network::Devnet).to_string();
+    init_devnet(&config_path, &data_dir, &miner_address).expect("init");
+    let app = router(rpc_state(&data_dir, &index_dir));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/transactions/not-a-transaction-hash")
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn invalid_transaction_submission_is_rejected() {
     let (temp_dir, config_path, data_dir) = setup_paths();
     let index_dir = temp_dir.path().join(".alvenqis-dev/indexer");

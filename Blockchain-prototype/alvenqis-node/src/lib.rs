@@ -34,7 +34,7 @@ pub use domain::mining::{
 pub use domain::runtime::{
     default_data_dir, default_runtime_dir, node_status, peers, reset_devnet,
     runtime_dir_for_data_dir, shutdown, start_node, NodeRuntimeStatus, PeersSummary, ResetSummary,
-    DEFAULT_DATA_DIR,
+    DEFAULT_DATA_DIR, DEFAULT_STORAGE_INTEGRITY_INTERVAL_SECONDS,
 };
 pub use domain::transactions::{
     mempool_status, send_dev_tx, submit_transaction, MempoolStatusSummary, SendTransactionSummary,
@@ -45,9 +45,9 @@ pub use mempool::{
     clear_mempool, default_mempool_dir, default_network_root, load_pending_transactions,
     load_pending_transactions_for_chain, lowest_fee_sender_package, mempool_runtime_fingerprint,
     reconcile_after_reorg, reconcile_after_reorg_for_chain, select_pending_for_template,
-    write_pending_transactions_for_chain, write_pending_transactions_for_chain_in_lock,
-    PendingTransactionRecord, DEFAULT_MEMPOOL_MAX_AGE_SECONDS, MAX_PENDING_TXS_PER_SENDER,
-    MEMPOOL_FILE_NAME,
+    select_pending_for_template_for_chain, write_pending_transactions_for_chain,
+    write_pending_transactions_for_chain_in_lock, PendingTransactionRecord,
+    DEFAULT_MEMPOOL_MAX_AGE_SECONDS, MAX_PENDING_TXS_PER_SENDER, MEMPOOL_FILE_NAME,
 };
 pub use p2p::{
     load_p2p_status, local_p2p_handshake, queue_peer_ban, queue_peer_unban, run_p2p_service,
@@ -67,8 +67,9 @@ pub use state_store::{
 };
 pub use storage::{
     append_block, append_block_unchecked, backup_chain_database, chain_database_path,
-    chain_storage_exists, chain_storage_fingerprint, load_blocks, verify_chain_structure,
-    verify_database_integrity, BlockStore, ChainStorageFingerprint, FileFingerprint,
-    SqliteBlockStore, CHAIN_DATABASE_FILE_NAME, CHAIN_FILE_NAME, CHAIN_LOCK_FILE_NAME,
+    chain_storage_exists, chain_storage_fingerprint, existing_transaction_hashes, load_blocks,
+    load_transaction_by_hash, verify_chain_structure, verify_database_integrity, BlockStore,
+    ChainStorageFingerprint, FileFingerprint, SqliteBlockStore, StorageIntegrityReport,
+    StoredTransaction, CHAIN_DATABASE_FILE_NAME, CHAIN_FILE_NAME, CHAIN_LOCK_FILE_NAME,
     LEGACY_CHAIN_FILE_NAME,
 };

@@ -12,6 +12,10 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $scriptDir '..\local\common.ps1')
 
 function Fail([string]$Message) {
+    if ($script:DrillTranscriptStarted) {
+        try { Stop-Transcript | Out-Null } catch {}
+        $script:DrillTranscriptStarted = $false
+    }
     Write-Error "FAIL: $Message"
     exit 1
 }
@@ -21,6 +25,21 @@ function Write-Step([string]$Message) {
     Write-Host "==> $Message"
 }
 
+function ConvertFrom-ValidationOutput([string]$Output) {
+    $identity = [ordered]@{}
+    foreach ($field in @('network_id', 'height', 'blocks', 'tip_hash')) {
+        if ($Output -notmatch "(?:^|\s)$field=([^\s]+)") {
+            throw "validate-chain output did not contain $field"
+        }
+        $identity[$field] = if ($field -in @('height', 'blocks')) {
+            [UInt64]$Matches[1]
+        } else {
+            $Matches[1]
+        }
+    }
+    $identity
+}
+
 Ensure-LocalDirectories
 $chainDb = Join-Path $script:ChainDir 'chain.sqlite3'
 $evidenceRoot = Join-Path $script:LocalRoot 'maturity-evidence'
@@ -28,6 +47,10 @@ New-Item -ItemType Directory -Force -Path $evidenceRoot | Out-Null
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
 $drillDir = Join-Path $evidenceRoot "sqlite-restore-$stamp"
 New-Item -ItemType Directory -Force -Path $drillDir | Out-Null
+$transcriptPath = Join-Path $drillDir 'drill.log'
+$script:DrillTranscriptStarted = $false
+Start-Transcript -Path $transcriptPath -Force | Out-Null
+$script:DrillTranscriptStarted = $true
 
 $evidence = [ordered]@{
     drill            = 'sqlite-restore'
@@ -36,7 +59,9 @@ $evidence = [ordered]@{
     g4_waiver        = $false
     chain_dir        = $script:ChainDir
     drill_dir        = $drillDir
+    transcript_log   = $transcriptPath
     simulate_disk    = [bool]$SimulateDiskFailure
+    identity_verified = $false
     steps            = @()
     pass             = $false
 }
@@ -51,6 +76,7 @@ Write-Host 'Alvenqis Task 3 — SQLite restore drill'
 Write-Host ("UTC: {0}" -f $stamp)
 Write-Host ("chain_dir: {0}" -f $script:ChainDir)
 Write-Host ("drill_dir: {0}" -f $drillDir)
+Write-Host ("transcript: {0}" -f $transcriptPath)
 Write-Host 'NOTE: This is rehearsal evidence, not Mainnet Live / G4 approval.'
 
 if (-not (Test-Path -LiteralPath $chainDb)) {
@@ -67,19 +93,19 @@ try {
     Fail "Live chain failed integrity check: $_"
 }
 
-# capture tip via status if possible
-$preTip = $null
-$preHeight = $null
+# --- source identity ---
+Write-Step 'Capture source chain identity'
 try {
-    $statusOut = Invoke-NodeCommand -CommandArgs @('status') -CaptureOutput
-    if ($statusOut -match 'tip[_\s-]*hash[=:\s]+([0-9a-fA-F]{64})') { $preTip = $Matches[1] }
-    if ($statusOut -match 'height[=:\s]+(\d+)') { $preHeight = [int]$Matches[1] }
-    $evidence.pre_status_snippet = if ($statusOut.Length -gt 500) { $statusOut.Substring(0, 500) } else { $statusOut }
+    $sourceValidation = Invoke-NodeCommand -CommandArgs @('validate-chain') -CaptureOutput
+    Write-Host $sourceValidation
+    $sourceIdentity = ConvertFrom-ValidationOutput $sourceValidation
+    $evidence.source_identity = $sourceIdentity
+    Add-Step 'source_identity' $true ("network_id={0} height={1} blocks={2} tip_hash={3}" -f
+        $sourceIdentity.network_id, $sourceIdentity.height, $sourceIdentity.blocks, $sourceIdentity.tip_hash)
 } catch {
-    Write-Host "  (status optional) $_"
+    Add-Step 'source_identity' $false "$_"
+    Fail "Source chain validation failed: $_"
 }
-$evidence.pre_tip_hash = $preTip
-$evidence.pre_height = $preHeight
 
 # --- online backup ---
 Write-Step 'Online backup-chain-database'
@@ -89,7 +115,10 @@ $backupDb = Join-Path $backupDir 'chain.sqlite3'
 try {
     Invoke-NodeCommand -CommandArgs @('backup-chain-database', '--output', $backupDb) | Out-Null
     if (-not (Test-Path -LiteralPath $backupDb)) { throw 'backup file missing after command' }
-    Add-Step 'online_backup' $true $backupDb
+    $backupSha256 = (Get-FileHash -LiteralPath $backupDb -Algorithm SHA256).Hash.ToLowerInvariant()
+    $evidence.backup_db = $backupDb
+    $evidence.backup_sha256 = $backupSha256
+    Add-Step 'online_backup' $true "$backupDb sha256=$backupSha256"
 } catch {
     Add-Step 'online_backup' $false "$_"
     Fail "Online backup failed: $_"
@@ -116,8 +145,17 @@ try {
     Fail "Isolated restore integrity failed: $_"
 }
 
+$restoreSha256 = (Get-FileHash -LiteralPath $restoreDb -Algorithm SHA256).Hash.ToLowerInvariant()
+$evidence.restore_db = $restoreDb
+$evidence.restore_sha256 = $restoreSha256
+if ($restoreSha256 -ne $backupSha256) {
+    Add-Step 'restored_file_hash' $false "backup=$backupSha256 restore=$restoreSha256"
+    Fail 'Restored SQLite copy hash does not match online backup'
+}
+Add-Step 'restored_file_hash' $true "sha256=$restoreSha256"
+
 if (-not $SkipValidateChain) {
-    Write-Step 'Isolated validate-chain'
+    Write-Step 'Isolated validate-chain + identity comparison'
     try {
         $vArgs = @(
             '--config', $script:LocalNodeConfig,
@@ -125,12 +163,27 @@ if (-not $SkipValidateChain) {
             '--mempool-dir', (Join-Path $drillDir 'isolated-mempool'),
             'validate-chain'
         )
-        Invoke-CargoRun -Package 'alvenqis-node' -CliArgs $vArgs | Out-Null
-        Add-Step 'isolated_validate_chain' $true
+        $restoreValidation = Invoke-CargoRun -Package 'alvenqis-node' -CliArgs $vArgs -CaptureOutput
+        Write-Host $restoreValidation
+        $restoreIdentity = ConvertFrom-ValidationOutput $restoreValidation
+        $evidence.restore_identity = $restoreIdentity
+        if (
+            $restoreIdentity.network_id -ne $sourceIdentity.network_id -or
+            $restoreIdentity.height -ne $sourceIdentity.height -or
+            $restoreIdentity.blocks -ne $sourceIdentity.blocks -or
+            $restoreIdentity.tip_hash -ne $sourceIdentity.tip_hash
+        ) {
+            throw 'restored chain identity does not match source'
+        }
+        $evidence.identity_verified = $true
+        Add-Step 'restored_identity_match' $true ("network_id={0} height={1} blocks={2} tip_hash={3}" -f
+            $restoreIdentity.network_id, $restoreIdentity.height, $restoreIdentity.blocks, $restoreIdentity.tip_hash)
     } catch {
-        Add-Step 'isolated_validate_chain' $false "$_"
-        Write-Warning "validate-chain failed on restore (recorded): $_"
+        Add-Step 'restored_identity_match' $false "$_"
+        Fail "Isolated validate-chain or identity comparison failed: $_"
     }
+} else {
+    Write-Host '  SKIP restored_identity_match — -SkipValidateChain'
 }
 
 # --- optional disk failure on live ---
@@ -169,8 +222,12 @@ Write-Host ""
 Write-Host ("evidence: {0}" -f $evidencePath)
 if ($evidence.pass) {
     Write-Host 'PASS: Drill A SQLite backup/restore evidence recorded (not G4).'
+    Stop-Transcript | Out-Null
+    $script:DrillTranscriptStarted = $false
     exit 0
 } else {
     Write-Host 'FAIL: one or more drill steps failed — see evidence.json'
+    Stop-Transcript | Out-Null
+    $script:DrillTranscriptStarted = $false
     exit 1
 }

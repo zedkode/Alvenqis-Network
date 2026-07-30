@@ -19,13 +19,16 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 pub const DEFAULT_DATA_DIR: &str = ".alvenqis-mainnet/chain";
 const NODE_RUNTIME_DIR_NAME: &str = "node";
 const NODE_RUNTIME_FILE_NAME: &str = "runtime.json";
 const NODE_SHUTDOWN_FILE_NAME: &str = "shutdown.signal";
 const NODE_POLL_INTERVAL_SECONDS: u64 = 1;
+const STORAGE_INTEGRITY_FILE_NAME: &str = "storage-integrity.json";
+const MIN_STORAGE_INTEGRITY_INTERVAL_SECONDS: u64 = 60;
+pub const DEFAULT_STORAGE_INTEGRITY_INTERVAL_SECONDS: u64 = 21_600;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NodeRuntimeStatus {
@@ -58,6 +61,15 @@ struct PersistedRuntimeProcessState {
     running: bool,
     #[serde(default)]
     pid: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+struct StorageIntegrityStatus {
+    ok: bool,
+    checked_at_unix_seconds: u64,
+    interval_seconds: u64,
+    report: Option<storage::StorageIntegrityReport>,
+    error: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -149,7 +161,9 @@ pub fn start_node(
     data_dir: &Path,
     mempool_dir: &Path,
     force_genesis: bool,
+    storage_integrity_interval_seconds: u64,
 ) -> NodeResult<()> {
+    validate_storage_integrity_interval(storage_integrity_interval_seconds)?;
     NetworkConfig::load_from_path(config_path)?;
     let runtime_dir = runtime_dir_for_data_dir(data_dir);
     fs::create_dir_all(&runtime_dir)?;
@@ -167,6 +181,13 @@ pub fn start_node(
         force_genesis,
     )?;
     write_runtime_status_file(&runtime_dir, &runtime)?;
+    verify_and_record_storage_integrity(
+        data_dir,
+        &runtime_dir,
+        storage_integrity_interval_seconds,
+    )?;
+    let storage_integrity_interval = Duration::from_secs(storage_integrity_interval_seconds);
+    let mut last_storage_integrity_check = Instant::now();
     let (mut chain_fingerprint, mut mempool_fingerprint) =
         runtime_data_fingerprint(data_dir, mempool_dir);
 
@@ -194,6 +215,18 @@ pub fn start_node(
         }
 
         thread::sleep(Duration::from_secs(NODE_POLL_INTERVAL_SECONDS));
+        if last_storage_integrity_check.elapsed() >= storage_integrity_interval {
+            if let Err(error) = verify_and_record_storage_integrity(
+                data_dir,
+                &runtime_dir,
+                storage_integrity_interval_seconds,
+            ) {
+                stop_p2p.store(true, Ordering::Relaxed);
+                let _ = p2p_handle.join();
+                return Err(error);
+            }
+            last_storage_integrity_check = Instant::now();
+        }
         let (next_chain_fingerprint, next_mempool_fingerprint) =
             runtime_data_fingerprint(data_dir, mempool_dir);
         if next_chain_fingerprint != chain_fingerprint {
@@ -389,6 +422,58 @@ fn write_runtime_status_file(runtime_dir: &Path, status: &NodeRuntimeStatus) -> 
     Ok(())
 }
 
+fn validate_storage_integrity_interval(interval_seconds: u64) -> NodeResult<()> {
+    if interval_seconds < MIN_STORAGE_INTEGRITY_INTERVAL_SECONDS {
+        return Err(NodeError::Input(format!(
+            "storage integrity interval must be at least {MIN_STORAGE_INTEGRITY_INTERVAL_SECONDS} seconds"
+        )));
+    }
+    Ok(())
+}
+
+fn verify_and_record_storage_integrity(
+    data_dir: &Path,
+    runtime_dir: &Path,
+    interval_seconds: u64,
+) -> NodeResult<()> {
+    let checked_at_unix_seconds = current_unix_seconds();
+    match storage::verify_database_integrity(data_dir) {
+        Ok(report) => write_storage_integrity_status(
+            runtime_dir,
+            &StorageIntegrityStatus {
+                ok: true,
+                checked_at_unix_seconds,
+                interval_seconds,
+                report: Some(report),
+                error: None,
+            },
+        ),
+        Err(error) => {
+            let status = StorageIntegrityStatus {
+                ok: false,
+                checked_at_unix_seconds,
+                interval_seconds,
+                report: None,
+                error: Some(error.to_string()),
+            };
+            let _ = write_storage_integrity_status(runtime_dir, &status);
+            Err(error)
+        }
+    }
+}
+
+fn write_storage_integrity_status(
+    runtime_dir: &Path,
+    status: &StorageIntegrityStatus,
+) -> NodeResult<()> {
+    fs::create_dir_all(runtime_dir)?;
+    fs::write(
+        runtime_dir.join(STORAGE_INTEGRITY_FILE_NAME),
+        serde_json::to_string_pretty(status)?,
+    )?;
+    Ok(())
+}
+
 fn runtime_data_fingerprint(
     data_dir: &Path,
     mempool_dir: &Path,
@@ -469,7 +554,12 @@ fn move_dir_if_exists(source: &Path, destination: &Path) -> NodeResult<()> {
 
 #[cfg(test)]
 mod runtime_status_tests {
-    use super::PersistedRuntimeProcessState;
+    use super::{
+        validate_storage_integrity_interval, verify_and_record_storage_integrity,
+        PersistedRuntimeProcessState, STORAGE_INTEGRITY_FILE_NAME,
+    };
+    use crate::storage;
+    use alvenqis_core::{devnet_genesis, Address, Network, PrivateKey};
 
     #[test]
     fn legacy_runtime_status_only_requires_process_fields() {
@@ -480,5 +570,37 @@ mod runtime_status_tests {
 
         assert!(status.running);
         assert_eq!(status.pid, Some(42));
+    }
+
+    #[test]
+    fn storage_integrity_interval_rejects_excessive_frequency() {
+        assert!(validate_storage_integrity_interval(59).is_err());
+        assert!(validate_storage_integrity_interval(60).is_ok());
+    }
+
+    #[test]
+    fn storage_integrity_status_records_diagnostic_commitment() {
+        let root = tempfile::tempdir().expect("temp");
+        let data_dir = root.path().join("chain");
+        let runtime_dir = root.path().join("runtime");
+        let miner = Address::from_public_key_for_network(
+            &PrivateKey::generate().public_key(),
+            Network::Devnet,
+        )
+        .to_string();
+        let genesis = devnet_genesis(&miner).expect("genesis");
+        storage::append_block(&data_dir, &genesis).expect("append genesis");
+
+        verify_and_record_storage_integrity(&data_dir, &runtime_dir, 60)
+            .expect("record integrity status");
+        let status: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(runtime_dir.join(STORAGE_INTEGRITY_FILE_NAME))
+                .expect("read integrity status"),
+        )
+        .expect("decode integrity status");
+        assert_eq!(status["ok"], true);
+        assert_eq!(status["interval_seconds"], 60);
+        assert_eq!(status["report"]["canonical_block_count"], 1);
+        assert!(status["report"]["block_hash_merkle_root"].is_string());
     }
 }

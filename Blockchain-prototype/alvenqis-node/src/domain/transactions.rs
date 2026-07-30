@@ -2,7 +2,7 @@ use crate::domain::chain::{load_validated_chain, persist_validated_chain_state, 
 use crate::error::{NodeError, NodeResult};
 use crate::mempool::{
     current_unix_seconds, load_pending_transactions_for_chain, lowest_fee_sender_package,
-    sanitize_pending_transactions, tx_hash_string, validate_pending_transaction,
+    sanitize_pending_transactions_for_chain, tx_hash_string, validate_pending_transaction,
     PendingTransactionRecord, MAX_PENDING_TXS_PER_SENDER,
 };
 use crate::storage;
@@ -128,18 +128,13 @@ pub fn submit_transaction(
     max_mempool_transactions: usize,
     transaction: &Transaction,
 ) -> NodeResult<SubmitTransactionSummary> {
-    let chain = load_chain_only(data_dir)?;
     let tx_hash = tx_hash_string(transaction);
-    if chain
-        .blocks()
-        .iter()
-        .flat_map(|block| block.transactions.iter())
-        .any(|existing| tx_hash_string(existing) == tx_hash)
-    {
+    if storage::load_transaction_by_hash(data_dir, &tx_hash)?.is_some() {
         return Err(NodeError::Input(format!(
             "transaction {tx_hash} already exists in the local chain"
         )));
     }
+    let chain = load_chain_only(data_dir)?;
 
     let transaction_network = transaction.network()?;
     if transaction_network != chain.network() {
@@ -152,7 +147,7 @@ pub fn submit_transaction(
     crate::mempool::with_mempool_lock(mempool_dir, || {
         let existing_records = load_pending_transactions_for_chain(data_dir, mempool_dir)?;
         let (mut valid_records, _invalid_hashes, mut pending_state) =
-            sanitize_pending_transactions(&chain, existing_records)?;
+            sanitize_pending_transactions_for_chain(data_dir, &chain, existing_records)?;
         if valid_records.iter().any(|record| record.tx_hash == tx_hash) {
             return Err(NodeError::Input(format!(
                 "transaction {tx_hash} already exists in the local mempool"
@@ -198,7 +193,8 @@ pub fn submit_transaction(
                 for index in drop_indices {
                     valid_records.remove(index);
                 }
-                let (rebuilt, _, new_state) = sanitize_pending_transactions(&chain, valid_records)?;
+                let (rebuilt, _, new_state) =
+                    sanitize_pending_transactions_for_chain(data_dir, &chain, valid_records)?;
                 valid_records = rebuilt;
                 pending_state = new_state;
             }
@@ -222,7 +218,8 @@ pub fn submit_transaction(
                 record.transaction.from.as_deref() != Some(victim_sender.as_str())
             });
             // Re-sanitize after bulk package eviction.
-            let (rebuilt, _, new_state) = sanitize_pending_transactions(&chain, valid_records)?;
+            let (rebuilt, _, new_state) =
+                sanitize_pending_transactions_for_chain(data_dir, &chain, valid_records)?;
             valid_records = rebuilt;
             pending_state = new_state;
             if valid_records.len() >= max_mempool_transactions {
@@ -261,7 +258,7 @@ pub fn mempool_status(data_dir: &Path, mempool_dir: &Path) -> NodeResult<Mempool
         crate::mempool::with_mempool_lock(mempool_dir, || {
             let pending_records = load_pending_transactions_for_chain(data_dir, mempool_dir)?;
             let (valid_records, _invalid_hashes, _state) =
-                sanitize_pending_transactions(&chain, pending_records)?;
+                sanitize_pending_transactions_for_chain(data_dir, &chain, pending_records)?;
             crate::mempool::write_pending_transactions_for_chain_in_lock(
                 data_dir,
                 mempool_dir,

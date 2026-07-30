@@ -34,8 +34,14 @@ $script:WalletDir = if ((Test-Path -LiteralPath $legacyWalletDir) -and -not (Tes
 $script:SignedTxDir = Join-Path $script:WalletDir "signed-txs"
 $script:LogsDir = Join-Path $script:LocalRoot "logs"
 $script:BackupsDir = Join-Path $script:LocalRoot "backups"
-$script:BuildDir = Join-Path $script:LocalRoot "build\target"
-$script:LocalNodeConfig = if ($script:IsPackaged) {
+$script:BuildDir = if ($env:ALVENQIS_BUILD_DIR) {
+    $env:ALVENQIS_BUILD_DIR
+} else {
+    Join-Path $script:LocalRoot "build\target"
+}
+$script:LocalNodeConfig = if ($env:ALVENQIS_LOCAL_NODE_CONFIG) {
+    $env:ALVENQIS_LOCAL_NODE_CONFIG
+} elseif ($script:IsPackaged) {
     Join-Path $script:LocalRoot "node.toml"
 } else {
     Join-Path $script:WorkspaceRoot "configs\local.toml"
