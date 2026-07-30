@@ -29,10 +29,10 @@ fi
 
 is_state_gitkeep() {
   case "$1" in
-    Blockchain-prototype/alvenqis-release/vps-control-plane/state/config/generated/.gitkeep|\
-    Blockchain-prototype/alvenqis-release/vps-control-plane/state/secrets/.gitkeep|\
-    alvenqis-release/vps-control-plane/state/config/generated/.gitkeep|\
-    alvenqis-release/vps-control-plane/state/secrets/.gitkeep)
+    Blockchain-prototype/alvenqis-release/alvenqis-setup-external/state/config/generated/.gitkeep|\
+    Blockchain-prototype/alvenqis-release/alvenqis-setup-external/state/secrets/.gitkeep|\
+    alvenqis-release/alvenqis-setup-external/state/config/generated/.gitkeep|\
+    alvenqis-release/alvenqis-setup-external/state/secrets/.gitkeep)
       return 0
       ;;
     *)
@@ -56,8 +56,8 @@ while IFS= read -r file; do
     continue
   fi
 
-  if [[ "$file" == Blockchain-prototype/alvenqis-release/vps-control-plane/state/* \
-     || "$file" == alvenqis-release/vps-control-plane/state/* ]]; then
+  if [[ "$file" == Blockchain-prototype/alvenqis-release/alvenqis-setup-external/state/* \
+     || "$file" == alvenqis-release/alvenqis-setup-external/state/* ]]; then
     issues+=("Forbidden control-plane runtime state: $file")
     continue
   fi

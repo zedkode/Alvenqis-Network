@@ -170,7 +170,8 @@ Release/
 Blockchain-scripts/release/*
 !Blockchain-scripts/release/build-windows-installer.ps1
 !Blockchain-scripts/release/build-linux-desktop.sh
-!Blockchain-scripts/release/build-vps-control-plane-bundle.sh
+!Blockchain-scripts/release/build-alvenqis-setup-external-bundle.sh
+!Blockchain-scripts/release/build-linux-component-artifact.sh
 !Blockchain-scripts/release/release-gate.ps1
 !Blockchain-scripts/release/release-gate.sh
 !Blockchain-scripts/release/alvenqis-release.cmd
@@ -251,7 +252,7 @@ temp/
 *.orig
 *.rej
 
-**/alvenqis-release/vps-control-plane/state/
+**/alvenqis-release/alvenqis-setup-external/state/
 
 # -----------------------------------------------------------------------------
 # Release artifacts, staging, packages, and archives

@@ -72,7 +72,7 @@ while IFS= read -r file; do
 done < <(find . -path ./alvenqis-wallet -prune -o -type f \( -path "*/wallets/*" -o -name "*.wallet" -o -name "*.seed" -o -name "*.key" -o -name "*.pem" \) -print)
 
 # VPS compose: every service should declare hardening intent (user / read_only / cap review).
-compose_file="${proto}alvenqis-release/vps-control-plane/compose.yaml"
+compose_file="${proto}alvenqis-release/alvenqis-setup-external/compose.yaml"
 if [[ -f "$compose_file" ]]; then
   # Extract service keys under top-level `services:` (simple YAML scan).
   mapfile -t compose_services < <(awk '

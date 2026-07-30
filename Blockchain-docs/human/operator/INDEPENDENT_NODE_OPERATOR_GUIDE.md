@@ -24,7 +24,7 @@ installer remains G2 work.
 ## Configure a standalone node
 
 ```bash
-cd Blockchain-prototype/alvenqis-release/vps-control-plane
+cd Blockchain-prototype/alvenqis-release/alvenqis-setup-external
 cp .env.example .env
 ```
 

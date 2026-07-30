@@ -1,0 +1,115 @@
+name: Alvenqis Setup External Release
+
+on:
+  push:
+    tags:
+      - "setup-external-v*-rc.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing Alvenqis Setup External tag to release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alvenqis-setup-external-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  verify-build-publish:
+    runs-on: ubuntu-24.04
+    environment: candidate-release
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          components: clippy,rustfmt
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential clang cmake libclang-dev libdbus-1-dev
+
+      - name: Verify requested tag
+        run: |
+          set -euo pipefail
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
+          VERSION="$(tr -d '[:space:]' < Blockchain-prototype/alvenqis-release/alvenqis-setup-external/VERSION)"
+          case "$RELEASE_TAG" in
+            "setup-external-v${VERSION}-rc."*) ;;
+            *) echo "Tag $RELEASE_TAG does not match VERSION $VERSION" >&2; exit 1 ;;
+          esac
+
+      - name: Repository security checks
+        run: |
+          bash Blockchain-scripts/git/check-forbidden-files.sh
+          bash Blockchain-scripts/security/check-secrets.sh
+          bash Blockchain-scripts/security/check-repo-hygiene.sh
+          bash Blockchain-scripts/security/check-config-safety.sh
+
+      - name: Rust release checks
+        run: |
+          cargo fmt --manifest-path Blockchain-prototype/Cargo.toml --all --check
+          cargo test --manifest-path Blockchain-prototype/Cargo.toml --workspace --locked
+          cargo clippy --manifest-path Blockchain-prototype/Cargo.toml --workspace --all-targets --locked -- -D warnings
+          cargo test --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --locked --features storage-rocksdb --lib
+          cargo clippy --manifest-path Blockchain-prototype/Cargo.toml -p alvenqis-node --all-targets --locked --features storage-rocksdb -- -D warnings
+
+      - name: Validate Setup External
+        working-directory: Blockchain-prototype/alvenqis-release/alvenqis-setup-external
+        run: bash ./scripts/validate-stack.sh --require-docker
+
+      - name: Build RocksDB runtime image
+        run: docker build --file Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/Dockerfile --tag alvenqis-runtime:release-gate .
+
+      - name: Build Alvenqis Setup External bundle
+        run: bash Blockchain-scripts/release/build-alvenqis-setup-external-bundle.sh
+
+      - name: Verify bundle contents and checksum
+        run: |
+          set -euo pipefail
+          cd release-artifacts
+          sha256sum --check alvenqis-setup-external.tar.gz.sha256
+          tar -tzf alvenqis-setup-external.tar.gz > setup-external-contents.txt
+          for required in \
+            Cargo.toml \
+            Cargo.lock \
+            Blockchain-prototype/alvenqis-release/alvenqis-setup-external/compose/base.yaml \
+            Blockchain-prototype/alvenqis-release/alvenqis-setup-external/compose/installer.yaml \
+            Blockchain-prototype/alvenqis-release/alvenqis-setup-external/compose/roles.json \
+            Blockchain-prototype/alvenqis-release/alvenqis-setup-external/APPLICATIONS.md \
+            Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/Dockerfile \
+            Blockchain-prototype/alvenqis-release/alvenqis-setup-external/scripts/install-docker-stack.sh; do
+            grep -Fxq "$required" setup-external-contents.txt || {
+              echo "Missing required bundle entry: $required" >&2
+              exit 1
+            }
+          done
+
+      - name: Publish Alvenqis Setup External prerelease
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Alvenqis Setup External ${{ env.RELEASE_TAG }}
+          prerelease: true
+          draft: false
+          generate_release_notes: true
+          body: |
+            Mainnet Candidate Alvenqis Setup External prerelease for operator testing.
+
+            This is not a Mainnet Live declaration. Verify the SHA-256 file before installation. The optional mining-pool coordinator remains a prototype and does not store payout signing keys.
+          files: |
+            release-artifacts/alvenqis-setup-external.tar.gz
+            release-artifacts/alvenqis-setup-external.tar.gz.sha256
+            release-artifacts/setup-external-contents.txt
+          overwrite_files: false
+          fail_on_unmatched_files: true

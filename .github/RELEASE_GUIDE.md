@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Alvenqis candidate releases use independent GitHub Actions workflows for Windows, Linux, VPS control-plane, and quality verification. A successful platform workflow may publish its own artifacts without hiding a failure on another platform.
+Alvenqis candidate releases use independent GitHub Actions workflows for Windows, Linux, Alvenqis Setup External, and quality verification. A successful platform workflow may publish its own artifacts without hiding a failure on another platform.
 
 Passing a candidate workflow is not a public Mainnet approval. Network maturity remains governed by `Blockchain-docs/human/release/NETWORK_MATURITY.md`.
 
@@ -35,8 +35,14 @@ The manager reads the Control Center V2 version, creates an annotated `desktop-v
 - `Candidate Quality Checks` verifies repository safety, documentation, formatting, tests, RocksDB support, and Clippy for core and desktop candidate tags.
 - `Candidate Windows Release` builds and signs Tauri Windows packages for `desktop-v*-candidate.*` tags.
 - `Candidate Linux Release` builds Tauri Linux packages for `desktop-v*-candidate.*` tags.
-- `Candidate VPS Release` validates and packages the control plane for core and desktop candidate tags.
-- `Release Gate` runs documentation, security, Rust, web, and control-plane jobs on release-relevant changes.
+- `Candidate Setup External Release` validates and packages the independent
+  deployment bundle for core and desktop candidate tags.
+- `Candidate Linux Components Release` tests, packages, and publishes node,
+  RPC, indexer, explorer, pool, wallet CLI, and CUDA miner artifacts as
+  independent matrix entries. Matrix fail-fast is disabled: a failed component
+  remains failed while passing components may still publish.
+- `Release Gate` runs documentation, security, Rust, web, and Setup External
+  jobs on release-relevant changes.
 
 ## Existing Tags
 

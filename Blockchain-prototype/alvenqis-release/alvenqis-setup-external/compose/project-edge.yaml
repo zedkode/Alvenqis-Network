@@ -1,0 +1,162 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${CONTAINER_LOG_MAX_SIZE:-20m}
+    max-file: ${CONTAINER_LOG_MAX_FILES:-3}
+
+x-service-guardrails: &service-guardrails
+  restart: unless-stopped
+  networks: [alvenqis-internal]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  pids_limit: 256
+  stop_grace_period: 30s
+  logging: *default-logging
+
+x-runtime-image: &runtime-image
+  <<: *service-guardrails
+  image: ${ALVENQIS_RUNTIME_IMAGE:-ghcr.io/zedkode/alvenqis-runtime}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+  build:
+    context: ${ALVENQIS_HOST_ROOT:-../../..}
+    dockerfile: Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/Dockerfile
+
+services:
+  alvenqis-control:
+    <<: *runtime-image
+    env_file: [.env]
+    environment:
+      ALVENQIS_COMPONENT: control
+      ALVENQIS_DEPLOYMENT_MODE: docker
+    volumes:
+      - ${ALVENQIS_STATE_ROOT:-./state}/config/generated:/config
+      - ${ALVENQIS_STATE_ROOT:-./state}/control:/data/control
+    depends_on:
+      alvenqis-rpc: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp:size=64m]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:10788/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: ${CONTROL_MEMORY_LIMIT:-384M}
+    cpus: ${CONTROL_CPU_LIMIT:-0.35}
+
+  docker-broker:
+    <<: *service-guardrails
+    profiles: [project-edge]
+    image: ${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}
+      dockerfile: docker/ops/Dockerfile
+    working_dir: /app
+    env_file: [.env]
+    environment:
+      ALVENQIS_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
+      ALVENQIS_HOST_WORKSPACE: ${ALVENQIS_HOST_WORKSPACE}
+      ALVENQIS_HOST_REPO: ${ALVENQIS_HOST_REPO}
+      BROKER_TOKEN_FILE: /run/secrets/broker_token
+    command: ["gunicorn", "--bind", "0.0.0.0:8090", "--workers", "1", "--threads", "2", "--timeout", "7200", "broker:app"]
+    volumes:
+      - ${ALVENQIS_HOST_WORKSPACE}:${ALVENQIS_HOST_WORKSPACE}
+      - ${ALVENQIS_HOST_REPO}:${ALVENQIS_HOST_REPO}:ro
+      - type: bind
+        source: ${ALVENQIS_STATE_ROOT:-./state}
+        target: ${ALVENQIS_STATE_ROOT:-/workspace/state}
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets: [broker_token, cloudflare_api_token, backup_passphrase, r2_secret_access_key]
+    read_only: true
+    tmpfs: [/tmp:size=256m]
+    cap_add: [CHOWN, DAC_OVERRIDE, DAC_READ_SEARCH, FOWNER]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${BROKER_MEMORY_LIMIT:-384M}
+    cpus: ${BROKER_CPU_LIMIT:-0.35}
+    pids_limit: 256
+    ulimits:
+      nofile: {soft: 32768, hard: 32768}
+
+  alvenqis-ops:
+    <<: *service-guardrails
+    profiles: [project-edge]
+    image: ${ALVENQIS_OPS_IMAGE:-ghcr.io/zedkode/alvenqis-ops}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}
+      dockerfile: docker/ops/Dockerfile
+    env_file: [.env]
+    environment:
+      ALVENQIS_WORKSPACE: /workspace
+      SETUP_TOKEN_FILE: /run/secrets/setup_token
+      BROKER_URL: http://docker-broker:8090
+      BROKER_TOKEN_FILE: /run/secrets/broker_token
+      DISCORD_WEBHOOK_FILE: /run/secrets/discord_webhook
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+    volumes:
+      - ./.env:/workspace/.env
+      - ${ALVENQIS_STATE_ROOT:-./state}:/workspace/state
+    secrets: [setup_token, broker_token, discord_webhook, telegram_bot_token]
+    depends_on:
+      docker-broker: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp:size=128m]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${OPS_MEMORY_LIMIT:-384M}
+    cpus: ${OPS_CPU_LIMIT:-0.35}
+    pids_limit: 256
+
+  alvenqis-website:
+    <<: *service-guardrails
+    profiles: [project-edge]
+    image: ${ALVENQIS_WEBSITE_IMAGE:-ghcr.io/zedkode/alvenqis-website}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_ROOT:-../../..}
+      dockerfile: Blockchain-prototype/alvenqis-website/Dockerfile
+      args:
+        VITE_ALVENQIS_RPC_URL: https://${PUBLIC_RPC_HOST:-rpc.example.invalid}
+        VITE_ALVENQIS_POOL_URL: https://${POOL_HOST:-pool.example.invalid}
+        VITE_ALVENQIS_EXPLORER_URL: https://${EXPLORER_HOST:-explorer.example.invalid}
+    read_only: true
+    tmpfs: [/tmp:size=32m]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${WEBSITE_MEMORY_LIMIT:-192M}
+    cpus: ${WEBSITE_CPU_LIMIT:-0.15}
+    pids_limit: 128
+
+  gateway:
+    <<: *service-guardrails
+    profiles: [project-edge]
+    image: ${ALVENQIS_GATEWAY_IMAGE:-ghcr.io/zedkode/alvenqis-gateway}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_WORKSPACE:-.}/docker/gateway
+      dockerfile: Dockerfile
+    env_file: [.env]
+    secrets: [admin_password]
+    depends_on:
+      alvenqis-control: {condition: service_started}
+      alvenqis-rpc: {condition: service_started}
+      alvenqis-ops: {condition: service_started}
+      alvenqis-website: {condition: service_healthy}
+      alvenqis-explorer: {condition: service_healthy}
+    read_only: true
+    tmpfs: [/tmp:size=64m]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/gateway-health"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${GATEWAY_MEMORY_LIMIT:-192M}
+    cpus: ${GATEWAY_CPU_LIMIT:-0.20}
+    pids_limit: 256

@@ -34,7 +34,7 @@ Alvenqis_Network/                          # git root
 │   ├── alvenqis-examples/
 │   ├── alvenqis-devnet/
 │   ├── alvenqis-docker/
-│   └── alvenqis-release/                  # packaging + VPS control plane
+│   └── alvenqis-release/                  # packaging + Alvenqis Setup External
 │
 ├── Blockchain-docs/
 │   ├── human/                             # public human documentation site sources

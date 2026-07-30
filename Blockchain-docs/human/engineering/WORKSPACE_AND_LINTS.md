@@ -26,7 +26,7 @@ Root `Cargo.toml` lists only crates that:
 | `alvenqis-miner` | NVIDIA CUDA-only FiroPoW miner |
 | `alvenqis-mining-pool` | Pool prototype |
 | `alvenqis-desktop` | egui Control Center (legacy shell) |
-| `alvenqis-release/vps-control-plane/admin-server` | VPS admin agent |
+| `alvenqis-release/alvenqis-setup-external/admin-server` | VPS admin agent |
 
 ### Out of workspace (by design)
 

@@ -63,7 +63,7 @@ Blockchain-scripts/release/release-gate.ps1 --help
 - candidate-genesis checkpoint/proof tests and deterministic multithreaded
   FiroPoW search tests through the Rust workspace suite
 - `npm ci` and `npm run build` for the explorer and public documentation website
-- static VPS control-plane validation on the Bash gate
+- static Alvenqis Setup External validation on the Bash gate
 - Required release and security documentation files
 - Required mainnet-candidate config files
 
@@ -72,7 +72,7 @@ The GitHub `Release Gate` workflow reports four component jobs:
 - documentation and security;
 - Rust workspace;
 - web applications;
-- VPS control plane.
+- Alvenqis Setup External.
 
 A final `Release Gate` job succeeds only when all four component jobs succeed.
 
@@ -83,7 +83,7 @@ A final `Release Gate` job succeeds only when all four component jobs succeed.
 | Allowed | Not allowed |
 |---|---|
 | “Release gate (G1) passed for Mainnet Candidate” | “Mainnet is live” |
-| “Safe to build candidate installers / VPS control-plane bundle for rehearsal” | “Production-ready public network” |
+| “Safe to build candidate installers / Alvenqis Setup External bundle for rehearsal” | “Production-ready public network” |
 | Continue G2 checklist / controlled VPS rehearsal | Skip external review or multi-host soak |
 
 ---

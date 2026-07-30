@@ -27,7 +27,7 @@ Alvenqis Network is an experimental Rust-based Layer 1 blockchain focused on:
 The current network is a **Mainnet Candidate**, not a public production
 Mainnet. The candidate implementation includes a node, wallet, RPC gateway,
 indexer, explorer, mining pool, miner, desktop control center, browser native
-host, Rust SDK and role-based VPS control plane.
+host, Rust SDK and role-based Alvenqis Setup External.
 
 The repository does not currently claim:
 

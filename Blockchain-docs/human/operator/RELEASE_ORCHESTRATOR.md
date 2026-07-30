@@ -32,14 +32,14 @@ build, gate, or deployment logic:
 | WSL2 Ubuntu preparation | `Blockchain-scripts/release/setup-wsl-linux-build-host.sh` and `wsl-linux-setup.sh` |
 | Linux Control Center build | `Blockchain-scripts/release/build-linux-desktop.sh` |
 | Software/security release gate | `Blockchain-scripts/release/release-gate.ps1` |
-| Commit/push and VPS bundle release | `Blockchain-scripts/github/sync-and-release-vps.ps1` |
+| Commit/push and Setup External bundle release | `Blockchain-scripts/github/sync-and-release-setup-external.ps1` |
 | Candidate packages | existing candidate Windows, Linux, and VPS GitHub Actions workflows |
-| Immutable Docker images | `.github/workflows/docker-control-plane-images.yml` through `gh` |
+| Immutable Docker images | `.github/workflows/setup-external-images.yml` through `gh` |
 | VPS stack update | authenticated `POST /api/deploy`, polled through `GET /api/job` |
 | VPS versions/containers | authenticated `GET /api/stack` |
 
 The legacy `Blockchain-prototype/alvenqis-release/vps/` tree is never used.
-Only `alvenqis-release/vps-control-plane/` is in the active path.
+Only `alvenqis-release/alvenqis-setup-external/` is in the active path.
 
 ## Local VPS operator profile
 

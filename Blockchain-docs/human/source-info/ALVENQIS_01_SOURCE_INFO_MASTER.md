@@ -53,7 +53,7 @@ application payloads remain off-chain.
 
 Implemented candidate components include core, node, wallet tooling, RPC,
 indexer, explorer, CUDA miner, pool prototype, Tauri Control Center, SDKs, and
-the VPS control plane. Smart contracts, staking, DAO, marketplace, Passport,
+the Alvenqis Setup External. Smart contracts, staking, DAO, marketplace, Passport,
 native NFT/product standards, and public production Mainnet are not live.
 
 Exact maturity and limitations belong in `../release/NETWORK_MATURITY.md` rather

@@ -32,7 +32,7 @@ reviews are not accepted as release evidence.
 | P0 | Wallet and desktop signing boundary | `Blockchain-prototype/alvenqis-wallet/`, `Blockchain-prototype/alvenqis-desktop-v2/src-tauri/` | Key custody, recovery, confirmation, command exposure, update integrity |
 | P1 | RPC gateway | `Blockchain-prototype/alvenqis-rpc-gateway/` | Capability profiles, parsing, quotas, CORS, upstream trust, mining boundaries |
 | P1 | Miner and pool | `Blockchain-prototype/alvenqis-miner/`, `Blockchain-prototype/alvenqis-mining-pool/` | Work integrity, CUDA/core parity, Stratum TLS, share accounting, payout safety |
-| P1 | Release and control plane | `Blockchain-scripts/`, `Blockchain-prototype/alvenqis-release/vps-control-plane/` | Installer, secrets, RBAC, mTLS, container isolation, backups, upgrades, supply chain |
+| P1 | Release and control plane | `Blockchain-scripts/`, `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/` | Installer, secrets, RBAC, mTLS, container isolation, backups, upgrades, supply chain |
 | P2 | Indexer, explorer, website, SDKs | `Blockchain-prototype/alvenqis-indexer/`, `Blockchain-prototype/alvenqis-explorer/`, `Blockchain-prototype/alvenqis-website/`, `Blockchain-prototype/alvenqis-sdk*/` | Reorg correctness, untrusted rendering, API parity, false-data boundaries |
 
 ## Explicitly out of scope
@@ -63,7 +63,7 @@ node Blockchain-scripts/docs/audit-docs.mjs
 bash Blockchain-scripts/security/check-secrets.sh
 bash Blockchain-scripts/security/check-repo-hygiene.sh
 bash Blockchain-scripts/security/check-config-safety.sh
-bash Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/validate-stack.sh
+bash Blockchain-prototype/alvenqis-release/alvenqis-setup-external/scripts/validate-stack.sh
 
 cd Blockchain-prototype
 cargo fmt --all --check

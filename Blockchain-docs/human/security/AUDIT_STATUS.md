@@ -23,7 +23,7 @@ that the project has zero vulnerabilities or is safe for real funds.
 | RPC capability model | Profile validation and route tests separate public RPC from local/private mining; point tip queries and incremental cache-extension tests cover the read path | Deployed public endpoints require matching runtime probes |
 | Indexer synchronization | Append-only incremental indexing is compared with a full rebuild; reorgs retain the full-rebuild fallback | Long-running deployed catch-up and recovery still require runtime evidence |
 | Web products | Explorer and website lint/build/test jobs | Build success does not prove public service availability |
-| VPS control plane | Static validation, Compose role rendering and runtime image build | Independent clean-host and multi-host operation remain later-gate evidence |
+| Alvenqis Setup External | Static validation, Compose role rendering and runtime image build | Independent clean-host and multi-host operation remain later-gate evidence |
 | Desktop | Type checks, unit tests, web build and native Rust tests | Platform packaging and signing remain separate release evidence |
 | Supply chain | GitHub Actions are pinned to full commit SHAs; the node depends directly on the required rust-libp2p sub-crates and `Cargo.lock` excludes the unused vulnerable Hickory DNS path | Maintainer keys, dependency review, and release signing require operational controls |
 

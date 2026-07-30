@@ -52,7 +52,7 @@ bash "$scripts_root/security/check-config-safety.sh"
 bash "$scripts_root/security/check-workflow-pinning.sh"
 node "$scripts_root/docs/check-english-content.mjs"
 node "$scripts_root/docs/audit-docs.mjs"
-bash "$prototype_root/alvenqis-release/vps-control-plane/scripts/validate-stack.sh"
+bash "$prototype_root/alvenqis-release/alvenqis-setup-external/scripts/validate-stack.sh"
 
 assert_path_exists "$prototype_root/configs/mainnet-candidate.toml" "Mainnet-candidate config"
 assert_path_exists "$docs_root/release/MAINNET_CANDIDATE_CHECKLIST.md" "Mainnet-candidate checklist"

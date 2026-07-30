@@ -11,7 +11,7 @@ release commit that was approved from `main`.
 |---|---|---|---|
 | Website | `https://dohotstudio.com` | Cloudflare Tunnel HTTPS | 1Panel Node.js 24, port `18081` |
 | Website alias | `https://www.dohotstudio.com` | Cloudflare Tunnel HTTPS | Same website runtime |
-| RPC | `https://rpcnode.dohotstudio.com` | Cloudflare Tunnel HTTPS | VPS control plane |
+| RPC | `https://rpcnode.dohotstudio.com` | Cloudflare Tunnel HTTPS | Alvenqis Setup External |
 | Explorer | `https://dohotstudio.com/explorer` | Website + public RPC | Website runtime |
 | Pool statistics | `https://pool.dohotstudio.com` | Cloudflare Tunnel HTTPS | Read-only pool HTTP API |
 | Pool mining | `stratum+tls://stratum.dohotstudio.com:3333` | Direct TLS TCP, DNS-only | Pool Stratum listener |
@@ -40,14 +40,16 @@ replacement requires a new candidate tag.
   publishes Windows assets.
 - `candidate-linux-release.yml` builds and publishes Control Center V2 Linux
   packages from the same desktop candidate tag.
-- `candidate-vps-release.yml` validates and publishes the VPS control-plane
+- `candidate-setup-external-release.yml` validates and publishes the Alvenqis Setup External
   bundle from core or desktop candidate tags.
+- `candidate-linux-components-release.yml` independently tests and publishes
+  Linux node, RPC, indexer, explorer, pool, wallet CLI, and CUDA miner assets.
 - `candidate-quality.yml` runs repository checks for core and desktop candidate
   tags.
-- `release-gate.yml` validates documentation, security, Rust, web, and VPS
-  control-plane surfaces as separate required jobs.
-- `vps-control-plane-release.yml` builds the immutable VPS deployment bundle.
-- `docker-control-plane-images.yml` publishes canonical Alvenqis container
+- `release-gate.yml` validates documentation, security, Rust, web, and Setup
+  External surfaces as separate required jobs.
+- `alvenqis-setup-external-release.yml` builds the immutable VPS deployment bundle.
+- `setup-external-images.yml` publishes canonical Alvenqis container
   images; obsolete Veiron/Vireon image packages must not be referenced.
 
 ## Deployment order
@@ -55,7 +57,7 @@ replacement requires a new candidate tag.
 1. Merge the verified rebrand commit into `main`.
 2. Wait for required checks on that exact commit.
 3. Build and publish the Windows and Linux desktop candidate releases.
-4. Deploy the VPS control plane from that same `main` commit.
+4. Deploy the Alvenqis Setup External from that same `main` commit.
 5. Build and deploy the website according to
    `Blockchain-prototype/alvenqis-website/DEPLOYMENT.md`; do not replace or
    delete an existing 1Panel installation as part of blockchain automation.
@@ -65,5 +67,5 @@ replacement requires a new candidate tag.
 Operational details:
 
 - [Website/1Panel deployment](../Blockchain-prototype/alvenqis-website/DEPLOYMENT.md)
-- [VPS control plane](../Blockchain-prototype/alvenqis-release/vps-control-plane/README.md)
+- [Alvenqis Setup External](../Blockchain-prototype/alvenqis-release/alvenqis-setup-external/README.md)
 - [Private mining and Stratum](../Blockchain-docs/human/operator/PRIVATE_MINING_OPS.md)

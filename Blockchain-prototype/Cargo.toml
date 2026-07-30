@@ -17,7 +17,7 @@ members = [
     "alvenqis-indexer",
     "alvenqis-miner",
     "alvenqis-mining-pool",
-    "alvenqis-release/vps-control-plane/admin-server",
+    "alvenqis-release/alvenqis-setup-external/admin-server",
 ]
 resolver = "2"
 

@@ -49,7 +49,7 @@ Reserved folders and website concepts do not make these implemented features.
 - `/p2p/status` is currently part of the shared router, and the accepted public
   mining policy is inconsistent with the active gateway/RPC/smoke configuration.
   Both remain documented security blockers.
-- `alvenqis-release/vps-control-plane/` is active; `alvenqis-release/vps/` is frozen.
+- `alvenqis-release/alvenqis-setup-external/` is active; `alvenqis-release/vps/` is frozen.
 - Tauri is the only Control Center product; Electron must not be reintroduced.
 
 ## Storage boundary

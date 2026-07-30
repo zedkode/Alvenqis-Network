@@ -699,13 +699,14 @@ function Restart-IndependentWorkflows {
     switch ($choice) {
         "1" { $workflows = @("candidate-windows-release.yml") }
         "2" { $workflows = @("candidate-linux-release.yml") }
-        "3" { $workflows = @("candidate-vps-release.yml") }
+        "3" { $workflows = @("candidate-setup-external-release.yml") }
         "4" { $workflows = @("candidate-quality.yml") }
         "5" {
             $workflows = @(
                 "candidate-windows-release.yml",
                 "candidate-linux-release.yml",
-                "candidate-vps-release.yml",
+                "candidate-setup-external-release.yml",
+                "candidate-linux-components-release.yml",
                 "candidate-quality.yml"
             )
         }

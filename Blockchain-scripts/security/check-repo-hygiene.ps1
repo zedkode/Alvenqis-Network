@@ -31,11 +31,11 @@ $candidates = $candidates | Where-Object { $_ } | ForEach-Object { $_ -replace '
 
 # Allowlisted placeholder keepers under control-plane state (must stay empty dirs in git).
 $stateGitkeepAllow = @(
-  'Blockchain-prototype/alvenqis-release/vps-control-plane/state/config/generated/.gitkeep',
-  'Blockchain-prototype/alvenqis-release/vps-control-plane/state/secrets/.gitkeep',
+  'Blockchain-prototype/alvenqis-release/alvenqis-setup-external/state/config/generated/.gitkeep',
+  'Blockchain-prototype/alvenqis-release/alvenqis-setup-external/state/secrets/.gitkeep',
   # legacy path (pre monorepo layout) — still reject anything else there
-  'alvenqis-release/vps-control-plane/state/config/generated/.gitkeep',
-  'alvenqis-release/vps-control-plane/state/secrets/.gitkeep'
+  'alvenqis-release/alvenqis-setup-external/state/config/generated/.gitkeep',
+  'alvenqis-release/alvenqis-setup-external/state/secrets/.gitkeep'
 )
 
 $forbiddenPatterns = @(
@@ -44,7 +44,7 @@ $forbiddenPatterns = @(
   '(^|/)(\.review|\.agents|\.codex|\.cursor|\.grok|\.claude)(/|$)',
   '(^|/)Blockchain-docs/(internal|ai/rebrand-pack|human/internal)(/|$)',
   # Control-plane runtime state (monorepo + legacy roots). Only .gitkeep placeholders allowed.
-  '(^|/)((Blockchain-prototype/)?)alvenqis-release/vps-control-plane/state/.+',
+  '(^|/)((Blockchain-prototype/)?)alvenqis-release/alvenqis-setup-external/state/.+',
   '(^|/)chain\.jsonl$',
   '\.(log|pid|tmp|bak|orig|rej|db|sqlite|exe|dll|msi|AppImage|deb|rpm|apk|aab)$'
 )

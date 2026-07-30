@@ -15,7 +15,7 @@ the order and truth boundaries, not a second independent backlog.
 | Mining | `Blockchain-prototype/alvenqis-miner/`, `Blockchain-prototype/alvenqis-mining-pool/`, `Blockchain-docs/human/mining/` |
 | Clients | `Blockchain-prototype/alvenqis-desktop-v2/`, `Blockchain-prototype/alvenqis-wallet/`, `Blockchain-prototype/alvenqis-browser/` |
 | Website | `Blockchain-prototype/alvenqis-website/` |
-| Operations | `Blockchain-scripts/`, `Blockchain-prototype/alvenqis-release/vps-control-plane/`, `Blockchain-docs/human/operator/` |
+| Operations | `Blockchain-scripts/`, `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/`, `Blockchain-docs/human/operator/` |
 | Maturity | `Blockchain-docs/human/release/`, `Blockchain-docs/internal/memory/` |
 
 All active component names use `alvenqis-*`. References to the retired Veiron or

@@ -540,7 +540,7 @@ function Get-ActionSummary {
     switch ($SelectedAction) {
         "Start" { return "start local node, RPC, indexer refresh, and explorer" }
         "Restart" { return "restart local node, RPC, indexer refresh, and explorer" }
-        "UpdateVps" { return "run release gates, publish VPS release/images, and deploy through the authenticated admin API" }
+        "UpdateVps" { return "run release gates, publish Setup External release/images, and deploy through the authenticated admin API" }
         "BuildWindows" { return "build the Windows Control Center" }
         "BuildLinux" { return "prepare the existing WSL2 Ubuntu host and build the Linux Control Center" }
         "BuildBoth" { return "build Windows and Linux Control Center packages" }
@@ -563,7 +563,7 @@ function Confirm-Plan {
         default { 'none' }
     })"
     Write-Host "  VPS environment: $(if (Test-VpsAction $SelectedAction) { $script:SelectedEnvironment } else { 'none' })"
-    Write-Host "  Push local changes: $(if ($script:IncludeLocalChanges) { 'yes, through sync-and-release-vps.ps1 -SyncOnly' } else { 'no' })"
+    Write-Host "  Push local changes: $(if ($script:IncludeLocalChanges) { 'yes, through sync-and-release-setup-external.ps1 -SyncOnly' } else { 'no' })"
     Write-Host "  Mode: $(if ($DryRun) { 'DRY RUN (execution commands are not run)' } else { 'LIVE' })"
     if ($Yes) { return $true }
     $answer = (Read-Host "Proceed? [y/N]").Trim().ToLowerInvariant()
@@ -666,8 +666,8 @@ function Invoke-LinuxBuild {
 
 function Invoke-SyncAndReleaseVps {
     param([switch]$SyncOnly)
-    $script:CurrentStep = if ($SyncOnly) { "commit and push confirmed local changes" } else { "VPS release" }
-    $sync = Join-Path $script:RepoRoot "Blockchain-scripts\github\sync-and-release-vps.ps1"
+    $script:CurrentStep = if ($SyncOnly) { "commit and push confirmed local changes" } else { "Setup External release" }
+    $sync = Join-Path $script:RepoRoot "Blockchain-scripts\github\sync-and-release-setup-external.ps1"
     $arguments = @()
     if ($SyncOnly) { $arguments += "-SyncOnly" }
     Invoke-PowerShellScript -Path $sync -Arguments $arguments -DisplayName $(if ($SyncOnly) { "conservative confirmed sync through existing VPS sync script" } else { "VPS tag/release through existing sync script" }) -SkipInDryRun | Out-Null
@@ -761,7 +761,7 @@ function Invoke-CandidateRelease {
     }
     $script:CandidateTag = $tag
     if (-not $DryRun) {
-        foreach ($workflow in @("candidate-windows-release.yml", "candidate-linux-release.yml", "candidate-vps-release.yml")) {
+        foreach ($workflow in @("candidate-windows-release.yml", "candidate-linux-release.yml", "candidate-setup-external-release.yml", "candidate-linux-components-release.yml")) {
             Wait-GitHubWorkflow -Workflow $workflow -HeadBranch $tag -NotBefore $started
         }
     }
@@ -772,14 +772,14 @@ function Invoke-DockerImagesWorkflow {
     if ([string]::IsNullOrWhiteSpace($Version)) {
         throw "An immutable Docker image version is required."
     }
-    $script:CurrentStep = "Docker control-plane images"
+    $script:CurrentStep = "Setup External container images"
     $gh = Get-GhExecutable
     $started = Get-Date
     Invoke-ExternalCommand -FilePath $gh -ArgumentList @(
-        "workflow", "run", "docker-control-plane-images.yml", "--ref", "main", "-f", "version=$Version"
-    ) -DisplayName "trigger Docker control-plane images workflow" -SkipInDryRun | Out-Null
+        "workflow", "run", "setup-external-images.yml", "--ref", "main", "-f", "version=$Version"
+    ) -DisplayName "trigger Setup External images workflow" -SkipInDryRun | Out-Null
     if (-not $DryRun) {
-        Wait-GitHubWorkflow -Workflow "docker-control-plane-images.yml" -HeadBranch "main" -NotBefore $started
+        Wait-GitHubWorkflow -Workflow "setup-external-images.yml" -HeadBranch "main" -NotBefore $started
     }
 }
 
@@ -1158,9 +1158,9 @@ try {
             Invoke-ReleaseGate
             Invoke-SyncAndReleaseVps
             if (-not $DryRun) {
-                $script:VpsReleaseTag = [string](Get-TagPointingAtHead -Pattern "vps-control-v*-rc.*")
+                $script:VpsReleaseTag = [string](Get-TagPointingAtHead -Pattern "setup-external-v*-rc.*")
                 if ([string]::IsNullOrWhiteSpace($script:VpsReleaseTag)) {
-                    throw "The existing VPS release script completed without a VPS release tag at HEAD."
+                    throw "The existing Setup External release script completed without a Setup External release tag at HEAD."
                 }
             }
             else {
@@ -1176,7 +1176,7 @@ try {
             Invoke-ReleaseGate
             Invoke-SyncAndReleaseVps
             if (-not $DryRun) {
-                $script:VpsReleaseTag = [string](Get-TagPointingAtHead -Pattern "vps-control-v*-rc.*")
+                $script:VpsReleaseTag = [string](Get-TagPointingAtHead -Pattern "setup-external-v*-rc.*")
             }
             Invoke-CandidateRelease
             Invoke-DockerImagesWorkflow -Version $script:CandidateTag

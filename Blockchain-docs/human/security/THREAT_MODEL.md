@@ -30,7 +30,7 @@ does not claim complete threat coverage.
 | RPC capability boundary | `Blockchain-prototype/alvenqis-rpc-gateway/` and control-plane gateway config | Unauthorized mutation/mining access, denial of service, or dishonest health |
 | Wallet keys and signing intent | `Blockchain-prototype/alvenqis-wallet/` and `alvenqis-desktop-v2/` | Key theft, unauthorized signing, or wrong-network transfer |
 | Mining work and shares | `alvenqis-miner/` and `alvenqis-mining-pool/` | Invalid work, share theft, payout fraud, or mining centralization |
-| Release and operator authority | `Blockchain-scripts/` and `alvenqis-release/vps-control-plane/` | Supply-chain compromise, fleet takeover, destructive upgrade, or data loss |
+| Release and operator authority | `Blockchain-scripts/` and `alvenqis-release/alvenqis-setup-external/` | Supply-chain compromise, fleet takeover, destructive upgrade, or data loss |
 
 ## Trust boundaries
 

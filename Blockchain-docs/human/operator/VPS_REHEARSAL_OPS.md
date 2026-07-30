@@ -9,15 +9,15 @@ work.
 Package root on the monorepo:
 
 ```text
-Blockchain-prototype/alvenqis-release/vps-control-plane/
+Blockchain-prototype/alvenqis-release/alvenqis-setup-external/
 ```
 
 Typical install path on the controlled host (adjust if different):
 
 ```text
-/home/apps/alvenqis-network/Blockchain-prototype/alvenqis-release/vps-control-plane
+/home/apps/alvenqis-network/Blockchain-prototype/alvenqis-release/alvenqis-setup-external
 # or legacy layout:
-/home/apps/alvenqis-network/alvenqis-release/vps-control-plane
+/home/apps/alvenqis-network/alvenqis-release/alvenqis-setup-external
 ```
 
 Project-operated rehearsal example: `https://rpcnode.dohotstudio.com`. It is
@@ -42,7 +42,7 @@ not an availability or trust dependency for an independent operator.
 On the VPS, as the operator user:
 
 ```bash
-cd /path/to/vps-control-plane
+cd /path/to/alvenqis-setup-external
 test -f .env && echo "has .env"
 test -f VERSION && cat VERSION
 git rev-parse --short HEAD 2>/dev/null || echo "not a git checkout"
@@ -62,9 +62,9 @@ From any laptop with network (no SSH required):
 
 ```bash
 # monorepo root
-bash Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/smoke-public-candidate.sh
+bash Blockchain-prototype/alvenqis-release/alvenqis-setup-external/scripts/smoke-public-candidate.sh
 # or PowerShell:
-# powershell -File Blockchain-prototype/alvenqis-release/vps-control-plane/scripts/smoke-public-candidate.ps1
+# powershell -File Blockchain-prototype/alvenqis-release/alvenqis-setup-external/scripts/smoke-public-candidate.ps1
 ```
 
 The smoke verifies the reviewed public capability contract:
@@ -79,7 +79,7 @@ The smoke verifies the reviewed public capability contract:
 ## 2. Backup (on the VPS)
 
 ```bash
-cd /path/to/vps-control-plane
+cd /path/to/alvenqis-setup-external
 chmod +x scripts/*.sh docker/*.sh docker/backup-scheduler/*.sh 2>/dev/null || true
 ./scripts/backup-now.sh
 ls -la state/backups/
@@ -125,7 +125,7 @@ If restore is only a dry-run on a **second** host: copy the backup directory off
 See also `MANUAL_UPGRADE.md`. Condensed:
 
 ```bash
-cd /path/to/vps-control-plane
+cd /path/to/alvenqis-setup-external
 ./scripts/backup-now.sh
 git fetch --all --tags
 # Explicitly check out the reviewed commit/tag (no auto latest)

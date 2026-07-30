@@ -142,12 +142,12 @@ excluded by policy.
 | `Blockchain-prototype/alvenqis-mining-pool/README.md` | Public | Mainnet Candidate / Prototype. Not a live public mining pool.** | Alvenqis Mining Pool |
 | `Blockchain-prototype/alvenqis-node/README.md` | Public | Mainnet Candidate / Prototype / not public Mainnet | alvenqis-node |
 | `Blockchain-prototype/alvenqis-release/README.md` | Public | Mainnet Candidate. This folder does not declare a live public mainnet. | Alvenqis Release |
-| `Blockchain-prototype/alvenqis-release/vps-control-plane/DOCKER_DEPLOYMENT.md` | Component reference | Not stated | Alvenqis Docker Control Plane 2.1.0-no-autoupdate |
-| `Blockchain-prototype/alvenqis-release/vps-control-plane/INSTALL_AND_UNINSTALL.md` | Component reference | Mainnet Candidate / Prototype | Docker Installation and Retention |
-| `Blockchain-prototype/alvenqis-release/vps-control-plane/MANUAL_UPGRADE.md` | Component reference | Not stated | Manual upgrades only |
-| `Blockchain-prototype/alvenqis-release/vps-control-plane/MIGRATION_FROM_V1.md` | Component reference | Not stated | Migration from the previous Docker stack |
-| `Blockchain-prototype/alvenqis-release/vps-control-plane/monitoring/README.md` | Component reference | Not stated | Alvenqis control-plane monitoring |
-| `Blockchain-prototype/alvenqis-release/vps-control-plane/README.md` | Component reference | Mainnet Candidate / Prototype. This is not a Mainnet Live declaration. | Alvenqis Docker VPS Control Plane |
+| `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/DOCKER_DEPLOYMENT.md` | Component reference | Not stated | Alvenqis Alvenqis Setup External 2.1.0-no-autoupdate |
+| `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/INSTALL_AND_UNINSTALL.md` | Component reference | Mainnet Candidate / Prototype | Docker Installation and Retention |
+| `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/MANUAL_UPGRADE.md` | Component reference | Not stated | Manual upgrades only |
+| `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/MIGRATION_FROM_V1.md` | Component reference | Not stated | Migration from the previous Docker stack |
+| `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/monitoring/README.md` | Component reference | Not stated | Alvenqis control-plane monitoring |
+| `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/README.md` | Component reference | Mainnet Candidate / Prototype. This is not a Mainnet Live declaration. | Alvenqis Docker VPS Control Plane |
 | `Blockchain-prototype/alvenqis-rpc-gateway/README.md` | Public | Mainnet Candidate / public prototype / not public Mainnet | alvenqis-rpc-gateway |
 | `Blockchain-prototype/alvenqis-sdk-rust/docs/API.md` | Public | Not stated | alvenqis-sdk-rust — API map (v0.1) |
 | `Blockchain-prototype/alvenqis-sdk-rust/docs/JS_PARITY.md` | Public | Not stated | TypeScript `@alvenqis/sdk` ↔ Rust `alvenqis-sdk-rust` |

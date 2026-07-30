@@ -51,6 +51,6 @@ FiroPoW solutions. Pool mode uses the pool share target and submits shares with
 the same canonical nonce, mix hash, and final hash fields. Both modes use the
 same CUDA engine; neither has a CPU mining path.
 
-The VPS control plane runs node, RPC, indexer, and pool services. It does not
+The Alvenqis Setup External runs node, RPC, indexer, and pool services. It does not
 run the CUDA desktop miner unless the host explicitly has a supported NVIDIA
 GPU, which is not part of the standard VPS bundle.

@@ -19,7 +19,7 @@ explicit accepted decision.
 - Upgrade activation: fixed-height flag day for launch scope.
 - Early checkpoints: release-pinned checkpoints, currently including genesis.
 - Desktop product: Tauri Control Center only.
-- Active VPS package: `alvenqis-release/vps-control-plane/` only.
+- Active VPS package: `alvenqis-release/alvenqis-setup-external/` only.
 
 ## Unresolved protocol and policy decisions
 

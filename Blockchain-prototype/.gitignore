@@ -238,15 +238,15 @@ temp/
 *.orig
 *.rej
 
-alvenqis-release/vps-control-plane/state/*
-!alvenqis-release/vps-control-plane/state/config/
-!alvenqis-release/vps-control-plane/state/secrets/
-alvenqis-release/vps-control-plane/state/config/*
-!alvenqis-release/vps-control-plane/state/config/generated/
-alvenqis-release/vps-control-plane/state/config/generated/*
-!alvenqis-release/vps-control-plane/state/config/generated/.gitkeep
-alvenqis-release/vps-control-plane/state/secrets/*
-!alvenqis-release/vps-control-plane/state/secrets/.gitkeep
+alvenqis-release/alvenqis-setup-external/state/*
+!alvenqis-release/alvenqis-setup-external/state/config/
+!alvenqis-release/alvenqis-setup-external/state/secrets/
+alvenqis-release/alvenqis-setup-external/state/config/*
+!alvenqis-release/alvenqis-setup-external/state/config/generated/
+alvenqis-release/alvenqis-setup-external/state/config/generated/*
+!alvenqis-release/alvenqis-setup-external/state/config/generated/.gitkeep
+alvenqis-release/alvenqis-setup-external/state/secrets/*
+!alvenqis-release/alvenqis-setup-external/state/secrets/.gitkeep
 
 # -----------------------------------------------------------------------------
 # Release artifacts, package outputs, staging, and archives

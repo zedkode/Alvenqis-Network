@@ -83,6 +83,6 @@ incompatible change can make stored chain data fail validation.
 ## Update checklist
 
 1. Verify the downloaded release against `SHA256SUMS`.
-2. Install the matching 1.0.0 Control Center and VPS control-plane artifacts.
+2. Install the matching 1.0.0 Control Center and Alvenqis Setup External artifacts.
 3. Confirm `alvenqis-miner devices` reports CUDA and no CPU/OpenCL backend.
 4. Start pool mining and confirm accepted shares and a non-zero hashrate.

@@ -147,8 +147,8 @@ jobs:
           npm ci
           npm test
 
-  control-plane:
-    name: VPS control plane
+  setup-external:
+    name: Alvenqis Setup External
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -160,12 +160,12 @@ jobs:
       - name: Install validation parser
         run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.2
 
-      - name: Validate control-plane configuration
-        working-directory: Blockchain-prototype/alvenqis-release/vps-control-plane
+      - name: Validate Setup External configuration
+        working-directory: Blockchain-prototype/alvenqis-release/alvenqis-setup-external
         run: bash ./scripts/validate-stack.sh --require-docker
 
       - name: Build runtime image
-        run: docker build --file Blockchain-prototype/alvenqis-release/vps-control-plane/docker/Dockerfile --tag alvenqis-runtime:release-gate .
+        run: docker build --file Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/Dockerfile --tag alvenqis-runtime:release-gate .
 
   release-gate:
     name: Release Gate
@@ -174,7 +174,7 @@ jobs:
       - documentation-security
       - rust
       - web
-      - control-plane
+      - setup-external
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -183,13 +183,13 @@ jobs:
           DOCUMENTATION_SECURITY_RESULT: ${{ needs.documentation-security.result }}
           RUST_RESULT: ${{ needs.rust.result }}
           WEB_RESULT: ${{ needs.web.result }}
-          CONTROL_PLANE_RESULT: ${{ needs.control-plane.result }}
+          SETUP_EXTERNAL_RESULT: ${{ needs.setup-external.result }}
         run: |
           set -euo pipefail
           for result in \
             "$DOCUMENTATION_SECURITY_RESULT" \
             "$RUST_RESULT" \
             "$WEB_RESULT" \
-            "$CONTROL_PLANE_RESULT"; do
+            "$SETUP_EXTERNAL_RESULT"; do
             test "$result" = "success"
           done

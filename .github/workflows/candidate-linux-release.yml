@@ -121,7 +121,7 @@ jobs:
           cat > release-notes.md <<'EOF'
           ## Mainnet Candidate prerelease — not public Mainnet
 
-          Windows, Linux, and VPS assets are built independently from the same candidate tag. A platform failure remains visible and does not certify another platform.
+          Windows, Linux, server-component, and Setup External assets are built independently from the same candidate tag. A component failure remains visible and does not block artifacts that passed their own checks.
 
           The desktop product is Tauri-based. Electron, CPU mining, and OpenCL mining are not shipped. Verify every platform-specific SHA-256 checksum file before testing an asset.
           EOF

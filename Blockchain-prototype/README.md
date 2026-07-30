@@ -22,7 +22,7 @@ cargo build --workspace --release
 | `alvenqis-desktop-v2` | Control Center |
 | `alvenqis-explorer` | Explorer UI |
 | `alvenqis-website` | Website |
-| `alvenqis-release` | Packaging + VPS control plane |
+| `alvenqis-release` | Packaging + Alvenqis Setup External |
 | `configs/` | Network configs |
 | `shared/` | Brand, constants, schemas |
 

@@ -33,5 +33,5 @@ evidence or make existing wallet data unreadable.
   renamed for rollback; they are not deleted.
 
 The active Docker deployment lives only in
-`alvenqis-release/vps-control-plane/`. The `alvenqis-docker` staging folder was an
+`alvenqis-release/alvenqis-setup-external/`. The `alvenqis-docker` staging folder was an
 import source and must not become a parallel control-plane implementation.

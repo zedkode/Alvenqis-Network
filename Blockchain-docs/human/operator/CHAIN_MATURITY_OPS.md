@@ -160,7 +160,7 @@ powershell -File Blockchain-scripts\operator\chain-maturity-snapshot.ps1
 
 ---
 
-## Drill E — VPS control-plane backup/restore (package level)
+## Drill E — Alvenqis Setup External backup/restore (package level)
 
 Already defined in Task 1:
 

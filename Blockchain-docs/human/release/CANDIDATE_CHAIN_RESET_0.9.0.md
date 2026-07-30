@@ -55,5 +55,5 @@ With ~177 MH/s continuous, equilibrium net_diff is ~**33** → ~**1 minute** per
 
 The direct-binary deploy and chain-reset scripts used for this historical event
 have been removed. They are intentionally unavailable because the supported VPS
-path is now the Docker control plane in `alvenqis-release/vps-control-plane/`.
+path is now the Docker control plane in `alvenqis-release/alvenqis-setup-external/`.
 This record must not be used as current operational guidance.

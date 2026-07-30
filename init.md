@@ -68,7 +68,7 @@ Under `Blockchain-prototype/`:
 | Desktop Control Center | `alvenqis-desktop-v2` | Tauri app |
 | Explorer | `alvenqis-explorer` | Vite React UI |
 | Website | `alvenqis-website` | Marketing / info site |
-| VPS control plane | `alvenqis-release/vps-control-plane` | Docker stack, admin |
+| Alvenqis Setup External | `alvenqis-release/alvenqis-setup-external` | Docker stack, admin |
 | Network configs | `configs/` | local + mainnet-candidate |
 | Shared brand/constants | `shared/` | logos, schemas, constants |
 

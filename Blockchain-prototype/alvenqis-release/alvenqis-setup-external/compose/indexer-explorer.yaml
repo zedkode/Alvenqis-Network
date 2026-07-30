@@ -1,0 +1,71 @@
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${CONTAINER_LOG_MAX_SIZE:-20m}
+    max-file: ${CONTAINER_LOG_MAX_FILES:-3}
+
+x-service-guardrails: &service-guardrails
+  restart: unless-stopped
+  networks: [alvenqis-internal]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  pids_limit: 256
+  stop_grace_period: 30s
+  logging: *default-logging
+
+x-runtime-image: &runtime-image
+  <<: *service-guardrails
+  image: ${ALVENQIS_RUNTIME_IMAGE:-ghcr.io/zedkode/alvenqis-runtime}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+  build:
+    context: ${ALVENQIS_HOST_ROOT:-../../..}
+    dockerfile: Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/Dockerfile
+
+x-runtime-common: &runtime-common
+  <<: *runtime-image
+  env_file: [.env]
+  secrets: [alvenqis_storage_key]
+  volumes:
+    - ${ALVENQIS_STATE_ROOT:-./state}/config/generated:/config
+    - ${ALVENQIS_STATE_ROOT:-./state}/data:/data/.alvenqis-mainnet
+    - ${ALVENQIS_STATE_ROOT:-./state}/backups/rocksdb-repository:/backups/rocksdb-repository
+  read_only: true
+  tmpfs: [/tmp:size=128m]
+
+services:
+  alvenqis-indexer:
+    <<: *runtime-common
+    environment:
+      ALVENQIS_COMPONENT: indexer
+      INDEXER_INTERVAL_SECONDS: ${INDEXER_INTERVAL_SECONDS:-5}
+      INDEXER_FAILURE_BACKOFF_MAX_SECONDS: ${INDEXER_FAILURE_BACKOFF_MAX_SECONDS:-60}
+    depends_on:
+      alvenqis-node: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f '^alvenqis-indexer ' >/dev/null && test -s /data/.alvenqis-mainnet/indexer/.last-success && find /data/.alvenqis-mainnet/indexer/.last-success -mmin -10 | grep -q ."]
+      interval: 30s
+      timeout: 5s
+      retries: 8
+      start_period: 180s
+    mem_limit: ${INDEXER_MEMORY_LIMIT:-768M}
+    cpus: ${INDEXER_CPU_LIMIT:-0.75}
+    pids_limit: 256
+
+  alvenqis-explorer:
+    <<: *service-guardrails
+    profiles: [explorer]
+    image: ${ALVENQIS_EXPLORER_IMAGE:-ghcr.io/zedkode/alvenqis-explorer}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
+    build:
+      context: ${ALVENQIS_HOST_REPO:-../..}/alvenqis-explorer
+      dockerfile: Dockerfile
+      args:
+        VITE_ALVENQIS_RPC_URL: https://${PUBLIC_RPC_HOST:-rpc.example.invalid}
+    read_only: true
+    tmpfs: [/tmp:size=32m]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+    mem_limit: ${EXPLORER_MEMORY_LIMIT:-192M}
+    cpus: ${EXPLORER_CPU_LIMIT:-0.15}
+    pids_limit: 128

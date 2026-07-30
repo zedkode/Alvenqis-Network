@@ -5,13 +5,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-DEFAULT_OLD = Path("/home/vireon/network/vireon-release/vps-control-plane/.env")
+DEFAULT_OLD = Path("/home/vireon/network/vireon-release/alvenqis-setup-external/.env")
 DEFAULT_REPO = Path("/opt/alvenqis/repo")
 DEFAULT_NEW = (
     DEFAULT_REPO
     / "Blockchain-prototype"
     / "alvenqis-release"
-    / "vps-control-plane"
+    / "alvenqis-setup-external"
     / ".env"
 )
 # Genesis recipient for Mainnet Candidate (provisional pool treasury until operator rotates)
@@ -56,14 +56,14 @@ def main() -> None:
     new = args.new.resolve()
     repo_root = args.repo_root.resolve()
     prototype_root = repo_root / "Blockchain-prototype"
-    if not (prototype_root / "alvenqis-release" / "vps-control-plane" / "docker" / "Dockerfile").is_file():
+    if not (prototype_root / "alvenqis-release" / "alvenqis-setup-external" / "docker" / "Dockerfile").is_file():
         raise SystemExit(
             f"canonical Docker build context is missing below checkout: {prototype_root}"
         )
     workspace = new.parent
     vals = load_env(old)
     env = {
-        "COMPOSE_PROJECT_NAME": "alvenqis-control-plane",
+        "COMPOSE_PROJECT_NAME": "alvenqis-setup-external",
         "STACK_VERSION": args.stack_version,
         "TZ": pick(vals, "TZ", default="Europe/Bucharest"),
         "DEPLOYMENT_SOURCE": "build",
@@ -105,7 +105,7 @@ def main() -> None:
         "CLOUDFLARE_MODE": pick(vals, "CLOUDFLARE_MODE", default="tunnel"),
         "CLOUDFLARE_ACCOUNT_ID": pick(vals, "CLOUDFLARE_ACCOUNT_ID"),
         "CLOUDFLARE_ZONE_ID": pick(vals, "CLOUDFLARE_ZONE_ID"),
-        "CLOUDFLARE_TUNNEL_NAME": "alvenqis-control-plane",
+        "CLOUDFLARE_TUNNEL_NAME": "alvenqis-setup-external",
         "PUBLIC_IPV4": pick(vals, "PUBLIC_IPV4"),
         "CLOUDFLARE_PROXY_HTTP": pick(vals, "CLOUDFLARE_PROXY_HTTP", default="true"),
         "ENABLE_POOL": "true",

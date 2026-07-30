@@ -34,7 +34,7 @@ Runnable under Mainnet Candidate / Prototype:
 - `alvenqis-miner` (NVIDIA CUDA-only FiroPoW; no CPU/OpenCL fallback) against RPC or pool
 - `alvenqis-mining-pool` **prototype** (not a public production pool)
 - `alvenqis-indexer` / explorer / website (candidate-scoped)
-- Optional VPS control-plane packaging under `alvenqis-release/vps-control-plane/`
+- Optional Alvenqis Setup External packaging under `alvenqis-release/alvenqis-setup-external/`
 
 Still **not** production-complete (non-exhaustive):
 

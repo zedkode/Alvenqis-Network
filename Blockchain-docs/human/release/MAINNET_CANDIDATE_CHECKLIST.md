@@ -10,7 +10,7 @@ explicit owner decision.
 
 - [ ] `node Blockchain-scripts/docs/audit-docs.mjs` exits 0.
 - [ ] The Windows or Bash G1 release gate exits 0 on the same commit.
-- [ ] `vps-control-plane/scripts/validate-stack.sh --require-docker` exits 0.
+- [ ] `alvenqis-setup-external/scripts/validate-stack.sh --require-docker` exits 0.
 - [ ] The public source-information set is version-controlled and all local
       documentation links resolve.
 - [ ] `KNOWN_LIMITATIONS.md` and `DECENTRALIZATION_READINESS.md` match the

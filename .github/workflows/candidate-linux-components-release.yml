@@ -1,0 +1,123 @@
+name: Candidate Linux Components Release
+
+on:
+  push:
+    tags:
+      - "v*-candidate.*"
+      - "desktop-v*-candidate.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing candidate tag
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: candidate-linux-components-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  prepare-release:
+    name: Prepare shared prerelease
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout candidate tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Verify tag and create or reuse prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
+          cat > release-notes.md <<'EOF'
+          ## Mainnet Candidate prerelease — not public Mainnet
+
+          Desktop, server-component, and Setup External assets are tested and
+          published independently. A failed component remains visible and does
+          not block artifacts that passed their own checks.
+
+          Verify the component-specific SHA-256 file before testing an asset.
+          Automatic cross-host discovery is not asserted by these G1 artifacts.
+          EOF
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --verify-tag \
+              --title "Alvenqis $RELEASE_TAG" \
+              --notes-file release-notes.md \
+              --prerelease \
+              || gh release view "$RELEASE_TAG" >/dev/null
+          fi
+
+  build-and-publish:
+    name: Build and publish ${{ matrix.component }}
+    needs: prepare-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - node
+          - rpc
+          - indexer
+          - explorer
+          - pool
+          - wallet-cli
+          - miner
+    steps:
+      - name: Checkout candidate tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        if: matrix.component != 'explorer'
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+
+      - name: Install Rust system dependencies
+        if: matrix.component != 'explorer'
+        run: sudo apt-get update && sudo apt-get install -y build-essential clang cmake libclang-dev libdbus-1-dev
+
+      - name: Install CUDA toolkit for miner
+        if: matrix.component == 'miner'
+        uses: Jimver/cuda-toolkit@3d45d157f327c09c04b50ee6ccdea2d9d017ec76
+        with:
+          cuda: "13.2.0"
+          method: network
+          sub-packages: '["nvcc", "cudart-dev"]'
+
+      - name: Setup Node.js for explorer
+        if: matrix.component == 'explorer'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Blockchain-prototype/alvenqis-explorer/package-lock.json
+
+      - name: Test and package component
+        run: bash Blockchain-scripts/release/build-linux-component-artifact.sh "${{ matrix.component }}" release-publish/component
+
+      - name: Keep component as workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: candidate-${{ matrix.component }}-${{ env.RELEASE_TAG }}
+          if-no-files-found: error
+          path: release-publish/component/*
+
+      - name: Upload passing component to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" release-publish/component/*
