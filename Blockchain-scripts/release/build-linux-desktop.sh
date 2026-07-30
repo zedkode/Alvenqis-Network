@@ -12,6 +12,29 @@ prototype="$root/Blockchain-prototype"
 desktop="$prototype/alvenqis-desktop-v2"
 output="$root/release-artifacts/linux-v2"
 bundles="deb,appimage,rpm"
+manifest_path="$desktop/src-tauri/resources/MANIFEST.json"
+manifest_backup="$(mktemp "${TMPDIR:-/tmp}/alvenqis-linux-manifest.XXXXXX")"
+manifest_existed=0
+
+restore_source_manifest() {
+  if [[ -z "${manifest_backup:-}" ]]; then
+    return
+  fi
+
+  if [[ "$manifest_existed" == "1" && -f "$manifest_backup" ]]; then
+    cp -p "$manifest_backup" "$manifest_path"
+  else
+    rm -f "$manifest_path"
+  fi
+  rm -f "$manifest_backup"
+  manifest_backup=""
+}
+
+if [[ -f "$manifest_path" ]]; then
+  cp -p "$manifest_path" "$manifest_backup"
+  manifest_existed=1
+fi
+trap restore_source_manifest EXIT HUP INT TERM
 
 while (($#)); do
   case "$1" in

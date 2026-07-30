@@ -12,10 +12,10 @@ excluded by policy.
 
 | Class | Documents |
 |---|---:|
-| Component reference | 20 |
+| Component reference | 21 |
 | Historical | 2 |
-| Public | 124 |
-| **Total** | **146** |
+| Public | 126 |
+| **Total** | **149** |
 
 ## Complete inventory
 
@@ -48,6 +48,7 @@ excluded by policy.
 | `Blockchain-docs/human/DOCUMENTATION_POLICY.md` | Public | Accepted workspace policy | Alvenqis Documentation Policy |
 | `Blockchain-docs/human/engineering/BACKUP_RESTORE_DRILL_2026-07-30.md` | Public | Point-in-time local recovery evidence / `TM-308` remains In Progress | SQLite Backup and Restore Drill — 2026-07-30 |
 | `Blockchain-docs/human/engineering/DATA_INTEGRITY_VERIFICATION_2026-07-30.md` | Public | Local G1 engineering evidence / `TM-307` remains In Progress | Canonical SQLite Data-Integrity Verification — 2026-07-30 |
+| `Blockchain-docs/human/engineering/LINUX_COMPONENT_BUILD_EVIDENCE_2026-07-30.md` | Public | Local G1 packaging evidence / `TM-1110` remains In Progress | Linux Component and Desktop Build Evidence — 2026-07-30 |
 | `Blockchain-docs/human/engineering/LONG_CHAIN_REBUILD_BENCHMARK_2026-07-30.md` | Public | Point-in-time engineering measurement / `TM-205` remains In Progress | Long-Chain Rebuild Benchmark — 2026-07-30 |
 | `Blockchain-docs/human/engineering/WORKSPACE_AND_LINTS.md` | Public | Draft / engineering hygiene | Workspace Scope and Rust Lint Policy |
 | `Blockchain-docs/human/legal/LICENSING_POLICY.md` | Public | Draft / Accepted Repository Policy | Alvenqis Licensing Policy |
@@ -91,6 +92,7 @@ excluded by policy.
 | `Blockchain-docs/human/README.md` | Public | Current documentation index / mixed maturity | Alvenqis Network Documentation |
 | `Blockchain-docs/human/release/CANDIDATE_CHAIN_RESET_0.10.0.md` | Historical | Not stated | Candidate chain reset — FiroPoW 0.10.0 |
 | `Blockchain-docs/human/release/CANDIDATE_CHAIN_RESET_0.9.0.md` | Historical | ** Mainnet Candidate / Prototype (not public Mainnet) | Mainnet Candidate chain reset — product 0.9.0 |
+| `Blockchain-docs/human/release/COMPONENT_RELEASES.md` | Public | Mainnet Candidate / Prototype | Component Candidate Releases |
 | `Blockchain-docs/human/release/DECENTRALIZATION_READINESS.md` | Public | Draft readiness register / all closure claims evidence-gated | Decentralization Readiness Register |
 | `Blockchain-docs/human/release/GENESIS_CEREMONY_AND_ALLOCATION.md` | Public | Draft / independent ceremony and final allocation unresolved | Genesis Ceremony and Allocation |
 | `Blockchain-docs/human/release/GENESIS.md` | Public | Draft / Mainnet Candidate / Prototype — **Alvenqis Network rebrand freeze** | Mainnet Candidate Genesis |
@@ -141,13 +143,14 @@ excluded by policy.
 | `Blockchain-prototype/alvenqis-miner/README.md` | Public | Not stated | Alvenqis CUDA Miner |
 | `Blockchain-prototype/alvenqis-mining-pool/README.md` | Public | Mainnet Candidate / Prototype. Not a live public mining pool.** | Alvenqis Mining Pool |
 | `Blockchain-prototype/alvenqis-node/README.md` | Public | Mainnet Candidate / Prototype / not public Mainnet | alvenqis-node |
-| `Blockchain-prototype/alvenqis-release/README.md` | Public | Mainnet Candidate. This folder does not declare a live public mainnet. | Alvenqis Release |
+| `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/APPLICATIONS.md` | Component reference | Mainnet Candidate / Prototype | Setup External Application Map |
 | `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/DOCKER_DEPLOYMENT.md` | Component reference | Not stated | Alvenqis Alvenqis Setup External 2.1.0-no-autoupdate |
 | `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/INSTALL_AND_UNINSTALL.md` | Component reference | Mainnet Candidate / Prototype | Docker Installation and Retention |
 | `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/MANUAL_UPGRADE.md` | Component reference | Not stated | Manual upgrades only |
 | `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/MIGRATION_FROM_V1.md` | Component reference | Not stated | Migration from the previous Docker stack |
 | `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/monitoring/README.md` | Component reference | Not stated | Alvenqis control-plane monitoring |
-| `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/README.md` | Component reference | Mainnet Candidate / Prototype. This is not a Mainnet Live declaration. | Alvenqis Docker VPS Control Plane |
+| `Blockchain-prototype/alvenqis-release/alvenqis-setup-external/README.md` | Component reference | Mainnet Candidate / Prototype. This is not a Mainnet Live declaration. | Alvenqis Setup External |
+| `Blockchain-prototype/alvenqis-release/README.md` | Public | Mainnet Candidate. This folder does not declare a live public mainnet. | Alvenqis Release |
 | `Blockchain-prototype/alvenqis-rpc-gateway/README.md` | Public | Mainnet Candidate / public prototype / not public Mainnet | alvenqis-rpc-gateway |
 | `Blockchain-prototype/alvenqis-sdk-rust/docs/API.md` | Public | Not stated | alvenqis-sdk-rust — API map (v0.1) |
 | `Blockchain-prototype/alvenqis-sdk-rust/docs/JS_PARITY.md` | Public | Not stated | TypeScript `@alvenqis/sdk` ↔ Rust `alvenqis-sdk-rust` |

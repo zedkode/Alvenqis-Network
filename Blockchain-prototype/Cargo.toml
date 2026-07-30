@@ -18,8 +18,14 @@ members = [
     "alvenqis-miner",
     "alvenqis-mining-pool",
     "alvenqis-release/alvenqis-setup-external/admin-server",
+    "third-party/libp2p-yamux",
 ]
 resolver = "2"
+
+[patch.crates-io]
+# Security backport of the unreleased upstream 0.48 adapter shape: retain the
+# configured stream cap while using only patched yamux >= 0.13.10.
+libp2p-yamux = { path = "third-party/libp2p-yamux" }
 
 # Workspace-wide Clippy defaults for members that opt in with:
 #   [lints]

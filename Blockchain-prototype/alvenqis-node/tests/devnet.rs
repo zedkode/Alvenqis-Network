@@ -7,7 +7,7 @@ use alvenqis_core::{
 use alvenqis_node::{
     adopt_candidate_chain, approve_genesis, balance, create_block_template, default_miner_address,
     genesis_approval_status, genesis_hash_hex_from_config, genesis_review_manifest, init_devnet,
-    load_pending_transactions, local_p2p_handshake, mempool_status, mine_dev_blocks,
+    load_pending_transactions_for_chain, local_p2p_handshake, mempool_status, mine_dev_blocks,
     mine_pending_block, node_status, reset_devnet, send_dev_tx, state, status, storage,
     submit_mined_block, submit_transaction, validate_chain, validate_p2p_handshake,
     write_genesis_review_manifest, NetworkConfig, NodeError, P2pHandshake, StatusReport,
@@ -96,7 +96,8 @@ fn detached_valid_transaction_returns_to_mempool_after_reorg() {
     let candidate = storage::load_blocks(&candidate_dir).expect("candidate blocks");
     adopt_candidate_chain(&config_path, &data_dir, &mempool_dir, &candidate)
         .expect("adopt candidate");
-    let pending = load_pending_transactions(&mempool_dir).expect("restored mempool");
+    let pending =
+        load_pending_transactions_for_chain(&data_dir, &mempool_dir).expect("restored mempool");
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].tx_hash, tx_hash);
     assert_eq!(pending[0].transaction, transaction);
@@ -349,7 +350,9 @@ fn valid_transaction_enters_mempool() {
     assert_eq!(summary.lifecycle_status, "pending");
     assert_eq!(summary.mempool_size, 1);
     assert_eq!(
-        load_pending_transactions(&mempool_dir).expect("load").len(),
+        load_pending_transactions_for_chain(&data_dir, &mempool_dir)
+            .expect("load")
+            .len(),
         1
     );
 }

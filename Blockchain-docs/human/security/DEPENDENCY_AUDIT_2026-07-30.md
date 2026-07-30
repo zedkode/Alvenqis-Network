@@ -19,9 +19,9 @@ Tools and advisory data:
 
 - `cargo-audit 0.22.2`;
 - `cargo-deny 0.20.2`;
-- RustSec database: 1,173 advisories, commit
-  `7c7ccac53056b87f69ac677f15ea2d9a98a6f8e2`, updated
-  `2026-07-29T08:17:10-07:00`.
+- RustSec database: 1,174 advisories, commit
+  `bd347a52f842c6c696ffcaed55f7ad3568a58cb5`, updated
+  `2026-07-30T21:13:51+02:00`.
 
 ## Routine workspace hygiene rerun
 

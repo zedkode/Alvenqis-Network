@@ -14,6 +14,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CUDA_PATH");
     println!("cargo:rerun-if-env-changed=NVCC");
     println!("cargo:rerun-if-env-changed=ALVENQIS_FORCE_CUDA");
+    println!("cargo:rerun-if-env-changed=ALVENQIS_REQUIRE_CUDA");
     println!("cargo:rerun-if-env-changed=ALVENQIS_CUDA_ARCH");
     println!("cargo:rustc-check-cfg=cfg(alvenqis_cuda_linked)");
     println!("cargo:rustc-check-cfg=cfg(alvenqis_cuda_stub)");

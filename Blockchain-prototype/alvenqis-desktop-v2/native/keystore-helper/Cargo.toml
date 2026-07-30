@@ -7,6 +7,9 @@ publish = false
 
 [workspace]
 
+[patch.crates-io]
+libp2p-yamux = { path = "../../../third-party/libp2p-yamux" }
+
 [[bin]]
 name = "alvenqis-keystore-helper"
 path = "src/main.rs"

@@ -1,0 +1,20 @@
+[package]
+name = "libp2p-yamux"
+version = "0.47.0"
+edition = "2021"
+rust-version = "1.83.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+license = "MIT"
+description = "Security-backported Yamux multiplexer adapter for Alvenqis"
+repository = "https://github.com/libp2p/rust-libp2p"
+publish = false
+
+[dependencies]
+futures = "0.3.30"
+libp2p-core = "0.43.0"
+thiserror = "2"
+tracing = "0.1.41"
+yamux = "=0.13.10"
+
+[lints]
+workspace = true
