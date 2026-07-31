@@ -27,6 +27,7 @@ services:
     environment:
       ALVENQIS_COMPONENT: control
       ALVENQIS_DEPLOYMENT_MODE: docker
+    secrets: [alvenqis_storage_key]
     volumes:
       - ${ALVENQIS_STATE_ROOT:-./state}/config/generated:/config
       - ${ALVENQIS_STATE_ROOT:-./state}/control:/data/control
