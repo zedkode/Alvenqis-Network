@@ -50,7 +50,7 @@ services:
       - ${ALVENQIS_STATE_ROOT:-./state}/config/generated:/config
       - ${ALVENQIS_STATE_ROOT:-./state}/pool:/data/pool
       - ${ALVENQIS_STATE_ROOT:-./state}/stratum/letsencrypt:/certs:ro
-    secrets: [pool_admin_token]
+    secrets: [pool_admin_token, alvenqis_storage_key]
     depends_on:
       alvenqis-rpc: {condition: service_healthy}
       stratum-certbot: {condition: service_healthy}

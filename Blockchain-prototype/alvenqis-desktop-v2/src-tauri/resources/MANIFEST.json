@@ -1,15 +1,16 @@
-﻿{
-    "opencl_mining":  false,
-    "operator":  "alvenqis.ps1",
-    "binaries":  [
-                     "bin/alvenqis-miner.exe",
-                     "bin/alvenqis-node.exe",
-                     "bin/alvenqis-rpc-gateway.exe",
-                     "bin/alvenqis-indexer.exe"
-                 ],
-    "keystore_helper":  "bin/alvenqis-keystore-helper.exe",
-    "mining_backend":  "cuda",
-    "platform":  "windows",
-    "prepared_at_utc":  "2026-07-28T00:53:11.5424761Z",
-    "cpu_mining":  false
+{
+  "prepared_at_utc": "2026-07-30T23:56:32Z",
+  "platform": "linux",
+  "host_triple": "x86_64-unknown-linux-gnu",
+  "keystore_helper": "bin/alvenqis-keystore-helper",
+  "binaries": [
+    "bin/alvenqis-miner",
+    "bin/alvenqis-node",
+    "bin/alvenqis-rpc-gateway",
+    "bin/alvenqis-indexer"
+  ],
+  "operator": "alvenqis.sh",
+  "mining_backend": "cuda",
+  "cpu_mining": false,
+  "opencl_mining": false
 }
