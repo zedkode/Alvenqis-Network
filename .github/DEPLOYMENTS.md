@@ -48,9 +48,12 @@ replacement requires a new candidate tag.
   tags.
 - `release-gate.yml` validates documentation, security, Rust, web, and Setup
   External surfaces as separate required jobs.
-- `alvenqis-setup-external-release.yml` builds the immutable VPS deployment bundle.
-- `setup-external-images.yml` publishes canonical Alvenqis container
-  images; obsolete Veiron/Vireon image packages must not be referenced.
+- `alvenqis-setup-external-release.yml` builds the immutable Setup External
+  deployment bundle.
+- `setup-external-images.yml` publishes the project-owned runtime, operations,
+  backup scheduler, explorer, website, Pingora gateway, and metrics exporter
+  images as independent matrix jobs; obsolete Veiron/Vireon image packages
+  must not be referenced.
 
 ## Deployment order
 

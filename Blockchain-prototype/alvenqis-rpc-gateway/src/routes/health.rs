@@ -20,6 +20,9 @@ pub(crate) async fn health(State(state): State<RpcState>) -> Json<HealthResponse
         crate::config::RpcAccessMode::Local => "Local only",
         crate::config::RpcAccessMode::PublicRead => "Public read",
         crate::config::RpcAccessMode::PublicSubmit => "Public submit (mining disabled)",
+        crate::config::RpcAccessMode::InternalEdge => {
+            "Internal edge (public mining disabled at gateway; private pool mining enabled)"
+        }
         crate::config::RpcAccessMode::PrivateMining => {
             "Private container-network mining (no published host port)"
         }

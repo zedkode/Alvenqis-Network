@@ -7,7 +7,7 @@
 #
 # Or build packages on any Linux host without makepkg:
 #   bash Blockchain-scripts/release/build-linux-desktop.sh --bundles deb,appimage
-#   chmod +x Blockchain-prototype/alvenqis-release/apps/linux/*.AppImage
+#   chmod +x release-artifacts/linux-v2/*.AppImage
 #
 # Status: Mainnet Candidate / Prototype -- not public Mainnet.
 #
@@ -63,6 +63,7 @@ sha256sums=()
 _repo_root="$(cd "${startdir}/../../../.." && pwd)"
 _prototype="${_repo_root}/Blockchain-prototype"
 _desktop="${_prototype}/alvenqis-desktop-v2"
+_release_output="${_repo_root}/release-artifacts/linux-v2"
 
 prepare() {
   cd "$_repo_root"
@@ -75,7 +76,8 @@ prepare() {
     echo "ERROR: desktop tree missing at ${_desktop}" >&2
     return 1
   fi
-  true
+
+  node "${_desktop}/scripts/check-version.mjs" --expected "$pkgver" || return 1
 }
 
 build() {
@@ -86,7 +88,7 @@ build() {
 }
 
 package() {
-  local out="${_prototype}/alvenqis-release/apps/linux"
+  local out="${_release_output}"
   install -d "$pkgdir/usr/bin"
   install -d "$pkgdir/usr/share/applications"
   install -d "$pkgdir/usr/share/icons/hicolor/256x256/apps"

@@ -1,5 +1,6 @@
 use alvenqis_vps_admin::{
-    router, run_agent_reporter, run_health_sampler, AdminConfig, AdminState, FleetStore,
+    rotate_agent_certificate_once, router, run_agent_reporter, run_health_sampler, AdminConfig,
+    AdminState, FleetStore,
 };
 use axum::serve;
 use clap::Parser;
@@ -15,6 +16,8 @@ struct Cli {
     config: PathBuf,
     #[arg(long)]
     check_config: bool,
+    #[arg(long)]
+    rotate_agent_certificate: bool,
 }
 
 #[tokio::main]
@@ -40,6 +43,13 @@ async fn run() -> Result<(), String> {
     }
     let store = FleetStore::load(config.state_dir.clone())?;
     let state = AdminState::new(config.clone(), store)?;
+    if cli.rotate_agent_certificate {
+        rotate_agent_certificate_once(&state).await?;
+        println!(
+            "agent certificate rotated locally; controller promotion occurs on the next authenticated report"
+        );
+        return Ok(());
+    }
     tokio::spawn(run_agent_reporter(state.clone()));
     tokio::spawn(run_health_sampler(state.clone()));
     let address: SocketAddr = format!("{}:{}", config.bind_host, config.bind_port)

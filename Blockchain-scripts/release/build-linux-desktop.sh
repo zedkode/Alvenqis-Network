@@ -100,6 +100,7 @@ version="$(
   node -e "const j=require('$desktop/package.json'); process.stdout.write(j.version||'')" 2>/dev/null \
     || sed -n 's/^.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$desktop/package.json" | head -1
 )"
+node "$desktop/scripts/check-version.mjs"
 echo "==> Alvenqis Control Center Linux build version=${version:-unknown} bundles=$bundles"
 
 mkdir -p "$output"

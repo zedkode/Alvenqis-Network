@@ -23,47 +23,10 @@ env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
-  prepare-release:
-    name: Prepare shared prerelease
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout candidate tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ inputs.tag || github.ref }}
-          fetch-depth: 0
-
-      - name: Verify tag and create or reuse prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
-          git merge-base --is-ancestor HEAD origin/main
-          cat > release-notes.md <<'EOF'
-          ## Mainnet Candidate prerelease — not public Mainnet
-
-          Desktop, server-component, and Setup External assets are tested and
-          published independently. A failed component remains visible and does
-          not block artifacts that passed their own checks.
-
-          Verify the component-specific SHA-256 file before testing an asset.
-          Automatic cross-host discovery is not asserted by these G1 artifacts.
-          EOF
-          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" \
-              --verify-tag \
-              --title "Alvenqis $RELEASE_TAG" \
-              --notes-file release-notes.md \
-              --prerelease \
-              || gh release view "$RELEASE_TAG" >/dev/null
-          fi
-
   build-and-publish:
     name: Build and publish ${{ matrix.component }}
-    needs: prepare-release
     runs-on: ubuntu-24.04
+    environment: candidate-release
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -82,6 +45,12 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
+
+      - name: Verify tag belongs to main
+        run: |
+          set -euo pipefail
+          test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
 
       - name: Install Rust toolchain
         if: matrix.component != 'explorer'
@@ -116,6 +85,26 @@ jobs:
           name: candidate-${{ matrix.component }}-${{ env.RELEASE_TAG }}
           if-no-files-found: error
           path: release-publish/component/*
+
+      - name: Create or reuse candidate prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash Blockchain-scripts/github/generate-candidate-release-notes.sh \
+            "$RELEASE_TAG" release-notes.md
+          for attempt in 1 2 3 4 5; do
+            gh release view "$RELEASE_TAG" >/dev/null 2>&1 && break
+            if gh release create "$RELEASE_TAG" \
+              --verify-tag \
+              --title "Alvenqis $RELEASE_TAG" \
+              --notes-file release-notes.md \
+              --prerelease; then
+              break
+            fi
+            sleep "$attempt"
+          done
+          gh release view "$RELEASE_TAG" >/dev/null
 
       - name: Upload passing component to GitHub Release
         env:

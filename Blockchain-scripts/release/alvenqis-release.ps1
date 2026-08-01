@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version 2.0
-$script:ReleaseManagerVersion = "3.2.0"
+$script:ReleaseManagerVersion = "3.3.0"
 
 function Write-Title {
     param([string]$Text)
@@ -315,41 +315,35 @@ function Ensure-GitHubPrerelease {
         return
     }
 
-    $notesPath = Join-Path ([System.IO.Path]::GetTempPath()) ("alvenqis-release-notes-{0}.md" -f ([guid]::NewGuid().ToString("N")))
-    @"
+    $notes = @"
 ## Mainnet Candidate prerelease - not public Mainnet
 
-This release may contain locally built artifacts verified by the operator. Windows, Linux, and VPS artifacts are published independently. Verify the SHA256SUMS-LOCAL.txt file before testing.
-"@ | Set-Content -LiteralPath $notesPath -Encoding UTF8
+Windows, Linux, server-component, container-image, and Setup External outputs are published independently. Verify SHA256SUMS-LOCAL.txt before testing locally supplied assets. The generated changelog below comes from the commits included by the tagged release.
+"@
+    $lastError = $null
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        $create = Invoke-Native -Command "gh" -Arguments @(
+            "release", "create", $Tag,
+            "--verify-tag",
+            "--title", "Alvenqis $Tag",
+            "--generate-notes",
+            "--notes", $notes,
+            "--prerelease"
+        ) -Capture -AllowFailure
 
-    try {
-        $lastError = $null
-        for ($attempt = 1; $attempt -le 5; $attempt++) {
-            $create = Invoke-Native -Command "gh" -Arguments @(
-                "release", "create", $Tag,
-                "--verify-tag",
-                "--title", "Alvenqis $Tag",
-                "--notes-file", $notesPath,
-                "--prerelease"
-            ) -Capture -AllowFailure
-
-            if ($create.ExitCode -eq 0) {
-                return
-            }
-
-            $view = Invoke-Native -Command "gh" -Arguments @("release", "view", $Tag) -Capture -AllowFailure
-            if ($view.ExitCode -eq 0) {
-                return
-            }
-
-            $lastError = $create.Output
-            Start-Sleep -Seconds 2
+        if ($create.ExitCode -eq 0) {
+            return
         }
-        throw "Could not create prerelease $Tag. $lastError"
+
+        $view = Invoke-Native -Command "gh" -Arguments @("release", "view", $Tag) -Capture -AllowFailure
+        if ($view.ExitCode -eq 0) {
+            return
+        }
+
+        $lastError = $create.Output
+        Start-Sleep -Seconds 2
     }
-    finally {
-        Remove-Item -LiteralPath $notesPath -Force -ErrorAction SilentlyContinue
-    }
+    throw "Could not create prerelease $Tag. $lastError"
 }
 
 function Publish-LocalArtifactsToRelease {
@@ -579,7 +573,7 @@ function Create-And-PushCandidateTag {
     Write-Host "  Branch:    $(if ([string]::IsNullOrWhiteSpace($branch)) { 'detached HEAD' } else { $branch })"
     Write-Host "  Commit:    $commit"
     Write-Host "  Source:    GitHub Actions"
-    Write-Host "  Starts:    Windows + Linux + VPS + Quality (independent)"
+    Write-Host "  Starts:    Windows + Linux + server components + Setup External + container images + Quality (independent)"
     Write-Host ""
 
     if (-not (Confirm-Action -Message "Create and publish tag $($tag)?" -DefaultYes $false)) {
@@ -601,10 +595,10 @@ function Create-And-PushCandidateTag {
 
     Write-Ok "Tag published: $tag"
 
-    Write-Ok "GitHub Actions received the event. The four workflows run independently."
+    Write-Ok "GitHub Actions received the event. The six release/quality workflows run independently."
     Write-Host ""
     Write-Host "Important: you do not need to create the release manually." -ForegroundColor Yellow
-    Write-Host "The first successful platform workflow creates the prerelease, and the others add their own files."
+    Write-Host "The first successful publish job creates the prerelease, and the others add their own files."
 
     if ($ghReady) {
         $repoUrl = (Invoke-Native -Command "gh" -Arguments @("repo", "view", "--json", "url", "--jq", ".url") -Capture).Output.Trim()
@@ -686,11 +680,13 @@ function Restart-IndependentWorkflows {
     Write-Host ""
     Write-Host "  1. Windows"
     Write-Host "  2. Linux"
-    Write-Host "  3. VPS"
-    Write-Host "  4. Quality checks"
-    Write-Host "  5. All four"
+    Write-Host "  3. Setup External bundle"
+    Write-Host "  4. Linux server components"
+    Write-Host "  5. Setup External container images"
+    Write-Host "  6. Quality checks"
+    Write-Host "  7. All six"
     Write-Host "  0. Back"
-    $choice = Read-MenuChoice -Prompt "Choose the workflow" -Allowed @("0", "1", "2", "3", "4", "5")
+    $choice = Read-MenuChoice -Prompt "Choose the workflow" -Allowed @("0", "1", "2", "3", "4", "5", "6", "7")
     if ($choice -eq "0") {
         return
     }
@@ -700,13 +696,16 @@ function Restart-IndependentWorkflows {
         "1" { $workflows = @("candidate-windows-release.yml") }
         "2" { $workflows = @("candidate-linux-release.yml") }
         "3" { $workflows = @("candidate-setup-external-release.yml") }
-        "4" { $workflows = @("candidate-quality.yml") }
-        "5" {
+        "4" { $workflows = @("candidate-linux-components-release.yml") }
+        "5" { $workflows = @("setup-external-images.yml") }
+        "6" { $workflows = @("candidate-quality.yml") }
+        "7" {
             $workflows = @(
                 "candidate-windows-release.yml",
                 "candidate-linux-release.yml",
                 "candidate-setup-external-release.yml",
                 "candidate-linux-components-release.yml",
+                "setup-external-images.yml",
                 "candidate-quality.yml"
             )
         }
@@ -821,7 +820,7 @@ while ($true) {
     Write-Host ""
     Write-Host "  1. Create the next candidate tag and start all releases"
     Write-Host "  2. Create a custom candidate tag"
-    Write-Host "  3. Restart Windows/Linux/VPS/Quality for an existing tag"
+    Write-Host "  3. Restart an independent workflow for an existing tag"
     Write-Host "  4. Upload local artifacts to an existing tag"
     Write-Host "  5. Show candidate tags"
     Write-Host "  6. Open GitHub Actions or Releases"

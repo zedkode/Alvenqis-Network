@@ -10,8 +10,9 @@ indexer_data_path = "/var/lib/alvenqis/.alvenqis-mainnet/indexer"
 mempool_data_path = "/var/lib/alvenqis/.alvenqis-mainnet/mempool"
 public_rpc_allowed = false
 access_mode = "public-submit"
-# Public submit/read profile. Solo mining uses local loopback RPC; the pool role
-# renders private-mining=true only on the unpublished Docker network.
+# Public submit/read profile. Solo mining uses local loopback RPC. Standalone
+# pool roles render private-mining, while full-stack + pool renders
+# internal-edge; both remain on the unpublished Docker network.
 expose_mining_endpoints = false
 max_mempool_transactions = 4096
 max_request_body_bytes = 65536

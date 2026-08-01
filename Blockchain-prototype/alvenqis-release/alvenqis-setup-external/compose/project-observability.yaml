@@ -121,6 +121,7 @@ services:
   alvenqis-metrics-exporter:
     <<: *service-guardrails
     profiles: [observability]
+    networks: [alvenqis-internal, alvenqis-control-monitoring]
     build:
       context: ${ALVENQIS_HOST_WORKSPACE:-.}/docker/metrics-exporter
       dockerfile: Dockerfile

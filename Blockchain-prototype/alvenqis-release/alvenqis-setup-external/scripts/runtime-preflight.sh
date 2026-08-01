@@ -33,6 +33,14 @@ grep -Eq '^[0-9A-Fa-f]{64}$' "$storage_key" || {
   echo "Alvenqis RocksDB storage key must contain exactly 64 hexadecimal characters." >&2
   exit 78
 }
+if compose_has_service gateway || compose_has_service alvenqis-control; then
+  control_proxy_token="$STATE_ROOT/secrets/control_proxy_token"
+  assert_owner_mode "$control_proxy_token" "0:0" "444" "Control proxy token"
+  grep -Eq '^[0-9A-Fa-f]{64}$' "$control_proxy_token" || {
+    echo "Control proxy token must contain exactly 64 hexadecimal characters." >&2
+    exit 78
+  }
+fi
 [[ "${ALVENQIS_STORAGE_KEY_FILE:-}" == /run/secrets/alvenqis_storage_key ]] || {
   echo "ALVENQIS_STORAGE_KEY_FILE must be /run/secrets/alvenqis_storage_key." >&2
   exit 64
@@ -133,7 +141,7 @@ PY
 
 port_names=(P2P_PORT)
 compose_has_service alvenqis-pool && port_names+=(STRATUM_PORT STRATUM_INTERNAL_PORT)
-compose_has_service gateway && port_names+=(HTTP_PORT)
+compose_has_service gateway && port_names+=(HTTP_PORT FLEET_MTLS_PORT)
 for port_name in "${port_names[@]}"; do
   value="${!port_name:-}"
   [[ "$value" =~ ^[0-9]+$ ]] && ((value >= 1 && value <= 65535)) || {
@@ -156,13 +164,39 @@ if compose_has_service alvenqis-pool; then
   }
 fi
 if compose_has_service gateway; then
-  for required_host in WEBSITE_HOST EXPLORER_HOST PUBLIC_RPC_HOST CONTROL_HOST; do
+  for required_host in WEBSITE_HOST EXPLORER_HOST PUBLIC_RPC_HOST CONTROL_HOST FLEET_HOST FLEET_MTLS_HOST; do
     value="${!required_host:-}"
     [[ -n "$value" && "$value" != example.invalid && "$value" != *.example.invalid ]] || {
       echo "$required_host must be an operator-owned hostname for the project edge." >&2
       exit 64
     }
   done
+  [[ "$FLEET_HOST" != "$FLEET_MTLS_HOST" ]] || {
+    echo "FLEET_HOST and FLEET_MTLS_HOST must be different." >&2
+    exit 64
+  }
+  python3 - "${FLEET_MTLS_BIND_ADDRESS:-127.0.0.1}" <<'PY'
+import ipaddress
+import sys
+
+try:
+    address = ipaddress.ip_address(sys.argv[1])
+except ValueError as exc:
+    raise SystemExit("FLEET_MTLS_BIND_ADDRESS must be a literal IPv4 address") from exc
+if address.version != 4:
+    raise SystemExit("FLEET_MTLS_BIND_ADDRESS must be IPv4")
+print(f"Fleet mTLS bind preflight: {address}")
+PY
+  [[ "$P2P_PORT" != "$FLEET_MTLS_PORT" ]] || {
+    echo "P2P_PORT and FLEET_MTLS_PORT must be different." >&2
+    exit 64
+  }
+  if compose_has_service alvenqis-pool; then
+    [[ "$STRATUM_PORT" != "$FLEET_MTLS_PORT" ]] || {
+      echo "STRATUM_PORT and FLEET_MTLS_PORT must be different." >&2
+      exit 64
+    }
+  fi
 fi
 
 printf 'Host preflight: cpus=%s memory_bytes=%s free_disk_bytes=%s\n' \

@@ -49,6 +49,16 @@ export MINING_RPC_BIND="${MINING_RPC_BIND:-docker-internal}"
 export CONTROLLER_URL_TOML='""'; [[ -n "${CONTROLLER_URL:-}" ]] && CONTROLLER_URL_TOML="\"${CONTROLLER_URL}\""
 export PUBLIC_RPC_URL_TOML='""'
 [[ "$PUBLIC_RPC_HOST" != *.example.invalid && "$PUBLIC_RPC_HOST" != example.invalid ]] && PUBLIC_RPC_URL_TOML="\"https://${PUBLIC_RPC_HOST}\""
+export FLEET_HOST="${FLEET_HOST:-fleet.${BASE_DOMAIN}}"
+export FLEET_MTLS_HOST="${FLEET_MTLS_HOST:-fleet-mtls.${BASE_DOMAIN}}"
+[[ "$FLEET_MTLS_HOST" != "$FLEET_HOST" ]] || {
+  echo "ERROR: FLEET_MTLS_HOST must be distinct from tunneled FLEET_HOST." >&2
+  exit 64
+}
+export FLEET_REPORT_URL_TOML='""'
+export FLEET_ENROLLMENT_URL_TOML='""'
+[[ "$FLEET_MTLS_HOST" != *.example.invalid && "$FLEET_MTLS_HOST" != example.invalid ]] && FLEET_REPORT_URL_TOML="\"https://${FLEET_MTLS_HOST}:${FLEET_MTLS_PORT:-10443}\""
+[[ "$FLEET_HOST" != *.example.invalid && "$FLEET_HOST" != example.invalid ]] && FLEET_ENROLLMENT_URL_TOML="\"https://${FLEET_HOST}\""
 case "$component" in
  node)
   render /app/templates/node.toml.template "$config_dir/node.toml"

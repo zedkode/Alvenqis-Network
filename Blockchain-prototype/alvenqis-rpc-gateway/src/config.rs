@@ -12,22 +12,23 @@ pub enum RpcAccessMode {
     Local,
     PublicRead,
     PublicSubmit,
+    InternalEdge,
     PrivateMining,
 }
 
 impl RpcAccessMode {
     pub const fn allows_transaction_submission(self) -> bool {
-        matches!(self, Self::Local | Self::PublicSubmit)
+        matches!(self, Self::Local | Self::PublicSubmit | Self::InternalEdge)
     }
 
     pub const fn allows_operator_endpoints(self) -> bool {
         matches!(self, Self::Local)
     }
 
-    /// Mining routes are enabled only for local or isolated private-mining
-    /// profiles. A private-mining listener must never publish a host port.
+    /// Mining routes are enabled only for local or isolated Docker-network
+    /// profiles. These listeners must never publish a host port.
     pub const fn default_exposes_mining(self) -> bool {
-        matches!(self, Self::Local | Self::PrivateMining)
+        matches!(self, Self::Local | Self::InternalEdge | Self::PrivateMining)
     }
 }
 
@@ -49,7 +50,8 @@ pub struct RpcConfig {
     pub public_rpc_allowed: bool,
     #[serde(default)]
     pub access_mode: RpcAccessMode,
-    /// When set, may disable mining for a local or private-mining profile.
+    /// When set, may disable mining for a local, internal-edge, or
+    /// private-mining profile.
     /// Public profiles cannot opt in to mining.
     #[serde(default)]
     pub expose_mining_endpoints: Option<bool>,
@@ -212,11 +214,11 @@ impl RpcConfig {
         if self.expose_mining_endpoints == Some(true)
             && !matches!(
                 self.access_mode,
-                RpcAccessMode::Local | RpcAccessMode::PrivateMining
+                RpcAccessMode::Local | RpcAccessMode::InternalEdge | RpcAccessMode::PrivateMining
             )
         {
             return Err(RpcError::Config(
-                "public RPC profiles cannot expose mining endpoints; use local loopback RPC or private-mining on an unpublished container network".to_owned(),
+                "public RPC profiles cannot expose mining endpoints; use local loopback RPC, internal-edge, or private-mining on an unpublished container network".to_owned(),
             ));
         }
         Ok(())

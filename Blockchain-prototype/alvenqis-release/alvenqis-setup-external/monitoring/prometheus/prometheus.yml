@@ -57,6 +57,16 @@ scrape_configs:
           service: alvenqis-metrics
           brand: alvenqis
 
+  # Pingora edge request, rejection, latency, and active-upstream health metrics.
+  - job_name: alvenqis-gateway
+    metrics_path: /
+    scrape_interval: 15s
+    static_configs:
+      - targets: [gateway:9091]
+        labels:
+          service: pingora-gateway
+          brand: alvenqis
+
   # Blackbox only probes liveness. The metrics exporter owns the heavier
   # status/indexer/P2P reads and caches one real sample per scrape window.
   - job_name: alvenqis-http

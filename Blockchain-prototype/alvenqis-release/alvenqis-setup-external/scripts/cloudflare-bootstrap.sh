@@ -29,9 +29,16 @@ token="$(cat "$api_token_file")"
 : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
 : "${CLOUDFLARE_ZONE_ID:?CLOUDFLARE_ZONE_ID is required}"
 : "${BASE_DOMAIN:?BASE_DOMAIN is required}"
+FLEET_MTLS_HOST="${FLEET_MTLS_HOST:-fleet-mtls.${BASE_DOMAIN}}"
+export FLEET_MTLS_HOST
 : "${CONTROL_HOST:?CONTROL_HOST is required}"
 : "${RPC_HOST:?RPC_HOST is required}"
 : "${FLEET_HOST:?FLEET_HOST is required}"
+: "${FLEET_MTLS_HOST:?FLEET_MTLS_HOST is required}"
+[[ "$FLEET_MTLS_HOST" != "$FLEET_HOST" ]] || {
+  echo "FLEET_MTLS_HOST must be distinct from tunneled FLEET_HOST." >&2
+  exit 64
+}
 : "${GRAFANA_HOST:?GRAFANA_HOST is required}"
 : "${PROMETHEUS_HOST:?PROMETHEUS_HOST is required}"
 : "${WEBSITE_HOST:?WEBSITE_HOST is required}"
@@ -98,6 +105,10 @@ public_ip="$(detect_ipv4)"
 # P2P must remain DNS-only because standard Cloudflare HTTP proxy/Tunnel is not
 # a transparent public TCP proxy for arbitrary blockchain clients.
 upsert_dns A "$P2P_HOST" "$public_ip" false
+# Fleet report and certificate-rotation traffic terminates as client-authenticated
+# TLS at the gateway. Keep this hostname on direct, DNS-only transport; never
+# route it through the HTTP tunnel used by the enrollment hostname.
+upsert_dns A "$FLEET_MTLS_HOST" "$public_ip" false
 if [[ "${ENABLE_POOL:-false}" == "true" ]]; then
   # Standard Cloudflare Tunnel/HTTP proxy is not a transparent public Stratum proxy.
   upsert_dns A "$STRATUM_HOST" "$public_ip" false

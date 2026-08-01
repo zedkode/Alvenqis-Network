@@ -12,10 +12,10 @@ excluded by policy.
 
 | Class | Documents |
 |---|---:|
-| Component reference | 21 |
+| Component reference | 22 |
 | Historical | 2 |
-| Public | 126 |
-| **Total** | **149** |
+| Public | 129 |
+| **Total** | **153** |
 
 ## Complete inventory
 
@@ -42,6 +42,7 @@ excluded by policy.
 | `Blockchain-docs/human/architecture/06_CLIENT_PLATFORM_DIRECTION.md` | Public | Draft / Planned / Prototype | Client Platform Direction |
 | `Blockchain-docs/human/architecture/07_BROWSER_EXTENSION_AND_NATIVE_HOST.md` | Public | Prototype / Mainnet Candidate / not store-ready | Browser Extension and Native Host |
 | `Blockchain-docs/human/architecture/LEDGER_STATE_AND_TX_HASH_RETENTION.md` | Public | Mainnet Candidate / Prototype | Ledger state and transaction-hash retention |
+| `Blockchain-docs/human/architecture/PINGORA_MIGRATION_DESIGN.md` | Public | **Proposed for owner review — implementation not started** | Pingora edge migration design |
 | `Blockchain-docs/human/architecture/README.md` | Public | Current reference / Mainnet Candidate | Architecture Docs |
 | `Blockchain-docs/human/architecture/STORAGE_CONSISTENCY_AND_RECOVERY.md` | Public | Draft audit contract / Mainnet Candidate | Storage Consistency and Recovery |
 | `Blockchain-docs/human/DOCUMENTATION_INVENTORY.md` | Public | Generated audit inventory | Alvenqis Documentation Inventory |
@@ -62,7 +63,7 @@ excluded by policy.
 | `Blockchain-docs/human/operator/COMMANDS.md` | Public | Draft / Mainnet Candidate / Prototype | Operator Commands |
 | `Blockchain-docs/human/operator/DESKTOP_V2_USER_GUIDE.md` | Public | **Mainnet Candidate / Prototype** — not public Mainnet Live | Alvenqis Control Center V2 — User Guide |
 | `Blockchain-docs/human/operator/INDEPENDENT_NODE_OPERATOR_GUIDE.md` | Public | Draft G2 guide / role rendering verified / clean-host proof pending | Independent Node Operator Guide |
-| `Blockchain-docs/human/operator/LINUX_DESKTOP.md` | Public | **1.0.0 Mainnet Candidate / Prototype** (not public Mainnet) | Linux Desktop - Alvenqis Control Center |
+| `Blockchain-docs/human/operator/LINUX_DESKTOP.md` | Public | **2.0.1 Mainnet Candidate / Prototype** (not public Mainnet) | Linux Desktop - Alvenqis Control Center |
 | `Blockchain-docs/human/operator/LOCAL_RUNBOOK.md` | Public | Draft / Mainnet Candidate / Prototype | Local Runbook |
 | `Blockchain-docs/human/operator/MINING_TROUBLESHOOTING.md` | Public | Not stated | Mining troubleshooting (Mainnet Candidate) |
 | `Blockchain-docs/human/operator/PRIVATE_MINING_OPS.md` | Public | **Mainnet Candidate / Prototype — not Mainnet Live** | Secured Mining Operations |
@@ -103,7 +104,9 @@ excluded by policy.
 | `Blockchain-docs/human/security/AUDIT_STATUS.md` | Public | **Current internal verification record / no external audit** | Verification and Audit Status |
 | `Blockchain-docs/human/security/DEFENSIVE_SECURITY_SCOPE.md` | Public | Authorized project-owned defensive engineering policy | Defensive Security Engineering Scope |
 | `Blockchain-docs/human/security/DEPENDENCY_AUDIT_2026-07-30.md` | Public | Dated Rust dependency review / open findings retained | Dependency Security Review — 2026-07-30 |
+| `Blockchain-docs/human/security/DEPENDENCY_AUDIT_2026-08-01.md` | Public | Not stated | Rust dependency hygiene report — 2026-08-01 |
 | `Blockchain-docs/human/security/EXTERNAL_SECURITY_REVIEW_SCOPE.md` | Public | Draft audit package / not yet ready for external sign-off | External Security Review Scope |
+| `Blockchain-docs/human/security/FLEET_RBAC_MTLS_STATUS_2026-08-01.md` | Public | Not stated | Fleet RBAC and agent mTLS status — 2026-08-01 |
 | `Blockchain-docs/human/security/KNOWN_LIMITATIONS.md` | Public | Open risk register / Mainnet Candidate / not an audit result | Known Limitations and Open Security Findings |
 | `Blockchain-docs/human/security/MINING_POOL_RISKS.md` | Public | Draft / Mainnet Candidate / Prototype | Mining Pool Security Risks |
 | `Blockchain-docs/human/security/PRODUCTION_RISKS.md` | Public | Mainnet Candidate risk register / not public Mainnet | Production Risks |
@@ -166,6 +169,7 @@ excluded by policy.
 | `Blockchain-prototype/shared/constants/README.md` | Public | Draft | Shared Constants |
 | `Blockchain-prototype/shared/README.md` | Public | Draft | Shared |
 | `Blockchain-prototype/shared/schemas/README.md` | Public | Draft | Shared Schemas |
+| `Blockchain-prototype/third-party/libp2p-yamux/UPSTREAM.md` | Component reference | temporary reviewed dependency backport | libp2p-yamux security backport |
 | `Blockchain-scripts/README.md` | Component reference | Not stated | Blockchain-scripts |
 | `init.md` | Component reference | Not stated | Alvenqis Network — init |
 | `PROJECT_STRUCTURE.md` | Component reference | Not stated | Alvenqis Network — project structure |

@@ -48,7 +48,6 @@ rsync -aHAX --delete \
   --exclude '/chain/.alvenqis-state-restore-*/' \
   "$STATE_ROOT/data/" "$snapshot/state/data/"
 state_sets=(config/generated)
-compose_has_service alvenqis-control && state_sets+=(control)
 compose_has_service alvenqis-pool && state_sets+=(pool stratum)
 compose_has_service prometheus && state_sets+=(prometheus grafana loki alloy alertmanager)
 for relative in "${state_sets[@]}"; do
@@ -118,7 +117,20 @@ with sqlite3.connect(chain_database, timeout=30) as chain_db:
     ).fetchone()
 if tip is None:
     raise SystemExit("canonical SQLite snapshot has no tip")
-(snapshot / "sqlite-chain-tip").write_text(f"{tip[0]} {tip[1]}\n", encoding="utf-8")
+tip_height, tip_hash = tip
+if isinstance(tip_hash, memoryview):
+    tip_hash = tip_hash.tobytes()
+if isinstance(tip_hash, bytes):
+    tip_hash = tip_hash.hex()
+elif isinstance(tip_hash, str):
+    tip_hash = tip_hash.lower()
+else:
+    raise SystemExit(f"canonical SQLite tip hash has unsupported type: {type(tip_hash).__name__}")
+if len(tip_hash) != 64 or any(character not in "0123456789abcdef" for character in tip_hash):
+    raise SystemExit("canonical SQLite tip hash is not a 32-byte hexadecimal value")
+(snapshot / "sqlite-chain-tip").write_text(
+    f"{tip_height} {tip_hash}\n", encoding="utf-8"
+)
 print(f"online SQLite snapshots verified: {database_count}")
 PY
   read -r sqlite_height sqlite_hash < "$snapshot/sqlite-chain-tip"
@@ -144,11 +156,17 @@ pass=/run/secrets/backup_passphrase
 [[ -s "$pass" ]] || pass="$STATE_ROOT/secrets/backup_passphrase"
 mkdir -p "$snapshot/state"
 cp -a "$STATE_ROOT/secrets" "$snapshot/state/secrets"
-tar -C "$snapshot" -czf - state/secrets |
+sensitive_state=(state/secrets)
+if compose_has_service alvenqis-control && [[ -e "$STATE_ROOT/control" ]]; then
+  cp -a "$STATE_ROOT/control" "$snapshot/state/control"
+  sensitive_state+=(state/control)
+fi
+tar -C "$snapshot" -czf - "${sensitive_state[@]}" |
   openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
     -pass "file:$pass" \
     -out "$out/alvenqis-secrets.tar.gz.enc"
 rm -rf -- "$snapshot/state/secrets"
+rm -rf -- "$snapshot/state/control"
 
 cat > "$out/BACKUP_COMPLETE" <<EOF
 created_utc=$stamp
@@ -161,6 +179,7 @@ rocksdb_tip_height=$rocks_height
 rocksdb_tip_hash=$rocks_hash
 rocksdb_encryption=$rocks_encryption
 rocksdb_key_id=$rocks_key_id
+control_state_encryption=aes-256-cbc-pbkdf2
 EOF
 (
   cd "$out"

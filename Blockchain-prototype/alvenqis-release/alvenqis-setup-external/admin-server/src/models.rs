@@ -117,6 +117,7 @@ pub struct NodeDetailView {
 #[serde(deny_unknown_fields)]
 pub struct EnrollmentRequest {
     pub invitation_token: String,
+    pub certificate_signing_request_pem: String,
     pub report: NodeReport,
 }
 
@@ -124,6 +125,11 @@ pub struct EnrollmentRequest {
 pub struct EnrollmentResponse {
     pub node_id: String,
     pub node_token: String,
+    pub client_certificate_pem: String,
+    pub fleet_ca_certificate_pem: String,
+    pub certificate_fingerprint_sha1: String,
+    pub certificate_expires_at_unix_seconds: u64,
+    pub report_url: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -131,6 +137,21 @@ pub struct EnrollmentResponse {
 pub struct ReportRequest {
     pub node_id: String,
     pub report: NodeReport,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CertificateRotationRequest {
+    pub node_id: String,
+    pub certificate_signing_request_pem: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CertificateRotationResponse {
+    pub client_certificate_pem: String,
+    pub fleet_ca_certificate_pem: String,
+    pub certificate_fingerprint_sha1: String,
+    pub certificate_expires_at_unix_seconds: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]

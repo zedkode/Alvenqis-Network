@@ -183,9 +183,11 @@ PY
     return 78
   }
   pool_enabled="${pool_enabled,,}"
-  if [[ "$ALVENQIS_OPERATOR_ROLE_RESOLVED" == pool \
-    || "$ALVENQIS_OPERATOR_ROLE_RESOLVED" == stratum \
-    || ( "$ALVENQIS_OPERATOR_ROLE_RESOLVED" == full-stack && "$pool_enabled" == true ) ]]; then
+  if [[ "$ALVENQIS_OPERATOR_ROLE_RESOLVED" == full-stack && "$pool_enabled" == true ]]; then
+    RPC_ACCESS_MODE=internal-edge
+    RPC_EXPOSE_MINING=true
+  elif [[ "$ALVENQIS_OPERATOR_ROLE_RESOLVED" == pool \
+    || "$ALVENQIS_OPERATOR_ROLE_RESOLVED" == stratum ]]; then
     RPC_ACCESS_MODE=private-mining
     RPC_EXPOSE_MINING=true
   else

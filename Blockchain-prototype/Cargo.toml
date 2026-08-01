@@ -18,6 +18,7 @@ members = [
     "alvenqis-miner",
     "alvenqis-mining-pool",
     "alvenqis-release/alvenqis-setup-external/admin-server",
+    "alvenqis-release/alvenqis-setup-external/pingora-gateway",
     "third-party/libp2p-yamux",
 ]
 resolver = "2"

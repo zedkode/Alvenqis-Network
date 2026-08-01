@@ -1,10 +1,15 @@
-name: Alvenqis Setup External Images (Manual Only)
+name: Alvenqis Setup External Images
 
 on:
+  push:
+    tags:
+      - "v*-candidate.*"
+      - "desktop-v*-candidate.*"
+      - "setup-external-v*-rc.*"
   workflow_dispatch:
     inputs:
-      version:
-        description: "Explicit image tag (latest is forbidden)"
+      tag:
+        description: "Existing candidate tag (latest is forbidden)"
         required: true
         type: string
 
@@ -12,31 +17,36 @@ permissions:
   contents: read
 
 concurrency:
-  group: setup-external-manual-${{ github.ref }}
+  group: setup-external-images-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
+
+env:
+  IMAGE_VERSION: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   validate:
+    name: Validate shared stack contract
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
       - name: Install validation parser
         run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.2
-      - name: Reject mutable tag
-        env:
-          IMAGE_VERSION: ${{ inputs.version }}
+      - name: Verify release ref and reject a mutable image tag
         run: |
+          set -euo pipefail
           test "$IMAGE_VERSION" != "latest"
           printf '%s' "$IMAGE_VERSION" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'
+          test "$(git rev-list -n 1 "$IMAGE_VERSION")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
       - name: Validate secure stack
         working-directory: Blockchain-prototype/alvenqis-release/alvenqis-setup-external
         run: bash ./scripts/validate-stack.sh --require-docker
 
-      - name: Smoke-build RocksDB runtime image
-        run: docker build --file Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/Dockerfile --tag alvenqis-runtime:smoke .
-
   build:
-    needs: validate
+    name: Build and publish ${{ matrix.image }}
     runs-on: ubuntu-24.04
     environment: candidate-release
     permissions:
@@ -55,8 +65,30 @@ jobs:
           - image: alvenqis-backup-scheduler
             context: Blockchain-prototype/alvenqis-release/alvenqis-setup-external
             dockerfile: Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/backup-scheduler/Dockerfile
+          - image: alvenqis-explorer
+            context: Blockchain-prototype/alvenqis-explorer
+            dockerfile: Blockchain-prototype/alvenqis-explorer/Dockerfile
+          - image: alvenqis-website
+            context: .
+            dockerfile: Blockchain-prototype/alvenqis-website/Dockerfile
+          - image: alvenqis-gateway
+            context: .
+            dockerfile: Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/gateway/Dockerfile
+          - image: alvenqis-metrics-exporter
+            context: Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/metrics-exporter
+            dockerfile: Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/metrics-exporter/Dockerfile
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Verify release ref
+        run: |
+          set -euo pipefail
+          test "$IMAGE_VERSION" != "latest"
+          printf '%s' "$IMAGE_VERSION" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'
+          test "$(git rev-list -n 1 "$IMAGE_VERSION")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
       - uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c
@@ -66,7 +98,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Reject an existing immutable image tag
         env:
-          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ inputs.version }}
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ env.IMAGE_VERSION }}
         run: |
           set -euo pipefail
           if docker buildx imagetools inspect "$IMAGE_REF" >/dev/null 2>&1; then
@@ -79,7 +111,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ inputs.version }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ env.IMAGE_VERSION }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           provenance: mode=max

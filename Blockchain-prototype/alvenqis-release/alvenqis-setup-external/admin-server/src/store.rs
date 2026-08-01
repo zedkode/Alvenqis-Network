@@ -39,6 +39,9 @@ struct Invitation {
 struct FleetNode {
     id: String,
     token_hash: String,
+    certificate_fingerprint_sha1: Option<String>,
+    #[serde(default)]
+    pending_certificate_fingerprint_sha1: Option<String>,
     report: NodeReport,
     created_at_unix_seconds: u64,
     banned: bool,
@@ -52,6 +55,8 @@ impl Default for FleetNode {
         Self {
             id: String::new(),
             token_hash: String::new(),
+            certificate_fingerprint_sha1: None,
+            pending_certificate_fingerprint_sha1: None,
             report: empty_report(),
             created_at_unix_seconds: 0,
             banned: false,
@@ -163,6 +168,7 @@ impl FleetStore {
     pub fn enroll(
         &self,
         invitation_token: &str,
+        certificate_fingerprint_sha1: String,
         report: NodeReport,
         now: u64,
         report_interval_seconds: u64,
@@ -196,6 +202,8 @@ impl FleetStore {
         data.nodes.push(FleetNode {
             id: node_id.clone(),
             token_hash: token_hash(&node_token),
+            certificate_fingerprint_sha1: Some(certificate_fingerprint_sha1),
+            pending_certificate_fingerprint_sha1: None,
             report,
             created_at_unix_seconds: now,
             banned: false,
@@ -207,10 +215,64 @@ impl FleetStore {
         Ok((node_id, node_token))
     }
 
+    pub fn validate_enrollment(
+        &self,
+        invitation_token: &str,
+        report: &NodeReport,
+        now: u64,
+    ) -> Result<(), String> {
+        let hash = token_hash(invitation_token);
+        let data = self.inner.lock().map_err(|_| "fleet lock poisoned")?;
+        let invitation = data
+            .invitations
+            .iter()
+            .find(|item| item.token_hash == hash && !item.used)
+            .ok_or_else(|| "invalid or already used enrollment token".to_owned())?;
+        if invitation.expires_at_unix_seconds <= now {
+            return Err("enrollment token expired".to_owned());
+        }
+        if invitation.node_name != report.node_name
+            || invitation.advertise_host != report.advertise_host
+        {
+            return Err("node identity does not match invitation".to_owned());
+        }
+        if data.nodes.iter().any(|node| {
+            node.report.node_name == report.node_name
+                || node.report.advertise_host == report.advertise_host
+        }) {
+            return Err("node identity is already registered".to_owned());
+        }
+        Ok(())
+    }
+
+    pub fn validate_node_certificate_credentials(
+        &self,
+        node_id: &str,
+        node_token: &str,
+        certificate_fingerprint_sha1: &str,
+    ) -> Result<(), String> {
+        let hash = token_hash(node_token);
+        let data = self.inner.lock().map_err(|_| "fleet lock poisoned")?;
+        let node = data
+            .nodes
+            .iter()
+            .find(|item| {
+                item.id == node_id
+                    && item.token_hash == hash
+                    && certificate_matches(item, certificate_fingerprint_sha1)
+            })
+            .ok_or_else(|| "invalid node credentials".to_owned())?;
+        if node.banned {
+            return Err("node is banned from fleet operations".to_owned());
+        }
+        Ok(())
+    }
+
     pub fn update_report(
         &self,
         node_id: &str,
         node_token: &str,
+        certificate_fingerprint_sha1: &str,
         report: NodeReport,
         report_interval_seconds: u64,
     ) -> Result<(), String> {
@@ -219,7 +281,11 @@ impl FleetStore {
         let node = data
             .nodes
             .iter_mut()
-            .find(|item| item.id == node_id && item.token_hash == hash)
+            .find(|item| {
+                item.id == node_id
+                    && item.token_hash == hash
+                    && certificate_matches(item, certificate_fingerprint_sha1)
+            })
             .ok_or_else(|| "invalid node credentials".to_owned())?;
         if node.banned {
             return Err("node is banned from fleet reporting".to_owned());
@@ -229,12 +295,73 @@ impl FleetStore {
         {
             return Err("node identity cannot change after enrollment".to_owned());
         }
+        if node.pending_certificate_fingerprint_sha1.as_deref()
+            == Some(certificate_fingerprint_sha1)
+        {
+            node.certificate_fingerprint_sha1 = node.pending_certificate_fingerprint_sha1.take();
+        }
         record_observation(
             &mut node.observations,
             observation_from_report(&report, report_interval_seconds),
         );
         node.report = report;
         self.save(&data)
+    }
+
+    pub fn stage_certificate_rotation(
+        &self,
+        node_id: &str,
+        node_token: &str,
+        current_fingerprint_sha1: &str,
+        new_fingerprint_sha1: String,
+    ) -> Result<(), String> {
+        let hash = token_hash(node_token);
+        let mut data = self.inner.lock().map_err(|_| "fleet lock poisoned")?;
+        let node = data
+            .nodes
+            .iter_mut()
+            .find(|item| {
+                item.id == node_id
+                    && item.token_hash == hash
+                    && certificate_matches(item, current_fingerprint_sha1)
+            })
+            .ok_or_else(|| "invalid node credentials".to_owned())?;
+        if node.banned {
+            return Err("node is banned from certificate rotation".to_owned());
+        }
+        if node.pending_certificate_fingerprint_sha1.as_deref() == Some(current_fingerprint_sha1) {
+            node.certificate_fingerprint_sha1 = node.pending_certificate_fingerprint_sha1.take();
+        }
+        node.pending_certificate_fingerprint_sha1 = Some(new_fingerprint_sha1);
+        self.save(&data)
+    }
+
+    pub fn revoke_node_certificate_controlled(
+        &self,
+        node_id: &str,
+        context: MutationContext<'_>,
+    ) -> Result<ControlledMutation<()>, String> {
+        let action = "node.certificate.revoke";
+        let mut data = self.inner.lock().map_err(|_| "fleet lock poisoned")?;
+        if let Some(response) = replay(&data, action, &context)? {
+            return Ok(ControlledMutation::Replayed(response));
+        }
+        let node = data
+            .nodes
+            .iter_mut()
+            .find(|node| node.id == node_id)
+            .ok_or_else(|| "node not found".to_owned())?;
+        let current = node.certificate_fingerprint_sha1.take();
+        let pending = node.pending_certificate_fingerprint_sha1.take();
+        if current.is_none() && pending.is_none() {
+            return Err("node certificate is already revoked".to_owned());
+        }
+        let response = commit_mutation(&mut data, action, node_id, "revoked", context);
+        self.save(&data)?;
+        Ok(ControlledMutation::Applied {
+            value: (),
+            response,
+        })
     }
 
     pub fn record_local_observation(
@@ -453,6 +580,11 @@ fn create_invitation_locked(
         advertise_host,
     });
     created
+}
+
+fn certificate_matches(node: &FleetNode, fingerprint_sha1: &str) -> bool {
+    node.certificate_fingerprint_sha1.as_deref() == Some(fingerprint_sha1)
+        || node.pending_certificate_fingerprint_sha1.as_deref() == Some(fingerprint_sha1)
 }
 
 fn replay(
@@ -745,6 +877,8 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
 
+    const CERTIFICATE: &str = "0123456789ABCDEF0123456789ABCDEF01234567";
+
     fn report(at: u64) -> NodeReport {
         NodeReport {
             network_id: "alvenqis-mainnet-candidate".to_owned(),
@@ -771,13 +905,120 @@ mod tests {
             .create_invitation("peer-2".to_owned(), "peer2.example.org".to_owned(), 90, 60)
             .expect("invite");
         let (id, token) = store
-            .enroll(&invite.token, report(100), 100, 15)
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(100), 100, 15)
             .expect("enroll");
-        assert!(store.enroll(&invite.token, report(101), 101, 15).is_err());
-        assert!(store.update_report(&id, "wrong", report(115), 15).is_err());
+        assert!(store
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(101), 101, 15)
+            .is_err());
+        assert!(store
+            .update_report(&id, "wrong", CERTIFICATE, report(115), 15)
+            .is_err());
         store
-            .update_report(&id, &token, report(115), 15)
+            .update_report(&id, &token, CERTIFICATE, report(115), 15)
             .expect("report");
+        assert!(store
+            .update_report(
+                &id,
+                &token,
+                "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+                report(130),
+                15,
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn certificate_rotation_keeps_current_identity_until_pending_identity_reports() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FleetStore::load(dir.path().to_path_buf()).expect("store");
+        let invite = store
+            .create_invitation("peer-2".to_owned(), "peer2.example.org".to_owned(), 90, 60)
+            .expect("invite");
+        let (id, token) = store
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(100), 100, 15)
+            .expect("enroll");
+        let lost_response_certificate = "89ABCDEF0123456789ABCDEF0123456789ABCDEF";
+        store
+            .stage_certificate_rotation(
+                &id,
+                &token,
+                CERTIFICATE,
+                lost_response_certificate.to_owned(),
+            )
+            .expect("stage first rotation");
+        drop(store);
+        let store =
+            FleetStore::load(dir.path().to_path_buf()).expect("reload after staged rotation");
+
+        // A lost response must not strand the agent: its current certificate
+        // remains valid and can authenticate a retry with a new CSR.
+        store
+            .update_report(&id, &token, CERTIFICATE, report(115), 15)
+            .expect("current certificate remains valid");
+        let installed_certificate = "FEDCBA9876543210FEDCBA9876543210FEDCBA98";
+        store
+            .stage_certificate_rotation(&id, &token, CERTIFICATE, installed_certificate.to_owned())
+            .expect("retry rotation with current certificate");
+        assert!(store
+            .update_report(&id, &token, lost_response_certificate, report(130), 15,)
+            .is_err());
+        store
+            .update_report(&id, &token, CERTIFICATE, report(130), 15)
+            .expect("current certificate remains valid until promotion");
+        store
+            .update_report(&id, &token, installed_certificate, report(145), 15)
+            .expect("pending certificate promotes after authenticated report");
+        assert!(store
+            .update_report(&id, &token, CERTIFICATE, report(160), 15)
+            .is_err());
+        store
+            .update_report(&id, &token, installed_certificate, report(160), 15)
+            .expect("promoted certificate remains valid");
+    }
+
+    #[test]
+    fn revocation_clears_current_and_pending_certificate_identities() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FleetStore::load(dir.path().to_path_buf()).expect("store");
+        let invite = store
+            .create_invitation("peer-2".to_owned(), "peer2.example.org".to_owned(), 90, 60)
+            .expect("invite");
+        let (id, token) = store
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(100), 100, 15)
+            .expect("enroll");
+        let pending = "89ABCDEF0123456789ABCDEF0123456789ABCDEF";
+        store
+            .stage_certificate_rotation(&id, &token, CERTIFICATE, pending.to_owned())
+            .expect("stage rotation");
+        store
+            .revoke_node_certificate_controlled(
+                &id,
+                MutationContext {
+                    actor: "operator",
+                    idempotency_key: "certificate-revoke-0001",
+                    request_sha256: "def",
+                    now: 120,
+                },
+            )
+            .expect("revoke");
+        assert!(store
+            .update_report(&id, &token, CERTIFICATE, report(115), 15)
+            .is_err());
+        assert!(store
+            .update_report(&id, &token, pending, report(115), 15)
+            .is_err());
+    }
+
+    #[test]
+    fn legacy_fleet_node_without_pending_certificate_field_deserializes() {
+        let legacy: FleetNode = serde_json::from_value(json!({
+            "id": "legacy-node",
+            "token_hash": "legacy-token-hash",
+            "certificate_fingerprint_sha1": CERTIFICATE,
+        }))
+        .expect("legacy fleet node");
+
+        assert!(legacy.pending_certificate_fingerprint_sha1.is_none());
     }
 
     #[test]
@@ -788,7 +1029,7 @@ mod tests {
             .create_invitation("peer-2".to_owned(), "peer2.example.org".to_owned(), 90, 60)
             .expect("invite");
         let (id, token) = store
-            .enroll(&invite.token, report(100), 100, 15)
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(100), 100, 15)
             .expect("enroll");
         let context = || MutationContext {
             actor: "operator",
@@ -808,7 +1049,9 @@ mod tests {
                 .expect("replay"),
             ControlledMutation::Replayed(_)
         ));
-        assert!(store.update_report(&id, &token, report(115), 15).is_err());
+        assert!(store
+            .update_report(&id, &token, CERTIFICATE, report(115), 15)
+            .is_err());
         assert_eq!(store.audit_entries(10).expect("audit").len(), 1);
     }
 
@@ -820,15 +1063,15 @@ mod tests {
             .create_invitation("peer-2".to_owned(), "peer2.example.org".to_owned(), 90, 60)
             .expect("invite");
         let (id, token) = store
-            .enroll(&invite.token, report(100), 100, 15)
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(100), 100, 15)
             .expect("enroll");
         let first = store.node_views(100, 15).expect("views").remove(0);
         assert_eq!(first.health.grade, "insufficient-data");
         store
-            .update_report(&id, &token, report(115), 15)
+            .update_report(&id, &token, CERTIFICATE, report(115), 15)
             .expect("report 2");
         store
-            .update_report(&id, &token, report(130), 15)
+            .update_report(&id, &token, CERTIFICATE, report(130), 15)
             .expect("report 3");
         let rated = store.node_views(145, 15).expect("views").remove(0);
         assert!(rated.health.score.is_some());

@@ -41,14 +41,24 @@ The manager reads the Control Center V2 version, creates an annotated `desktop-v
   RPC, indexer, explorer, pool, wallet CLI, and CUDA miner artifacts as
   independent matrix entries. Matrix fail-fast is disabled: a failed component
   remains failed while passing components may still publish.
+- `Alvenqis Setup External Images` builds and publishes the runtime, operations,
+  backup scheduler, explorer, website, Pingora gateway, and metrics exporter
+  images as independent matrix entries under the immutable candidate tag.
 - `Release Gate` runs documentation, security, Rust, web, and Setup External
   jobs on release-relevant changes.
+
+The first passing publish job creates the shared prerelease. Its changelog is
+generated from committed history at the exact candidate tag; it never describes
+uncommitted working-tree changes. Later passing jobs only add their own assets.
 
 ## Existing Tags
 
 To upload a new local artifact to an existing candidate tag, use the interactive manager and select the existing-tag upload operation. Existing asset names are not overwritten; publish a new candidate tag when an artifact must be replaced.
 
-To restart a platform build, select the workflow dispatch operation and choose the platform. The workflow always rebuilds and validates that platform.
+To restart a platform or component build, select the workflow dispatch operation
+and choose its workflow. Every workflow checks out and verifies the existing tag
+before rebuilding. An immutable image or release asset is never overwritten;
+publish a new candidate tag when an output must be replaced.
 
 ## Verification
 

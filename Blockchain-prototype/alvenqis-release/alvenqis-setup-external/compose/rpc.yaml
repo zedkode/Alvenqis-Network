@@ -34,6 +34,7 @@ x-runtime-common: &runtime-common
 services:
   alvenqis-rpc:
     <<: *runtime-common
+    networks: [alvenqis-internal, alvenqis-control-rpc]
     environment:
       ALVENQIS_COMPONENT: rpc
       RPC_ACCESS_MODE: ${RPC_ACCESS_MODE:-public-submit}

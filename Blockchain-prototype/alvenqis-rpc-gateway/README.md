@@ -12,14 +12,21 @@ consensus.
 - `public-read`: read routes only;
 - `public-submit`: reads plus `POST /transactions`; mining returns HTTP 410 and
   cannot be enabled by configuration;
+- `internal-edge`: reads, `POST /transactions`, and mining for one unpublished
+  Docker-network backend; operator routes remain disabled and the public
+  gateway must return HTTP 410 for every `/mining/*` request;
 - `private-mining`: mining routes for an unpublished container network used by
   the optional pool role.
 
 The reference VPS binds the Rust service only inside Docker. Its normal RPC
 roles use `public-submit` with mining disabled. Pool roles render
-`private-mining`; the public gateway returns HTTP 410 for every `/mining/*`
-request. Solo mining uses local loopback RPC, while remote miners use verified
-Stratum TLS. Detailed `/p2p/status` exposure remains a separate open finding.
+`private-mining`; a full-stack role with its pool enabled renders
+`internal-edge` so the same private process supports public transaction
+submission and Docker-private pool work. In both cases the public gateway
+returns HTTP 410 for every `/mining/*` request, and no raw RPC port is
+host-published. Solo mining uses local loopback RPC, while remote miners use
+verified Stratum TLS. Detailed `/p2p/status` exposure remains a separate open
+finding.
 
 Mining templates use `alvenqis-mining-v1`, unpredictable in-memory IDs, immutable
 candidate fields, and 90-second expiry. Submissions carry nonce, final hash, and

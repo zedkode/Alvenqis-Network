@@ -35,6 +35,19 @@ entries. Desktop and Setup External workflows are separate for the same reason.
 This rule does not turn an unsuccessful component into a successful release:
 no archive is uploaded for an entry whose tests or packaging failed.
 
+Setup External container images follow the same isolation rule. The
+`setup-external-images.yml` matrix publishes immutable GHCR tags for
+`alvenqis-runtime`, `alvenqis-ops`, `alvenqis-backup-scheduler`,
+`alvenqis-explorer`, `alvenqis-website`, `alvenqis-gateway`, and
+`alvenqis-metrics-exporter`. A failed image build does not cancel passing image
+jobs, and an existing immutable image tag is never replaced. Shared stack
+validation remains a separate visible job: its failure keeps the workflow red
+but does not cancel an image that passed its own build and publication steps.
+
+The shared prerelease notes identify the exact tagged commit and enumerate the
+committed changes since the preceding reachable candidate tag. They do not use
+the local working tree as changelog input.
+
 ## CUDA requirement
 
 The Linux desktop and standalone miner release paths set

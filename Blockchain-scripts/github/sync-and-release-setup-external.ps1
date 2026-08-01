@@ -124,7 +124,7 @@ $next = if ($numbers) { ($numbers | Measure-Object -Maximum).Maximum + 1 } else 
 $tag = "$prefix$next"
 
 Write-Host "[6/8] Creating $tag"
-Invoke-Checked { git tag -a $tag -m "Alvenqis VPS Control Plane $tag" } "tag creation failed"
+Invoke-Checked { git tag -a $tag -m "alvenqis-setup-external $tag" } "tag creation failed"
 try {
   Invoke-Checked { git push origin $tag } "tag push failed"
 } catch {

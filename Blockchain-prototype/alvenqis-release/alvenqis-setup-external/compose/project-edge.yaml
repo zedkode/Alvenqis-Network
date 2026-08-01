@@ -23,11 +23,16 @@ x-runtime-image: &runtime-image
 services:
   alvenqis-control:
     <<: *runtime-image
+    networks:
+      - alvenqis-control-gateway
+      - alvenqis-control-rpc
+      - alvenqis-control-monitoring
+      - alvenqis-control-egress
     env_file: [.env]
     environment:
       ALVENQIS_COMPONENT: control
       ALVENQIS_DEPLOYMENT_MODE: docker
-    secrets: [alvenqis_storage_key]
+    secrets: [alvenqis_storage_key, control_proxy_token]
     volumes:
       - ${ALVENQIS_STATE_ROOT:-./state}/config/generated:/config
       - ${ALVENQIS_STATE_ROOT:-./state}/control:/data/control
@@ -138,15 +143,21 @@ services:
 
   gateway:
     <<: *service-guardrails
+    user: "10001:10001"
     profiles: [project-edge]
+    networks: [alvenqis-edge-ingress, alvenqis-internal, alvenqis-control-gateway]
     image: ${ALVENQIS_GATEWAY_IMAGE:-ghcr.io/zedkode/alvenqis-gateway}:${ALVENQIS_VERSION:-2.1.0-no-autoupdate}
     build:
-      context: ${ALVENQIS_HOST_WORKSPACE:-.}/docker/gateway
-      dockerfile: Dockerfile
+      context: ${ALVENQIS_HOST_ROOT:-../../..}
+      dockerfile: Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/gateway/Dockerfile
     env_file: [.env]
-    secrets: [admin_password]
+    secrets: [admin_password, admin_viewer_password, control_proxy_token]
+    ports:
+      - "${FLEET_MTLS_BIND_ADDRESS:-127.0.0.1}:${FLEET_MTLS_PORT:-10443}:10443"
+    volumes:
+      - ${ALVENQIS_STATE_ROOT:-./state}/control/pki/edge:/run/alvenqis-pki:ro
     depends_on:
-      alvenqis-control: {condition: service_started}
+      alvenqis-control: {condition: service_healthy}
       alvenqis-rpc: {condition: service_started}
       alvenqis-ops: {condition: service_started}
       alvenqis-website: {condition: service_healthy}
@@ -154,7 +165,7 @@ services:
     read_only: true
     tmpfs: [/tmp:size=64m]
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/gateway-health"]
+      test: ["CMD", "curl", "-fsS", "-H", "Host: gateway-health.invalid", "http://127.0.0.1:8080/gateway-health"]
       interval: 20s
       timeout: 5s
       retries: 8
