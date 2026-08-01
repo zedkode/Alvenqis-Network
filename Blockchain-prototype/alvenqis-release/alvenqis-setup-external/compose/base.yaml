@@ -5,10 +5,27 @@ services: {}
 networks:
   alvenqis-internal:
     driver: bridge
+  # Only the Cloudflare connector and the Pingora edge share this ingress segment.
+  # It intentionally permits connector egress; application services stay off it.
+  alvenqis-edge-ingress:
+    driver: bridge
+  alvenqis-control-gateway:
+    driver: bridge
+    internal: true
+  alvenqis-control-rpc:
+    driver: bridge
+    internal: true
+  alvenqis-control-monitoring:
+    driver: bridge
+    internal: true
+  alvenqis-control-egress:
+    driver: bridge
 
 secrets:
   alvenqis_storage_key: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/alvenqis_storage_key"}
   admin_password: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/admin_password"}
+  admin_viewer_password: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/admin_viewer_password"}
+  control_proxy_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/control_proxy_token"}
   grafana_password: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/grafana_password"}
   setup_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/setup_token"}
   broker_token: {file: "${ALVENQIS_STATE_ROOT:-./state}/secrets/broker_token"}

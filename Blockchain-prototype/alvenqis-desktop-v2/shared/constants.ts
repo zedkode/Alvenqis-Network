@@ -21,7 +21,7 @@ export const LOCAL_REFRESH_MIN_MS = 1_500;
 export const LIVE_LOG_INTERVAL_MS = 2_000;
 /** Miner console while actively mining. */
 export const MINER_CONSOLE_ACTIVE_MS = 800;
-export const APP_VERSION = "2.0.0";
+export const APP_VERSION = "2.0.1";
 export const APP_NAME = "Alvenqis Control Center V2";
 /** Allowlisted miner CLI verbs for the interactive console (no free-form shell). */
 export const MINER_SAFE_COMMANDS = [

@@ -302,7 +302,11 @@ with tarfile.open(sys.argv[1], "r:gz") as archive:
         path = PurePosixPath(member.name)
         if path.is_absolute() or ".." in path.parts:
             raise SystemExit(f"unsafe secrets archive member: {member.name}")
-        if member.name != "state/secrets" and not member.name.startswith("state/secrets/"):
+        allowed_roots = ("state/secrets", "state/control")
+        if not any(
+            member.name == root or member.name.startswith(f"{root}/")
+            for root in allowed_roots
+        ):
             raise SystemExit(f"unexpected secrets archive member: {member.name}")
         if not (member.isfile() or member.isdir()):
             raise SystemExit(f"unsupported secrets archive member type: {member.name}")
@@ -346,6 +350,13 @@ PY
   exit 74
 }
 candidate="$stage/state"
+if [[ "$restore_secrets" == true && -d "$secrets_stage/state/control" ]]; then
+  [[ ! -e "$candidate/control" ]] || {
+    echo "Refusing restore with duplicate plaintext and encrypted control state." >&2
+    exit 74
+  }
+  cp -a "$secrets_stage/state/control" "$candidate/control"
+fi
 candidate_chain="$candidate/data/chain"
 candidate_config="$candidate/config/generated/node.toml"
 [[ -f "$candidate_chain/chain.sqlite3" && -f "$candidate_config" ]] || {

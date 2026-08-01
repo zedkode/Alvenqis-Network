@@ -21,6 +21,12 @@ pub struct AdminConfig {
     pub controller_url: Option<String>,
     #[serde(default)]
     pub public_rpc_url: Option<String>,
+    #[serde(default)]
+    pub fleet_enrollment_url: Option<String>,
+    #[serde(default)]
+    pub fleet_report_url: Option<String>,
+    #[serde(default)]
+    pub fleet_server_name: Option<String>,
     #[serde(default = "default_report_interval")]
     pub report_interval_seconds: u64,
     #[serde(default = "default_invitation_ttl")]
@@ -89,6 +95,30 @@ impl AdminConfig {
                 return Err("public_rpc_url must not contain credentials or whitespace".to_owned());
             }
         }
+        for (field, url) in [
+            ("fleet_enrollment_url", &self.fleet_enrollment_url),
+            ("fleet_report_url", &self.fleet_report_url),
+        ] {
+            let Some(url) = url else { continue };
+            if !url.is_empty() && !url.starts_with("https://") {
+                return Err(format!("{field} must use HTTPS"));
+            }
+            if url.contains('@') || url.chars().any(char::is_whitespace) {
+                return Err(format!(
+                    "{field} must not contain credentials or whitespace"
+                ));
+            }
+        }
+        if let Some(name) = &self.fleet_server_name {
+            if name.is_empty()
+                || name.len() > 253
+                || !name
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || "-.".contains(character))
+            {
+                return Err("fleet_server_name is not a valid DNS name".to_owned());
+            }
+        }
         if !self.release_bundle_url.starts_with("https://")
             || self.release_bundle_url.contains('@')
             || self.release_bundle_url.chars().any(char::is_whitespace)
@@ -124,6 +154,9 @@ mod tests {
             release_bundle_url: "https://example.org/bundle.tar.gz".to_owned(),
             controller_url: None,
             public_rpc_url: None,
+            fleet_enrollment_url: None,
+            fleet_report_url: None,
+            fleet_server_name: None,
             report_interval_seconds: 15,
             invitation_ttl_seconds: 900,
         }

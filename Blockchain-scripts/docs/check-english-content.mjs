@@ -60,6 +60,15 @@ const ignoredDirectories = new Set([
 const excludedFiles = new Set([
   'Blockchain-scripts/docs/check-english-content.mjs',
 ])
+// Narrow compatibility literals retained by internal governance documents:
+// one historical source filename and the owner's documented Romanian aliases
+// for the otherwise-English continuation command. They are not public prose.
+const permittedNonEnglishLiterals = [
+  'PLAN_IMBUNATATIRI_ALVENQIS_NETWORK.md',
+  'PLAN_IMBUNATATIRI...md',
+  'continuă dezvoltarea',
+  'continuă',
+]
 const romanianFilenamePattern =
   /(?:^|[-_.])(CITESTE|CUM[-_]FACI|DECIZII|DOCUMENTATIE|FAZA|IMBUNATATIRI|INCEPUT|RETEA|ROMANA|ROMANESC)(?:[-_.]|$)/i
 const romanianDiacriticsPattern = /[ăâîșțĂÂÎȘȚ]/
@@ -95,7 +104,14 @@ for (const absolutePath of files.sort()) {
 
   const content = await fs.readFile(absolutePath, 'utf8')
   for (const [index, line] of content.split(/\r?\n/).entries()) {
-    if (romanianDiacriticsPattern.test(line) || distinctiveRomanianWordsPattern.test(line)) {
+    const checkedLine = permittedNonEnglishLiterals.reduce(
+      (value, literal) => value.replaceAll(literal, ''),
+      line,
+    )
+    if (
+      romanianDiacriticsPattern.test(checkedLine) ||
+      distinctiveRomanianWordsPattern.test(checkedLine)
+    ) {
       issues.push(`${relativePath}:${index + 1}: Romanian content`)
     }
   }

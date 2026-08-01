@@ -726,21 +726,21 @@ function Wait-GitHubWorkflow {
 }
 
 function New-CandidateTag {
-    $packagePath = Join-Path $script:RepoRoot "Blockchain-prototype\alvenqis-desktop-tauri\package.json"
+    $packagePath = Join-Path $script:RepoRoot "Blockchain-prototype\alvenqis-desktop-v2\package.json"
     $version = [string]((Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json).version)
     $version = $version -replace '[-+].*$', ''
     if ($version -notmatch '^\d+\.\d+\.\d+$') {
         throw "Desktop package version is not a candidate-release semantic version."
     }
-    $remoteResult = Invoke-ExternalCommand -FilePath "git" -ArgumentList @("ls-remote", "--tags", "origin", "v$version-candidate.*") -DisplayName "read existing candidate tags"
+    $remoteResult = Invoke-ExternalCommand -FilePath "git" -ArgumentList @("ls-remote", "--tags", "origin", "desktop-v$version-candidate.*") -DisplayName "read existing candidate tags"
     $maximum = 0
     foreach ($line in $remoteResult.Output) {
-        if ($line -match "refs/tags/v$([regex]::Escape($version))-candidate\.(\d+)$") {
+        if ($line -match "refs/tags/desktop-v$([regex]::Escape($version))-candidate\.(\d+)$") {
             $number = [int]$Matches[1]
             if ($number -gt $maximum) { $maximum = $number }
         }
     }
-    return "v$version-candidate.$($maximum + 1)"
+    return "desktop-v$version-candidate.$($maximum + 1)"
 }
 
 function Invoke-CandidateRelease {

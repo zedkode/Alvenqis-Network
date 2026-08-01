@@ -19,7 +19,7 @@ if [[ "$standalone" != true ]]; then
   chmod 0600 "$STATE_ROOT/control/enrollment.token"
 fi
 unset token
-for n in admin_password grafana_password setup_token broker_token cloudflare_tunnel_token pool_admin_token backup_passphrase alvenqis_storage_key; do openssl rand -hex 32 > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
+for n in admin_password admin_viewer_password control_proxy_token grafana_password setup_token broker_token cloudflare_tunnel_token pool_admin_token backup_passphrase alvenqis_storage_key; do openssl rand -hex 32 > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
 for n in cloudflare_api_token r2_secret_access_key discord_webhook telegram_bot_token smtp_password; do : > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
 python3 - "$root" "$repo" "$STATE_ROOT" "$base" "$node" "$email" "$controller" "$bundle" "$host" "$role" "$standalone" "$enable_pool" "${seeds[@]}" <<'PY'
 import json

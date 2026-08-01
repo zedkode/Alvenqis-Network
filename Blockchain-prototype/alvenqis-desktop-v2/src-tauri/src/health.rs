@@ -268,6 +268,16 @@ mod tests {
 
     #[test]
     fn accepts_dot_alvenqis_local_segment() {
+        let path = PathBuf::from("test-root")
+            .join("Alvenqis")
+            .join("ControlCenter")
+            .join(".alvenqis-local");
+        assert!(local_root_name_ok(&path));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn accepts_windows_absolute_dot_alvenqis_local_segment() {
         let path =
             PathBuf::from(r"C:\Users\x\AppData\Local\Alvenqis\ControlCenter\.alvenqis-local");
         assert!(local_root_name_ok(&path));
@@ -275,7 +285,9 @@ mod tests {
 
     #[test]
     fn rejects_temp_without_required_segment() {
-        let path = PathBuf::from(r"C:\Users\x\AppData\Local\Temp\alvenqis-critical-smoke-local");
+        let path = PathBuf::from("test-root")
+            .join("Temp")
+            .join("alvenqis-critical-smoke-local");
         assert!(!local_root_name_ok(&path));
     }
 }

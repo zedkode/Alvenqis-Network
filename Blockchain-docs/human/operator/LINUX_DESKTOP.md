@@ -1,6 +1,6 @@
 # Linux Desktop - Alvenqis Control Center
 
-Status: **1.0.0 Mainnet Candidate / Prototype** (not public Mainnet)
+Status: **2.0.1 Mainnet Candidate / Prototype** (not public Mainnet)
 
 Linux and Windows use the same React/Tauri codebase. The product surface covers
 wallet, optional NVIDIA CUDA FiroPoW mining, pool view, explorer, local node/RPC
@@ -97,7 +97,7 @@ Ubuntu, a VM, or GitHub Actions `ubuntu-latest`.
 Output:
 
 ```text
-Blockchain-prototype/alvenqis-release/apps/linux/
+release-artifacts/linux-v2/
   *.deb
   *.AppImage
   *.rpm          # when requested and tooling is present
@@ -109,11 +109,11 @@ Blockchain-prototype/alvenqis-release/apps/linux/
 
 ```bash
 # Ubuntu / Debian
-sudo apt install ./Blockchain-prototype/alvenqis-release/apps/linux/*.deb
+sudo apt install ./release-artifacts/linux-v2/*.deb
 
 # AppImage (Ubuntu, Debian, Arch, CachyOS, …)
-chmod +x Blockchain-prototype/alvenqis-release/apps/linux/*.AppImage
-./Blockchain-prototype/alvenqis-release/apps/linux/*.AppImage
+chmod +x release-artifacts/linux-v2/*.AppImage
+./release-artifacts/linux-v2/*.AppImage
 
 # Arch / CachyOS from monorepo PKGBUILD
 cd Blockchain-prototype/alvenqis-desktop-v2/packaging/arch

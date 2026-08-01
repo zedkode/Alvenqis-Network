@@ -230,6 +230,80 @@ fn public_submit_cannot_opt_in_to_mining() {
         .contains("public RPC profiles cannot expose mining endpoints"));
 }
 
+#[test]
+fn internal_edge_profile_combines_only_edge_required_capabilities() {
+    let mode = RpcAccessMode::InternalEdge;
+    assert!(mode.allows_transaction_submission());
+    assert!(mode.default_exposes_mining());
+    assert!(!mode.allows_operator_endpoints());
+    assert_eq!(
+        serde_json::to_value(mode).expect("serialize access mode"),
+        Value::from("internal-edge")
+    );
+    assert_eq!(
+        serde_json::from_value::<RpcAccessMode>(Value::from("internal-edge"))
+            .expect("deserialize access mode"),
+        mode
+    );
+}
+
+#[tokio::test]
+async fn internal_edge_profile_registers_submission_and_mining_routes() {
+    let (temp_dir, _config_path, data_dir) = setup_paths();
+    let index_dir = temp_dir.path().join(".alvenqis-dev/indexer");
+    let mut state = rpc_state_with_access_mode(&data_dir, &index_dir, RpcAccessMode::InternalEdge);
+    state.config.expose_mining_endpoints = Some(true);
+    state.config.validate().expect("internal-edge config");
+    let app = router(state);
+
+    let transaction_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/transactions")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .expect("transaction request"),
+        )
+        .await
+        .expect("transaction response");
+    assert_eq!(
+        transaction_response.status(),
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+
+    let health_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .expect("health request"),
+        )
+        .await
+        .expect("health response");
+    assert_eq!(health_response.status(), StatusCode::OK);
+    let health_body = axum::body::to_bytes(health_response.into_body(), usize::MAX)
+        .await
+        .expect("health body");
+    let health_json: Value = serde_json::from_slice(&health_body).expect("health JSON");
+    let health_mode = health_json["mode"].as_str().expect("health mode");
+    assert!(health_mode.contains("public mining disabled at gateway"));
+    assert!(health_mode.contains("private pool mining enabled"));
+
+    let mining_response = app
+        .oneshot(
+            Request::builder()
+                .uri("/mining/template")
+                .body(Body::empty())
+                .expect("mining request"),
+        )
+        .await
+        .expect("mining response");
+    assert_eq!(mining_response.status(), StatusCode::BAD_REQUEST);
+}
+
 #[tokio::test]
 async fn health_response_works() {
     let (temp_dir, _config_path, data_dir) = setup_paths();

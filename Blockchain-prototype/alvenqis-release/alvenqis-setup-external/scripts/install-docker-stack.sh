@@ -39,7 +39,17 @@ else
   openssl rand -hex 32 > "$storage_key"
 fi
 chmod 0444 "$storage_key"
-for n in setup_token broker_token admin_password grafana_password pool_admin_token backup_passphrase cloudflare_tunnel_token; do [[ -s "$STATE_ROOT/secrets/$n" && "$(cat "$STATE_ROOT/secrets/$n")" != validation-placeholder ]] || openssl rand -hex 32 > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
+for n in setup_token broker_token admin_password admin_viewer_password grafana_password pool_admin_token backup_passphrase cloudflare_tunnel_token; do [[ -s "$STATE_ROOT/secrets/$n" && "$(cat "$STATE_ROOT/secrets/$n")" != validation-placeholder ]] || openssl rand -hex 32 > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
+control_proxy_token="$STATE_ROOT/secrets/control_proxy_token"
+if [[ -s "$control_proxy_token" && "$(cat "$control_proxy_token")" != validation-placeholder ]]; then
+  grep -Eq '^[0-9A-Fa-f]{64}$' "$control_proxy_token" || {
+    echo "Existing control proxy token is invalid; refusing to replace it." >&2
+    exit 78
+  }
+else
+  openssl rand -hex 32 > "$control_proxy_token"
+fi
+chmod 0444 "$control_proxy_token"
 for n in cloudflare_api_token r2_secret_access_key discord_webhook telegram_bot_token smtp_password; do [[ -e "$STATE_ROOT/secrets/$n" ]] || : > "$STATE_ROOT/secrets/$n"; chmod 0444 "$STATE_ROOT/secrets/$n"; done
 cat > .installer.env <<EOF
 ALVENQIS_HOST_WORKSPACE=$root

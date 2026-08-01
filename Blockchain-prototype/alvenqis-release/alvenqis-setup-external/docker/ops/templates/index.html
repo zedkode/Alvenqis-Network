@@ -33,7 +33,7 @@
         <label>Base domain<input name="base_domain" value="example.com" required></label>
         <label>Node name<input name="node_name" value="bootstrap-eu-1" required></label>
         <label>Operator email<input name="admin_email" type="email" value="operator@example.com" required></label>
-        <label>Admin user<input name="admin_user" value="alvenqis-admin"></label>
+        <label>Operator user<input name="admin_operator_user" value="alvenqis-admin"></label>
         <label>Role<select name="control_role"><option value="controller">Central controller</option><option value="standalone">Standalone</option><option value="agent">Enrolled node</option></select></label>
         <label>Fixed local version<input name="alvenqis_version" value="2.1.0-no-autoupdate" readonly></label>
         <label>Controller URL<input name="controller_url" placeholder="https://control.example.com"></label>
@@ -41,9 +41,18 @@
         <label class="full">P2P seeds, one per line or comma-separated<input name="seed_nodes" placeholder="/dns4/node.example.com/tcp/20787"></label>
         <label class="full">Immutable Docker enrollment archive URL<input name="release_bundle_url" placeholder="https://download.example.com/alvenqis-setup-external.tar.gz"></label>
       </div>
+      <h2>Fleet transport</h2>
+      <div class="grid">
+        <label>Enrollment hostname<input name="fleet_host" placeholder="fleet.example.com"></label>
+        <label>Direct mTLS hostname<input name="fleet_mtls_host" placeholder="fleet-mtls.example.com"></label>
+        <label>mTLS bind IPv4<input name="fleet_mtls_bind_address" value="127.0.0.1" required></label>
+        <label>mTLS port<input name="fleet_mtls_port" type="number" value="10443" min="1" max="65535" required></label>
+        <p class="note full">Keep the mTLS bind on 127.0.0.1 unless this controller is intentionally configured for remote agents. A public controller normally uses an explicit interface address or 0.0.0.0 plus a restricted firewall rule.</p>
+      </div>
       <h2>Credentials</h2>
       <div class="grid">
-        <label>Control-panel password<input name="admin_password" type="password" placeholder="generated when empty"></label>
+        <label>Operator password<input name="admin_password" type="password" autocomplete="new-password" required></label>
+        <label>Viewer password<input name="admin_viewer_password" type="password" autocomplete="new-password" required></label>
         <label>Grafana password<input name="grafana_password" type="password" placeholder="generated when empty"></label>
         <label>Backup encryption password<input name="backup_passphrase" type="password" placeholder="generated when empty"></label>
       </div>
@@ -75,7 +84,7 @@
 </main>
 <script>
 const apiBase=location.pathname.startsWith('/setup')?'/setup':'';const headers={'Content-Type':'application/json'};const log=document.querySelector('#log');const services=document.querySelector('#services');let poll;
-function formData(){const f=new FormData(document.querySelector('#setup'));const obj=Object.fromEntries(f.entries());for(const name of ['enable_pool','backup_remote_enabled','alert_email_enabled','alert_smtp_starttls'])obj[name]=f.has(name);for(const name of ['backup_retention_days','backup_interval_seconds','alert_smtp_port'])obj[name]=Number(obj[name]);return obj}
+function formData(){const f=new FormData(document.querySelector('#setup'));const obj=Object.fromEntries(f.entries());for(const name of ['enable_pool','backup_remote_enabled','alert_email_enabled','alert_smtp_starttls'])obj[name]=f.has(name);for(const name of ['fleet_mtls_port','backup_retention_days','backup_interval_seconds','alert_smtp_port'])obj[name]=Number(obj[name]);return obj}
 async function call(url,options={}){const r=await fetch(url,{...options,headers:{...headers,...(options.headers||{})}});const body=await r.json().catch(()=>({}));if(!r.ok)throw new Error(body.error||`HTTP ${r.status}`);return body}
 async function watch(){clearInterval(poll);poll=setInterval(async()=>{const j=await call(apiBase+'/api/job');log.textContent=j.output||`${j.kind||'operation'} in progress...`;if(!j.running){clearInterval(poll);refresh()}},1500)}
 function message(text,bad=false){const p=document.createElement('p');p.textContent=text;if(bad)p.className='bad';services.replaceChildren(p)}

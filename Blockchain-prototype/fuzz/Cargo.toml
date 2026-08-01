@@ -36,3 +36,6 @@ bench = false
 
 [workspace]
 members = ["."]
+
+[patch.crates-io]
+libp2p-yamux = { path = "../third-party/libp2p-yamux" }

@@ -150,22 +150,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cat > release-notes.md <<'EOF'
-          ## Mainnet Candidate prerelease — not public Mainnet
-
-          Windows, Linux, server-component, and Setup External assets are built independently from the same candidate tag. A component failure remains visible and does not block artifacts that passed their own checks.
-
-          The desktop product is Tauri-based. Electron, CPU mining, and OpenCL mining are not shipped. Verify every platform-specific SHA-256 checksum file before testing an asset.
-          EOF
-
-          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" \
+          bash Blockchain-scripts/github/generate-candidate-release-notes.sh \
+            "$RELEASE_TAG" release-notes.md
+          for attempt in 1 2 3 4 5; do
+            gh release view "$RELEASE_TAG" >/dev/null 2>&1 && break
+            if gh release create "$RELEASE_TAG" \
               --verify-tag \
               --title "Alvenqis $RELEASE_TAG" \
               --notes-file release-notes.md \
-              --prerelease \
-              || gh release view "$RELEASE_TAG" >/dev/null
-          fi
+              --prerelease; then
+              break
+            fi
+            sleep "$attempt"
+          done
+          gh release view "$RELEASE_TAG" >/dev/null
 
       - name: Upload Windows assets to GitHub Release
         shell: bash

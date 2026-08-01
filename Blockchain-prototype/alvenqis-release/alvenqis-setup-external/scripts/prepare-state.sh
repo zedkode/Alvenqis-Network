@@ -44,7 +44,9 @@ create_owned 10001 10001 \
   "$STATE_ROOT/data" \
   "$STATE_ROOT/data/chain" "$STATE_ROOT/data/mempool" \
   "$STATE_ROOT/data/indexer" "$STATE_ROOT/data/node" \
-  "$STATE_ROOT/control" "$STATE_ROOT/pool" "$STATE_ROOT/loki"
+  "$STATE_ROOT/control" "$STATE_ROOT/control/pki" \
+  "$STATE_ROOT/control/pki/ca" "$STATE_ROOT/control/pki/edge" \
+  "$STATE_ROOT/pool" "$STATE_ROOT/loki"
 create_owned 65534 65534 "$STATE_ROOT/prometheus" "$STATE_ROOT/alertmanager"
 create_owned 472 472 "$STATE_ROOT/grafana"
 create_owned 473 473 "$STATE_ROOT/alloy"

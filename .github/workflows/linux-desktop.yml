@@ -84,11 +84,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" \
+          bash Blockchain-scripts/github/generate-candidate-release-notes.sh \
+            "$RELEASE_TAG" release-notes.md
+          for attempt in 1 2 3 4 5; do
+            gh release view "$RELEASE_TAG" >/dev/null 2>&1 && break
+            if gh release create "$RELEASE_TAG" \
               --verify-tag \
               --title "Alvenqis Linux $RELEASE_TAG" \
-              --notes "Standalone Linux Control Center build." \
-              --prerelease
-          fi
+              --notes-file release-notes.md \
+              --prerelease; then
+              break
+            fi
+            sleep "$attempt"
+          done
+          gh release view "$RELEASE_TAG" >/dev/null
           gh release upload "$RELEASE_TAG" release-publish/linux/*

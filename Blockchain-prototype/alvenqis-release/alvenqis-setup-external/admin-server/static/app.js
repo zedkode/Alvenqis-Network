@@ -19,6 +19,17 @@ let lastEnrollmentToken = "";
 let lastInvite = null;
 let overviewCache = null;
 let summaryCache = null;
+let isOperator = false;
+
+async function loadSession() {
+  const response = await fetch("./api/session", { cache: "no-store" });
+  const session = await response.json();
+  if (!response.ok) throw new Error(session.error || `HTTP ${response.status}`);
+  isOperator = session.role === "operator";
+  document
+    .querySelectorAll('[data-view="enroll"], [data-view="bootstrapView"], [data-goto="enroll"]')
+    .forEach((element) => element.classList.toggle("hidden", !isOperator));
+}
 
 function toast(msg, ok = true) {
   const el = $("toast");
@@ -186,7 +197,7 @@ function renderNodes(nodes) {
       <td class="row-actions">
         <button type="button" class="btn tiny" data-action="detail" data-id="${escapeAttr(node.node_id)}">Detail</button>
         ${
-          isLocal
+          isLocal || !isOperator
             ? ""
             : `${node.banned
                 ? `<button type="button" class="btn tiny" data-action="unban" data-id="${escapeAttr(node.node_id)}">Unban</button>`
@@ -396,7 +407,7 @@ async function loadInvitations() {
           <td><span class="badge ${st}">${st.toUpperCase()}</span></td>
           <td>${formatTime(inv.expires_at_unix_seconds)}</td>
           <td>${
-            st === "pending"
+            st === "pending" && isOperator
               ? `<button type="button" class="btn tiny danger" data-revoke="${escapeAttr(inv.invitation_id)}">Revoke</button>`
               : "—"
           }</td>
@@ -602,5 +613,5 @@ function escapeAttr(s) {
   return escapeHtml(s).replace(/'/g, "&#39;");
 }
 
-void refresh();
+void loadSession().then(refresh).catch((error) => showError(error.message));
 setInterval(() => void refresh(), 12000);

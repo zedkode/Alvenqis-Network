@@ -83,7 +83,8 @@ def main() -> None:
         "EXPLORER_HOST": pick(vals, "EXPLORER_HOST", default="explorer.dohotstudio.com"),
         "NODE_NAME": "bootstrap-eu-1",
         "ADMIN_EMAIL": pick(vals, "ADMIN_EMAIL", default="contact@dohotstudio.com"),
-        "ADMIN_USER": "alvenqis-admin",
+        "ADMIN_OPERATOR_USER": "alvenqis-operator",
+        "ADMIN_VIEWER_USER": "alvenqis-viewer",
         "CONTROL_ROLE": "controller",
         "CONTROLLER_URL": pick(vals, "CONTROLLER_URL"),
         "ENROLLMENT_TOKEN": pick(vals, "ENROLLMENT_TOKEN"),
@@ -91,6 +92,13 @@ def main() -> None:
         "CONTROL_HOST": pick(vals, "CONTROL_HOST", default="control.dohotstudio.com"),
         "RPC_HOST": pick(vals, "RPC_HOST", default="rpcnode.dohotstudio.com"),
         "FLEET_HOST": pick(vals, "FLEET_HOST", default="fleet.dohotstudio.com"),
+        "FLEET_MTLS_HOST": pick(
+            vals, "FLEET_MTLS_HOST", default="fleet-mtls.dohotstudio.com"
+        ),
+        "FLEET_MTLS_BIND_ADDRESS": pick(
+            vals, "FLEET_MTLS_BIND_ADDRESS", default="127.0.0.1"
+        ),
+        "FLEET_MTLS_PORT": pick(vals, "FLEET_MTLS_PORT", default="10443"),
         "GRAFANA_HOST": pick(vals, "GRAFANA_HOST", default="grafana.dohotstudio.com"),
         "PROMETHEUS_HOST": pick(vals, "PROMETHEUS_HOST", default="prometheus.dohotstudio.com"),
         "POOL_HOST": pick(vals, "POOL_HOST", default="pool.dohotstudio.com"),

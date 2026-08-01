@@ -1,7 +1,7 @@
 # Alvenqis Control Center V2
 
 **Status:** Mainnet Candidate
-**Package:** `alvenqis-desktop-v2` (`2.0.0`)
+**Package:** `alvenqis-desktop-v2` (`2.0.1`)
 **Base:** evolved from the original Control Center implementation (logic, Rust bridge, mining, wallet)
 
 V2 is a **presentation-layer evolution**: denser shell, glass panels, motion, Analytics
@@ -23,12 +23,16 @@ This directory is the canonical Control Center implementation in the public repo
 
 ## Develop
 
-```powershell
-cd Blockchain-prototype\alvenqis-desktop-v2
+```shell
+cd Blockchain-prototype/alvenqis-desktop-v2
 npm install
 npm run prepare:native
 npm run tauri:dev
 ```
+
+`prepare:native` dispatches to the PowerShell preparer on Windows and the Bash
+preparer on Linux. Use `prepare:native:sidecars` when the complete native
+sidecar set is required for a package build.
 
 Typecheck:
 

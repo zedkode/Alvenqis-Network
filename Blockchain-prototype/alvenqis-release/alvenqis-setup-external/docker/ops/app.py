@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
@@ -49,6 +50,9 @@ def ensure_layout() -> None:
         STATE_DIR / "data" / "indexer": (10001, 10001),
         STATE_DIR / "data" / "node": (10001, 10001),
         STATE_DIR / "control": (10001, 10001),
+        STATE_DIR / "control" / "pki": (10001, 10001),
+        STATE_DIR / "control" / "pki" / "ca": (10001, 10001),
+        STATE_DIR / "control" / "pki" / "edge": (10001, 10001),
         STATE_DIR / "pool": (10001, 10001),
         STATE_DIR / "prometheus": (65534, 65534),
         STATE_DIR / "grafana": (472, 472),
@@ -114,6 +118,7 @@ def write_access_summary(
     data: dict[str, Any],
     hosts: dict[str, str],
     admin_password: str,
+    admin_viewer_password: str,
     grafana_password: str,
 ) -> None:
     control_dir = STATE_DIR / "control"
@@ -125,8 +130,14 @@ def write_access_summary(
             f"Generated UTC: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}",
             "",
             f"Master panel: https://{hosts['CONTROL_HOST']}",
-            f"Master user: {data.get('admin_user', 'alvenqis-admin')}",
-            f"Master password: {admin_password}",
+            f"Operator user: {data.get('admin_operator_user', 'alvenqis-operator')}",
+            f"Operator password: {admin_password}",
+            f"Viewer user: {data.get('admin_viewer_user', 'alvenqis-viewer')}",
+            f"Viewer password: {admin_viewer_password}",
+            "",
+            f"Fleet enrollment: https://{hosts['FLEET_HOST']}",
+            f"Fleet mTLS reports: https://{hosts['FLEET_MTLS_HOST']}:{data['fleet_mtls_port']}",
+            f"Fleet mTLS bind: {data['fleet_mtls_bind_address']}:{data['fleet_mtls_port']}",
             "",
             f"Grafana: https://{hosts['GRAFANA_HOST']}",
             f"Grafana user: {data.get('grafana_admin_user', 'admin')}",
@@ -166,9 +177,14 @@ def validate_payload(data: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("node_name must use letters, digits, dot, underscore or hyphen")
     if "@" not in admin_email:
         raise ValueError("admin_email is invalid")
-    for field in ("admin_password", "grafana_password"):
+    for field in ("admin_password", "admin_viewer_password", "grafana_password"):
         if not str(data.get(field, "")).strip():
             raise ValueError(f"{field} is required")
+    if secrets.compare_digest(
+        str(data.get("admin_password", "")).strip(),
+        str(data.get("admin_viewer_password", "")).strip(),
+    ):
+        raise ValueError("viewer and operator passwords must be distinct")
 
     cloudflare_mode = str(data.get("cloudflare_mode", "disabled"))
     if cloudflare_mode not in {"disabled", "dns", "tunnel"}:
@@ -179,6 +195,41 @@ def validate_payload(data: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("control_role must be standalone, controller or agent")
     if control_role == "agent" and not str(data.get("controller_url", "")).startswith("https://"):
         raise ValueError("agent role requires an HTTPS controller_url")
+
+    fleet_host = str(data.get("fleet_host") or f"fleet.{base_domain}").strip().lower()
+    fleet_mtls_host = str(
+        data.get("fleet_mtls_host") or f"fleet-mtls.{base_domain}"
+    ).strip().lower()
+    for field, hostname in (
+        ("fleet_host", fleet_host),
+        ("fleet_mtls_host", fleet_mtls_host),
+    ):
+        if not DOMAIN_RE.match(hostname):
+            raise ValueError(f"{field} is invalid")
+    if fleet_mtls_host == fleet_host:
+        raise ValueError("fleet_mtls_host must be distinct from fleet_host")
+
+    fleet_mtls_bind_address = str(
+        data.get("fleet_mtls_bind_address") or "127.0.0.1"
+    ).strip()
+    try:
+        parsed_fleet_bind = ipaddress.IPv4Address(fleet_mtls_bind_address)
+    except ipaddress.AddressValueError as exc:
+        raise ValueError("fleet_mtls_bind_address must be a literal IPv4 address") from exc
+    if parsed_fleet_bind.is_multicast or parsed_fleet_bind == ipaddress.IPv4Address(
+        "255.255.255.255"
+    ):
+        raise ValueError("fleet_mtls_bind_address must be a usable IPv4 bind address")
+    if control_role == "agent" and not parsed_fleet_bind.is_loopback:
+        raise ValueError("agent role must keep fleet mTLS bound to loopback")
+
+    raw_fleet_mtls_port = data.get("fleet_mtls_port", 10443)
+    try:
+        fleet_mtls_port = int(raw_fleet_mtls_port)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("fleet_mtls_port must be an integer") from exc
+    if not 1 <= fleet_mtls_port <= 65535:
+        raise ValueError("fleet_mtls_port must be between 1 and 65535")
 
     ALVENQIS_version = str(data.get("ALVENQIS_version", "2.1.0-no-autoupdate")).strip()
     if not NAME_RE.match(ALVENQIS_version) or ALVENQIS_version.lower() == "latest":
@@ -226,6 +277,10 @@ def validate_payload(data: dict[str, Any]) -> dict[str, Any]:
         "admin_email": admin_email,
         "cloudflare_mode": cloudflare_mode,
         "control_role": control_role,
+        "fleet_host": fleet_host,
+        "fleet_mtls_host": fleet_mtls_host,
+        "fleet_mtls_bind_address": fleet_mtls_bind_address,
+        "fleet_mtls_port": fleet_mtls_port,
         "ALVENQIS_version": ALVENQIS_version,
         "enable_pool": enable_pool,
         "seed_nodes": seed_nodes,
@@ -317,7 +372,8 @@ def configure(data: dict[str, Any]) -> None:
     hosts = {
         "CONTROL_HOST": data.get("control_host") or f"control.{base}",
         "RPC_HOST": data.get("rpc_host") or f"rpc.{base}",
-        "FLEET_HOST": data.get("fleet_host") or f"fleet.{base}",
+        "FLEET_HOST": data["fleet_host"],
+        "FLEET_MTLS_HOST": data["fleet_mtls_host"],
         "GRAFANA_HOST": data.get("grafana_host") or f"grafana.{base}",
         "PROMETHEUS_HOST": data.get("prometheus_host") or f"prometheus.{base}",
         "EXPLORER_HOST": data.get("explorer_host") or f"explorer.{base}",
@@ -327,9 +383,11 @@ def configure(data: dict[str, Any]) -> None:
     }
 
     admin_password = str(data.get("admin_password", "")).strip()
+    admin_viewer_password = str(data.get("admin_viewer_password", "")).strip()
     grafana_password = str(data.get("grafana_password", "")).strip()
 
     write_secret("admin_password", admin_password)
+    write_secret("admin_viewer_password", admin_viewer_password)
     write_secret("grafana_password", grafana_password)
     pool_admin_token = str(data.get("pool_admin_token", "")).strip()
     if pool_admin_token:
@@ -378,7 +436,8 @@ def configure(data: dict[str, Any]) -> None:
         "WWW_HOST": data.get("www_host") or f"www.{base}",
         "NODE_NAME": data["node_name"],
         "ADMIN_EMAIL": data["admin_email"],
-        "ADMIN_USER": data.get("admin_user", "alvenqis-admin"),
+        "ADMIN_OPERATOR_USER": data.get("admin_operator_user", "alvenqis-operator"),
+        "ADMIN_VIEWER_USER": data.get("admin_viewer_user", "alvenqis-viewer"),
         "CONTROL_ROLE": data["control_role"],
         "CONTROLLER_URL": data.get("controller_url", ""),
         "ENROLLMENT_TOKEN": data.get("enrollment_token", ""),
@@ -391,6 +450,8 @@ def configure(data: dict[str, Any]) -> None:
         "SEED_NODES_TOML": ", ".join(json.dumps(seed) for seed in data.get("seed_nodes", [])),
         "P2P_MIN_VALIDATED_PEERS": data.get("p2p_min_validated_peers", 0),
         "OPS_BOOTSTRAP_PORT": data.get("ops_bootstrap_port", 8080),
+        "FLEET_MTLS_BIND_ADDRESS": data["fleet_mtls_bind_address"],
+        "FLEET_MTLS_PORT": data["fleet_mtls_port"],
         "CLOUDFLARE_MODE": data["cloudflare_mode"],
         "CLOUDFLARE_ACCOUNT_ID": data.get("cloudflare_account_id", ""),
         "CLOUDFLARE_ZONE_ID": data.get("cloudflare_zone_id", ""),
@@ -435,7 +496,7 @@ def configure(data: dict[str, Any]) -> None:
         lines.append(f"{key}={env_quote(value)}")
     (WORKSPACE / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.chmod(WORKSPACE / ".env", 0o600)
-    write_access_summary(data, hosts, admin_password, grafana_password)
+    write_access_summary(data, hosts, admin_password, admin_viewer_password, grafana_password)
 
     write_alertmanager_config(data)
 
