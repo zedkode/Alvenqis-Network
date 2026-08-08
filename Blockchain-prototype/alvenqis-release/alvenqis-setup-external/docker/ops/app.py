@@ -38,6 +38,42 @@ job_state: dict[str, Any] = {
     "output": "",
 }
 
+def write_private_text(path: Path, content: str) -> None:
+    """Atomically replace a root-owned runtime secret with mode 0600.
+
+    The selected containers consume Docker secrets as files, so reversible
+    encryption here would only move the decryption key into the same runtime.
+    The security boundary is the root-only state directory, an exclusive
+    temporary file, atomic replacement, and the per-service read-only mount.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.parent / f".{path.name}.{secrets.token_hex(12)}.tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    file_descriptor: int | None = os.open(temporary, flags, 0o600)
+    try:
+        os.fchmod(file_descriptor, 0o600)
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
+            file_descriptor = None
+            # Docker's file-backed secret contract requires these bytes at
+            # runtime. The file is created 0600 inside a 0700 directory and is
+            # mounted read-only only into the selected service.
+            # lgtm[py/clear-text-storage-sensitive-data]
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        os.chmod(path, 0o600)
+        directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        directory_descriptor = os.open(path.parent, directory_flags)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+        temporary.unlink(missing_ok=True)
+
 def ensure_layout() -> None:
     # Bind mounts use the fixed, non-root UIDs of their corresponding images.
     # Keep host state private instead of making every directory world-writable.
@@ -74,8 +110,7 @@ def read_or_create_secret(path: Path, length: int = 32) -> str:
     if path.exists() and path.stat().st_size:
         return path.read_text(encoding="utf-8").strip()
     value = secrets.token_urlsafe(length)
-    path.write_text(value + "\n", encoding="utf-8")
-    os.chmod(path, 0o600)
+    write_private_text(path, value + "\n")
     return value
 
 def read_or_create_hex_secret(path: Path, byte_length: int = 32) -> str:
@@ -85,8 +120,7 @@ def read_or_create_hex_secret(path: Path, byte_length: int = 32) -> str:
             raise ValueError(f"invalid hexadecimal secret: {path}")
         return value
     value = secrets.token_hex(byte_length)
-    path.write_text(value + "\n", encoding="utf-8")
-    os.chmod(path, 0o600)
+    write_private_text(path, value + "\n")
     return value
 
 def setup_token() -> str:
@@ -108,18 +142,17 @@ def require_auth():
     return None
 
 def write_secret(name: str, value: str, keep_existing: bool = True) -> None:
+    if NAME_RE.fullmatch(name) is None:
+        raise ValueError("invalid secret name")
     path = SECRETS_DIR / name
     if keep_existing and not value and path.exists():
         return
-    path.write_text(value.strip() + ("\n" if value.strip() else ""), encoding="utf-8")
-    os.chmod(path, 0o600)
+    normalized = value.strip()
+    write_private_text(path, normalized + ("\n" if normalized else ""))
 
 def write_access_summary(
     data: dict[str, Any],
     hosts: dict[str, str],
-    admin_password: str,
-    admin_viewer_password: str,
-    grafana_password: str,
 ) -> None:
     control_dir = STATE_DIR / "control"
     control_dir.mkdir(parents=True, exist_ok=True)
@@ -496,7 +529,7 @@ def configure(data: dict[str, Any]) -> None:
         lines.append(f"{key}={env_quote(value)}")
     (WORKSPACE / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.chmod(WORKSPACE / ".env", 0o600)
-    write_access_summary(data, hosts, admin_password, admin_viewer_password, grafana_password)
+    write_access_summary(data, hosts)
 
     write_alertmanager_config(data)
 
