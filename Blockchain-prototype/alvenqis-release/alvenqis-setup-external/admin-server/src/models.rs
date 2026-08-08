@@ -293,8 +293,12 @@ pub struct BootstrapManifest {
     pub post_install_checks: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AuditEntry {
+    #[serde(default)]
+    pub sequence: u64,
+    #[serde(default)]
+    pub previous_entry_sha256: String,
     pub operation_id: String,
     pub occurred_at_unix_seconds: u64,
     pub actor: String,
@@ -303,6 +307,8 @@ pub struct AuditEntry {
     pub request_sha256: String,
     pub outcome: String,
     pub idempotency_key_sha256: String,
+    #[serde(default)]
+    pub entry_sha256: String,
 }
 
 #[derive(Clone, Debug, Serialize)]

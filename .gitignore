@@ -68,6 +68,7 @@ AI-INSTRUCTIONS.md
 *.credentials
 credentials.json
 credentials.*.json
+/credentials.md
 service-account*.json
 secrets/
 **/state/secrets/

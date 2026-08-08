@@ -12,7 +12,9 @@ use std::sync::{Arc, Mutex};
 const HEALTH_WINDOW_SECONDS: u64 = 86_400;
 const MAX_OBSERVATIONS: usize = 17_280;
 const MAX_IDEMPOTENCY_RECORDS: usize = 4_096;
-const MAX_AUDIT_ENTRIES: usize = 20_000;
+const AUDIT_HASH_DOMAIN: &[u8] = b"alvenqis-admin-audit-v1";
+const AUDIT_GENESIS_SHA256: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(default)]
@@ -118,12 +120,15 @@ impl FleetStore {
     pub fn load(state_dir: PathBuf) -> Result<Self, String> {
         fs::create_dir_all(&state_dir).map_err(|error| error.to_string())?;
         let path = state_dir.join("fleet.json");
-        let data = if path.exists() {
+        let mut data = if path.exists() {
             serde_json::from_str(&fs::read_to_string(&path).map_err(|error| error.to_string())?)
                 .map_err(|error| format!("invalid fleet store {}: {error}", path.display()))?
         } else {
             FleetData::default()
         };
+        if upgrade_or_validate_audit_chain(&mut data.audit)? {
+            persist(&path, &data)?;
+        }
         Ok(Self {
             path,
             inner: Arc::new(Mutex::new(data)),
@@ -545,14 +550,18 @@ impl FleetStore {
     }
 
     fn save(&self, data: &FleetData) -> Result<(), String> {
-        let temp = self.path.with_extension("json.tmp");
-        fs::write(
-            &temp,
-            serde_json::to_vec_pretty(data).map_err(|error| error.to_string())?,
-        )
-        .map_err(|error| error.to_string())?;
-        fs::rename(temp, &self.path).map_err(|error| error.to_string())
+        persist(&self.path, data)
     }
+}
+
+fn persist(path: &std::path::Path, data: &FleetData) -> Result<(), String> {
+    let temp = path.with_extension("json.tmp");
+    fs::write(
+        &temp,
+        serde_json::to_vec_pretty(data).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    fs::rename(temp, path).map_err(|error| error.to_string())
 }
 
 fn create_invitation_locked(
@@ -630,7 +639,14 @@ fn commit_mutation(
         created_at_unix_seconds: context.now,
     });
     trim_front(&mut data.idempotency, MAX_IDEMPOTENCY_RECORDS);
-    data.audit.push(AuditEntry {
+    let (sequence, previous_entry_sha256) = data
+        .audit
+        .last()
+        .map(|entry| (entry.sequence.saturating_add(1), entry.entry_sha256.clone()))
+        .unwrap_or_else(|| (1, AUDIT_GENESIS_SHA256.to_owned()));
+    let mut audit_entry = AuditEntry {
+        sequence,
+        previous_entry_sha256,
         operation_id: operation_id.clone(),
         occurred_at_unix_seconds: context.now,
         actor: context.actor.to_owned(),
@@ -639,8 +655,10 @@ fn commit_mutation(
         request_sha256: context.request_sha256.to_owned(),
         outcome: outcome.to_owned(),
         idempotency_key_sha256: key_sha256,
-    });
-    trim_front(&mut data.audit, MAX_AUDIT_ENTRIES);
+        entry_sha256: String::new(),
+    };
+    audit_entry.entry_sha256 = audit_entry_sha256(&audit_entry);
+    data.audit.push(audit_entry);
     MutationResponse {
         operation_id,
         action: action.to_owned(),
@@ -648,6 +666,71 @@ fn commit_mutation(
         status: outcome.to_owned(),
         replayed: false,
     }
+}
+
+fn upgrade_or_validate_audit_chain(entries: &mut [AuditEntry]) -> Result<bool, String> {
+    if entries.is_empty() {
+        return Ok(false);
+    }
+    let legacy = entries.iter().all(audit_chain_fields_are_empty);
+    if !legacy && entries.iter().any(audit_chain_fields_are_empty) {
+        return Err("audit chain contains a mixture of legacy and chained entries".to_owned());
+    }
+
+    let mut previous_entry_sha256 = AUDIT_GENESIS_SHA256.to_owned();
+    for (index, entry) in entries.iter_mut().enumerate() {
+        let sequence = u64::try_from(index)
+            .map_err(|_| "audit chain sequence exceeds u64".to_owned())?
+            .saturating_add(1);
+        if legacy {
+            entry.sequence = sequence;
+            entry.previous_entry_sha256 = previous_entry_sha256.clone();
+            entry.entry_sha256 = audit_entry_sha256(entry);
+        } else {
+            if entry.sequence != sequence {
+                return Err(format!(
+                    "audit chain sequence mismatch at entry {sequence}: found {}",
+                    entry.sequence
+                ));
+            }
+            if entry.previous_entry_sha256 != previous_entry_sha256 {
+                return Err(format!(
+                    "audit chain previous hash mismatch at entry {sequence}"
+                ));
+            }
+            let expected = audit_entry_sha256(entry);
+            if entry.entry_sha256 != expected {
+                return Err(format!("audit chain hash mismatch at entry {sequence}"));
+            }
+        }
+        previous_entry_sha256 = entry.entry_sha256.clone();
+    }
+    Ok(legacy)
+}
+
+fn audit_chain_fields_are_empty(entry: &AuditEntry) -> bool {
+    entry.sequence == 0 && entry.previous_entry_sha256.is_empty() && entry.entry_sha256.is_empty()
+}
+
+fn audit_entry_sha256(entry: &AuditEntry) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(AUDIT_HASH_DOMAIN);
+    hasher.update(entry.sequence.to_be_bytes());
+    hash_text(&mut hasher, &entry.previous_entry_sha256);
+    hash_text(&mut hasher, &entry.operation_id);
+    hasher.update(entry.occurred_at_unix_seconds.to_be_bytes());
+    hash_text(&mut hasher, &entry.actor);
+    hash_text(&mut hasher, &entry.action);
+    hash_text(&mut hasher, &entry.target);
+    hash_text(&mut hasher, &entry.request_sha256);
+    hash_text(&mut hasher, &entry.outcome);
+    hash_text(&mut hasher, &entry.idempotency_key_sha256);
+    hex::encode(hasher.finalize())
+}
+
+fn hash_text(hasher: &mut Sha256, value: &str) {
+    hasher.update((value.len() as u64).to_be_bytes());
+    hasher.update(value.as_bytes());
 }
 
 fn record_observation(observations: &mut Vec<Observation>, observation: Observation) {
@@ -1053,6 +1136,238 @@ mod tests {
             .update_report(&id, &token, CERTIFICATE, report(115), 15)
             .is_err());
         assert_eq!(store.audit_entries(10).expect("audit").len(), 1);
+    }
+
+    #[test]
+    fn audit_entries_are_hash_chained_and_survive_reload() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FleetStore::load(dir.path().to_path_buf()).expect("store");
+        let invite = store
+            .create_invitation("peer-2".to_owned(), "peer2.example.org".to_owned(), 90, 60)
+            .expect("invite");
+        let (id, _) = store
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(100), 100, 15)
+            .expect("enroll");
+        store
+            .set_node_ban_controlled(
+                &id,
+                Some("abuse".to_owned()),
+                MutationContext {
+                    actor: "operator",
+                    idempotency_key: "ban-request-0001",
+                    request_sha256: "abc",
+                    now: 110,
+                },
+            )
+            .expect("ban");
+        store
+            .set_node_ban_controlled(
+                &id,
+                None,
+                MutationContext {
+                    actor: "operator",
+                    idempotency_key: "unban-request-0001",
+                    request_sha256: "def",
+                    now: 120,
+                },
+            )
+            .expect("unban");
+
+        let mut entries = store.audit_entries(10).expect("audit entries");
+        entries.reverse();
+        assert_eq!(entries[0].sequence, 1);
+        assert_eq!(entries[0].previous_entry_sha256, AUDIT_GENESIS_SHA256);
+        assert_eq!(entries[0].entry_sha256.len(), 64);
+        assert_eq!(entries[1].sequence, 2);
+        assert_eq!(entries[1].previous_entry_sha256, entries[0].entry_sha256);
+        assert_eq!(entries[1].entry_sha256.len(), 64);
+
+        drop(store);
+        let reloaded = FleetStore::load(dir.path().to_path_buf()).expect("reload valid chain");
+        assert_eq!(
+            reloaded.audit_entries(10).expect("reloaded audit"),
+            entries.into_iter().rev().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn tampered_audit_entry_is_rejected_on_reload() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FleetStore::load(dir.path().to_path_buf()).expect("store");
+        let invite = store
+            .create_invitation("peer-2".to_owned(), "peer2.example.org".to_owned(), 90, 60)
+            .expect("invite");
+        let (id, _) = store
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(100), 100, 15)
+            .expect("enroll");
+        store
+            .set_node_ban_controlled(
+                &id,
+                Some("abuse".to_owned()),
+                MutationContext {
+                    actor: "operator",
+                    idempotency_key: "ban-request-0001",
+                    request_sha256: "abc",
+                    now: 110,
+                },
+            )
+            .expect("ban");
+        drop(store);
+
+        let path = dir.path().join("fleet.json");
+        let mut persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).expect("read fleet store"))
+                .expect("parse fleet store");
+        persisted["audit"][0]["actor"] = json!("tampered-actor");
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(&persisted).expect("serialize tampered store"),
+        )
+        .expect("write tampered store");
+
+        let error = FleetStore::load(dir.path().to_path_buf())
+            .err()
+            .expect("tampered audit chain must fail");
+        assert!(error.contains("audit chain"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn legacy_audit_entries_are_migrated_to_a_valid_chain() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("fleet.json");
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(&json!({
+                "audit": [{
+                    "operation_id": "legacy-operation",
+                    "occurred_at_unix_seconds": 100,
+                    "actor": "operator",
+                    "action": "node.ban",
+                    "target": "legacy-node",
+                    "request_sha256": "abc",
+                    "outcome": "banned",
+                    "idempotency_key_sha256": "def"
+                }]
+            }))
+            .expect("serialize legacy store"),
+        )
+        .expect("write legacy store");
+
+        let store = FleetStore::load(dir.path().to_path_buf()).expect("migrate legacy audit");
+        let entry = store.audit_entries(10).expect("audit").remove(0);
+        assert_eq!(entry.sequence, 1);
+        assert_eq!(entry.previous_entry_sha256, AUDIT_GENESIS_SHA256);
+        assert_eq!(entry.entry_sha256.len(), 64);
+
+        let persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).expect("read migrated store"))
+                .expect("parse migrated store");
+        assert_eq!(persisted["audit"][0]["sequence"], 1);
+        assert_eq!(
+            persisted["audit"][0]["entry_sha256"]
+                .as_str()
+                .expect("persisted entry hash")
+                .len(),
+            64
+        );
+    }
+
+    #[test]
+    fn reordered_audit_entries_are_rejected_on_reload() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FleetStore::load(dir.path().to_path_buf()).expect("store");
+        let invite = store
+            .create_invitation("peer-2".to_owned(), "peer2.example.org".to_owned(), 90, 60)
+            .expect("invite");
+        let (id, _) = store
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(100), 100, 15)
+            .expect("enroll");
+        for (reason, key, now) in [
+            (Some("abuse".to_owned()), "ban-request-0001", 110),
+            (None, "unban-request-0001", 120),
+        ] {
+            store
+                .set_node_ban_controlled(
+                    &id,
+                    reason,
+                    MutationContext {
+                        actor: "operator",
+                        idempotency_key: key,
+                        request_sha256: "abc",
+                        now,
+                    },
+                )
+                .expect("controlled mutation");
+        }
+        drop(store);
+
+        let path = dir.path().join("fleet.json");
+        let mut persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).expect("read fleet store"))
+                .expect("parse fleet store");
+        persisted["audit"]
+            .as_array_mut()
+            .expect("audit array")
+            .swap(0, 1);
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(&persisted).expect("serialize reordered store"),
+        )
+        .expect("write reordered store");
+
+        let error = FleetStore::load(dir.path().to_path_buf())
+            .err()
+            .expect("reordered audit chain must fail");
+        assert!(error.contains("audit chain"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn mixed_legacy_and_chained_audit_entries_are_rejected_on_reload() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = FleetStore::load(dir.path().to_path_buf()).expect("store");
+        let invite = store
+            .create_invitation("peer-2".to_owned(), "peer2.example.org".to_owned(), 90, 60)
+            .expect("invite");
+        let (id, _) = store
+            .enroll(&invite.token, CERTIFICATE.to_owned(), report(100), 100, 15)
+            .expect("enroll");
+        for (reason, key, now) in [
+            (Some("abuse".to_owned()), "ban-request-0001", 110),
+            (None, "unban-request-0001", 120),
+        ] {
+            store
+                .set_node_ban_controlled(
+                    &id,
+                    reason,
+                    MutationContext {
+                        actor: "operator",
+                        idempotency_key: key,
+                        request_sha256: "abc",
+                        now,
+                    },
+                )
+                .expect("controlled mutation");
+        }
+        drop(store);
+
+        let path = dir.path().join("fleet.json");
+        let mut persisted: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).expect("read fleet store"))
+                .expect("parse fleet store");
+        let legacy_entry = persisted["audit"][1].as_object_mut().expect("audit object");
+        legacy_entry.remove("sequence");
+        legacy_entry.remove("previous_entry_sha256");
+        legacy_entry.remove("entry_sha256");
+        fs::write(
+            &path,
+            serde_json::to_vec_pretty(&persisted).expect("serialize mixed store"),
+        )
+        .expect("write mixed store");
+
+        let error = FleetStore::load(dir.path().to_path_buf())
+            .err()
+            .expect("mixed audit chain must fail");
+        assert!(error.contains("mixture"), "unexpected error: {error}");
     }
 
     #[test]

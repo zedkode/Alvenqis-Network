@@ -80,6 +80,11 @@ command -v cargo >/dev/null || { echo "cargo is required" >&2; exit 1; }
 command -v npm >/dev/null || { echo "npm is required" >&2; exit 1; }
 command -v pkg-config >/dev/null || { echo "pkg-config is required (install build-essential / base-devel)" >&2; exit 1; }
 
+# TypeScript/Vite can exceed Node's environment-derived heap limit while Tauri
+# embeds the full desktop UI. Preserve an operator override, but provide enough
+# headroom for reproducible release builds on otherwise well-provisioned hosts.
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
+
 # Detect missing WebKitGTK early with a clear message.
 if ! pkg-config --exists webkit2gtk-4.1 2>/dev/null; then
   cat <<'EOF' >&2
