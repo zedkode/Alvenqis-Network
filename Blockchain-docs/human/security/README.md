@@ -39,6 +39,8 @@ Audit and risk entry points:
 - `AUDIT_STATUS.md` - current verification evidence and claim boundary;
 
 - `KNOWN_LIMITATIONS.md` — open findings and required closure evidence;
+- `AUDIT_LOG_HASH_CHAIN_STATUS_2026-08-08.md` — local fleet audit-chain
+  implementation, verification, and remaining anchoring boundary;
 - `THREAT_MODEL.md` — assets, trust boundaries, actors, and priority scenarios;
 - `EXTERNAL_SECURITY_REVIEW_SCOPE.md` — immutable external-review package;
 - `WALLET_KEY_MANAGEMENT.md` — custody, keystore, and recovery boundary;
