@@ -20,8 +20,9 @@ Implemented corrections:
 - `alvenqis-metrics-exporter` scrapes live RPC/pool JSON status into Prometheus (chain height, indexer lag, peers, pool workers/hashrate);
 - one bounded RPC gateway serves the public read/submit API and the pool's
   Docker-internal mining API, avoiding a second chain-loading gateway;
-- the hardened Nginx gateway isolates RPC availability from Grafana, Loki and
-  ops readiness;
+- the Rust/Pingora project-edge gateway isolates RPC availability from
+  Grafana, Loki and ops readiness, rejects public mining paths locally, and
+  applies bounded connection, header, body and per-route request limits;
 - SQLite remains the canonical block oracle while RocksDB stores authenticated
   canonical state, block metadata and the persistent mempool in dedicated
   LZ4-compressed column families;

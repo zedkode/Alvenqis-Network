@@ -13,8 +13,6 @@ use http::header::{
 use http::{HeaderName, StatusCode, Uri};
 use log::{info, warn};
 use pingora::http::{RequestHeader, ResponseHeader};
-use pingora::modules::http::compression::ResponseCompressionBuilder;
-use pingora::modules::http::HttpModules;
 use pingora::proxy::{FailToProxy, ProxyHttp, Session};
 use pingora::server::configuration::ServerConf;
 use pingora::server::ShutdownWatch;
@@ -34,6 +32,8 @@ use tokio::net::TcpStream;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const UPSTREAM_IO_TIMEOUT: Duration = Duration::from_secs(90);
 const HEALTH_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
+const MAX_REQUEST_HEADERS: usize = 100;
+const MAX_REQUEST_HEADER_BYTES: usize = 32 * 1024;
 const HSTS_VALUE: &str = "max-age=31536000; includeSubDomains";
 const PROTECTED_REQUEST_HEADERS: [&str; 12] = [
     "forwarded",
@@ -112,7 +112,7 @@ impl HealthRegistry {
                 entry.available = Some(false);
             }
         }
-        entry.available.unwrap_or(true)
+        entry.available.unwrap_or(false)
     }
 
     fn is_available(&self, upstream: Upstream) -> bool {
@@ -121,7 +121,7 @@ impl HealthRegistry {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .get(&upstream)
             .and_then(|entry| entry.available)
-            .unwrap_or(true)
+            .unwrap_or(false)
     }
 }
 
@@ -162,7 +162,9 @@ impl GatewayProxy {
                 .clamp(1, 8),
             listener_tasks_per_fd: 1,
             upstream_keepalive_pool_size: 128,
-            max_retries: 1,
+            // Pingora counts the first attempt in this value. Two allows one
+            // carefully gated retry for idempotent GET/HEAD requests.
+            max_retries: 2,
             grace_period_seconds: Some(1),
             graceful_shutdown_timeout_seconds: Some(25),
             pid_file: "/tmp/alvenqis-pingora.pid".to_owned(),
@@ -181,6 +183,23 @@ impl GatewayProxy {
             .and_then(|address| address.as_inet())
             .map(|address| address.port())
             .unwrap_or(self.config.http_bind.port());
+        let listener_tls = listener_port == self.config.mtls_bind.port();
+        if let Err(reason) = validate_request_headers(&session.req_header().headers) {
+            ctx.plan = Some(error_plan(
+                RouteId::Unknown,
+                StatusCode::BAD_REQUEST,
+                "invalid request headers",
+            ));
+            self.metrics.rejection(RouteId::Unknown, reason);
+            respond_json(
+                session,
+                StatusCode::BAD_REQUEST,
+                r#"{"error":"invalid request headers"}"#,
+                listener_tls,
+            )
+            .await?;
+            return Ok(true);
+        }
         let host = match normalized_host(session.req_header().headers.get(HOST)) {
             Ok(host) => host,
             Err(()) => {
@@ -194,7 +213,7 @@ impl GatewayProxy {
                     session,
                     StatusCode::BAD_REQUEST,
                     r#"{"error":"invalid host"}"#,
-                    false,
+                    listener_tls,
                 )
                 .await?;
                 return Ok(true);
@@ -205,6 +224,7 @@ impl GatewayProxy {
             &self.config.hosts,
             listener_port,
             self.config.mtls_bind.port(),
+            &session.req_header().method,
             &host,
             path,
         );
@@ -250,7 +270,7 @@ impl GatewayProxy {
                 .authenticate(session.req_header().headers.get(AUTHORIZATION));
             let Some(identity) = identity else {
                 self.metrics.rejection(plan.id, "authentication");
-                respond_unauthorized(session, ctx.forwarded_proto == "https").await?;
+                respond_unauthorized(session, plan.id, ctx.forwarded_proto == "https").await?;
                 return Ok(true);
             };
             if plan.auth == AuthPolicy::BasicWithAdminIdentity {
@@ -378,10 +398,6 @@ impl ProxyHttp for GatewayProxy {
 
     fn new_ctx(&self) -> Self::CTX {
         RequestContext::default()
-    }
-
-    fn init_downstream_modules(&self, modules: &mut HttpModules) {
-        modules.add_module(ResponseCompressionBuilder::enable(5));
     }
 
     fn request_summary(&self, session: &Session, ctx: &Self::CTX) -> String {
@@ -636,11 +652,11 @@ impl BackgroundService for GatewayHealthChecker {
             tokio::select! {
                 _ = shutdown.changed() => break,
                 _ = interval.tick() => {
-                    for upstream in ALL_UPSTREAMS {
-                        if shutdown.has_changed().unwrap_or(true) {
-                            return;
-                        }
-                        let healthy = probe_upstream(&self.resolver, upstream).await;
+                    let probes = ALL_UPSTREAMS.into_iter().map(|upstream| {
+                        let resolver = Arc::clone(&self.resolver);
+                        async move { (upstream, probe_upstream(&resolver, upstream).await) }
+                    });
+                    for (upstream, healthy) in futures_util::future::join_all(probes).await {
                         let available = self.health.record(upstream, healthy);
                         self.metrics.upstream_health(upstream, available);
                     }
@@ -685,7 +701,7 @@ async fn probe_upstream(resolver: &DnsResolver, upstream: Upstream) -> bool {
             .nth(1)
             .and_then(|status| status.parse::<u16>().ok())
             .unwrap_or(0);
-        Ok::<bool, std::io::Error>((200..400).contains(&status))
+        Ok::<bool, std::io::Error>(status == StatusCode::OK.as_u16())
     };
     tokio::time::timeout(HEALTH_PROBE_TIMEOUT, probe)
         .await
@@ -706,6 +722,28 @@ fn normalized_host(value: Option<&http::HeaderValue>) -> Result<String, ()> {
     Ok(host.to_owned())
 }
 
+fn validate_request_headers(headers: &http::HeaderMap) -> Result<(), &'static str> {
+    if headers.get_all(HOST).iter().count() != 1 {
+        return Err("host_count");
+    }
+    if headers.get_all(CONTENT_LENGTH).iter().count() > 1 {
+        return Err("content_length_count");
+    }
+    let mut count = 0_usize;
+    let mut bytes = 0_usize;
+    for (name, value) in headers {
+        count = count.saturating_add(1);
+        bytes = bytes
+            .saturating_add(name.as_str().len())
+            .saturating_add(value.as_bytes().len())
+            .saturating_add(4);
+        if count > MAX_REQUEST_HEADERS || bytes > MAX_REQUEST_HEADER_BYTES {
+            return Err("header_size");
+        }
+    }
+    Ok(())
+}
+
 fn error_plan(route: RouteId, status: StatusCode, message: &'static str) -> RoutePlan {
     RoutePlan {
         id: route,
@@ -724,17 +762,23 @@ fn error_plan(route: RouteId, status: StatusCode, message: &'static str) -> Rout
     }
 }
 
-async fn respond_unauthorized(session: &mut Session, tls: bool) -> PingoraResult<()> {
+async fn respond_unauthorized(
+    session: &mut Session,
+    route: RouteId,
+    tls: bool,
+) -> PingoraResult<()> {
+    let realm = if route == RouteId::Prometheus {
+        "Basic realm=\"Alvenqis Prometheus\""
+    } else {
+        "Basic realm=\"Alvenqis Control Plane\""
+    };
     respond_local(
         session,
         StatusCode::UNAUTHORIZED,
         "application/json",
         r#"{"error":"authentication required"}"#,
         tls,
-        Some((
-            WWW_AUTHENTICATE,
-            "Basic realm=\"Alvenqis project operations\"",
-        )),
+        Some((WWW_AUTHENTICATE, realm)),
     )
     .await
 }
@@ -820,9 +864,26 @@ mod tests {
     #[test]
     fn health_requires_three_consecutive_failures_before_unavailable() {
         let health = HealthRegistry::default();
-        assert!(health.record(Upstream::Rpc, false));
-        assert!(health.record(Upstream::Rpc, false));
+        assert!(!health.is_available(Upstream::Rpc));
+        assert!(!health.record(Upstream::Rpc, false));
+        assert!(!health.record(Upstream::Rpc, false));
         assert!(!health.record(Upstream::Rpc, false));
         assert!(health.record(Upstream::Rpc, true));
+    }
+
+    #[test]
+    fn rejects_duplicate_host_and_oversized_header_sets() {
+        let mut duplicate = http::HeaderMap::new();
+        duplicate.append(HOST, http::HeaderValue::from_static("rpc.example.test"));
+        duplicate.append(HOST, http::HeaderValue::from_static("attacker.example"));
+        assert_eq!(validate_request_headers(&duplicate), Err("host_count"));
+
+        let mut oversized = http::HeaderMap::new();
+        oversized.insert(HOST, http::HeaderValue::from_static("rpc.example.test"));
+        oversized.insert(
+            "x-large",
+            http::HeaderValue::from_bytes(&vec![b'a'; MAX_REQUEST_HEADER_BYTES]).unwrap(),
+        );
+        assert_eq!(validate_request_headers(&oversized), Err("header_size"));
     }
 }

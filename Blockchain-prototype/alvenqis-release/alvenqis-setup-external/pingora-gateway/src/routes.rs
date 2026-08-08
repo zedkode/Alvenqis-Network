@@ -54,6 +54,7 @@ impl Upstream {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum RouteId {
+    ConnectionAdmission,
     GatewayHealth,
     Unknown,
     ControlUi,
@@ -80,6 +81,7 @@ pub enum RouteId {
 impl RouteId {
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::ConnectionAdmission => "connection_admission",
             Self::GatewayHealth => "gateway_health",
             Self::Unknown => "unknown",
             Self::ControlUi => "control_ui",
@@ -149,7 +151,7 @@ impl RoutePlan {
             inject_proxy_token: false,
             inject_client_certificate: false,
             body_limit: Some(DEFAULT_BODY_LIMIT),
-            rate: None,
+            rate: Some(default_rate_policy(id)),
             local: None,
         }
     }
@@ -175,6 +177,55 @@ impl RoutePlan {
                 body,
             }),
         }
+    }
+}
+
+fn default_rate_policy(id: RouteId) -> RatePolicy {
+    match id {
+        RouteId::ControlUi
+        | RouteId::ControlOps
+        | RouteId::ControlApi
+        | RouteId::Grafana
+        | RouteId::Prometheus => RatePolicy {
+            requests_per_second: 20.0,
+            burst: 40,
+            concurrent: 64,
+        },
+        RouteId::RpcSubmit => RatePolicy {
+            requests_per_second: 10.0,
+            burst: 20,
+            concurrent: 32,
+        },
+        RouteId::FleetStatus | RouteId::FleetEnroll => RatePolicy {
+            requests_per_second: 5.0,
+            burst: 20,
+            concurrent: 20,
+        },
+        RouteId::RpcPoolHealth | RouteId::RpcPool | RouteId::Rpc | RouteId::Pool => RatePolicy {
+            requests_per_second: 50.0,
+            burst: 100,
+            concurrent: 128,
+        },
+        RouteId::Website | RouteId::Explorer => RatePolicy {
+            requests_per_second: 100.0,
+            burst: 200,
+            concurrent: 256,
+        },
+        RouteId::FleetMtlsReport | RouteId::FleetMtlsRotate => RatePolicy {
+            requests_per_second: 5.0,
+            burst: 20,
+            concurrent: 20,
+        },
+        RouteId::ConnectionAdmission
+        | RouteId::GatewayHealth
+        | RouteId::Unknown
+        | RouteId::FleetUpgradeRequired
+        | RouteId::FleetRoot
+        | RouteId::RpcMiningDenied => RatePolicy {
+            requests_per_second: 20.0,
+            burst: 40,
+            concurrent: 64,
+        },
     }
 }
 
@@ -378,7 +429,14 @@ mod tests {
     #[test]
     fn public_rpc_mining_paths_are_always_gone() {
         for path in ["/mining", "/mining/template", "/mining/submit"] {
-            let plan = route(&hosts(), 8080, 10_443, "rpc.example.test", path);
+            let plan = route(
+                &hosts(),
+                8080,
+                10_443,
+                &Method::GET,
+                "rpc.example.test",
+                path,
+            );
             assert_eq!(plan.id, RouteId::RpcMiningDenied);
             assert_eq!(plan.local.unwrap().status, StatusCode::GONE);
         }
@@ -390,13 +448,21 @@ mod tests {
             &hosts(),
             8080,
             10_443,
+            &Method::GET,
             "control.example.test",
             "/setup/health",
         );
         assert_eq!(ui.auth, AuthPolicy::Basic);
         assert_eq!(ui.rewrite_path.as_deref(), Some("/health"));
 
-        let api = route(&hosts(), 8080, 10_443, "control.example.test", "/nodes");
+        let api = route(
+            &hosts(),
+            8080,
+            10_443,
+            &Method::GET,
+            "control.example.test",
+            "/nodes",
+        );
         assert_eq!(api.auth, AuthPolicy::BasicWithAdminIdentity);
         assert!(api.inject_proxy_token);
     }
@@ -407,6 +473,7 @@ mod tests {
             &hosts(),
             8080,
             10_443,
+            &Method::POST,
             "fleet.example.test",
             "/fleet/report",
         );
@@ -416,6 +483,7 @@ mod tests {
             &hosts(),
             10_443,
             10_443,
+            &Method::POST,
             "fleet-mtls.example.test",
             "/fleet/report",
         );
@@ -427,6 +495,7 @@ mod tests {
             &hosts(),
             11_443,
             11_443,
+            &Method::POST,
             "fleet-mtls.example.test",
             "/fleet/report",
         );
@@ -435,7 +504,14 @@ mod tests {
 
     #[test]
     fn unknown_hosts_never_receive_a_default_upstream() {
-        let plan = route(&hosts(), 8080, 10_443, "attacker.example", "/");
+        let plan = route(
+            &hosts(),
+            8080,
+            10_443,
+            &Method::GET,
+            "attacker.example",
+            "/",
+        );
         assert_eq!(plan.id, RouteId::Unknown);
         assert!(plan.upstream.is_none());
         assert_eq!(plan.local.unwrap().status, StatusCode::NOT_FOUND);
@@ -455,9 +531,31 @@ mod tests {
             ("explorer.example.test", "/"),
         ];
         for (host, path) in cases {
-            let plan = route(&hosts(), 8080, 10_443, host, path);
+            let plan = route(&hosts(), 8080, 10_443, &Method::GET, host, path);
             assert!(plan.upstream.is_some(), "{host}{path} must be proxied");
             assert_eq!(plan.body_limit, Some(DEFAULT_BODY_LIMIT));
         }
+    }
+
+    #[test]
+    fn rpc_submission_has_a_stricter_rate_policy_than_reads() {
+        let read = route(
+            &hosts(),
+            8080,
+            10_443,
+            &Method::GET,
+            "rpc.example.test",
+            "/status",
+        );
+        let submit = route(
+            &hosts(),
+            8080,
+            10_443,
+            &Method::POST,
+            "rpc.example.test",
+            "/transactions",
+        );
+        assert_eq!(submit.id, RouteId::RpcSubmit);
+        assert!(submit.rate.unwrap().requests_per_second < read.rate.unwrap().requests_per_second);
     }
 }

@@ -4,7 +4,7 @@ Status: Mainnet Candidate / Prototype. This is not a Mainnet Live declaration.
 
 This directory is the only active Alvenqis external-host deployment package.
 It is Docker-only.
-The old systemd, host Nginx and automatic-update installers are not part of the
+The old systemd, host edge-proxy and automatic-update installers are not part of the
 active package. Migration scripts may stop and disable their services, but do
 not delete legacy units, containers or data.
 
@@ -17,7 +17,9 @@ not delete legacy units, containers or data.
 - TLS-only Stratum pool (`ENABLE_POOL`) with direct DNS-only TCP routing;
 - supervised read-only indexer loop with bounded exponential retry;
 - authenticated controller or fleet agent;
-- hardened Nginx gateway with optional Cloudflare Tunnel or direct DNS;
+- Rust/Pingora project-edge gateway with bounded connection/request admission,
+  typed routing, upstream health isolation, optional Cloudflare Tunnel, and a
+  dedicated direct mTLS fleet endpoint;
 - Prometheus, Alertmanager, Grafana, Loki, Alloy, node exporter and alvenqis-metrics-exporter (chain/RPC/indexer/pool gauges);
 - SQLite canonical blocks plus RocksDB canonical state, block metadata and
   persistent mempool, with LZ4 column families and authenticated

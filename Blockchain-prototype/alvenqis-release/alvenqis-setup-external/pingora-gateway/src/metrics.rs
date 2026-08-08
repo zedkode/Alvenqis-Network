@@ -45,7 +45,7 @@ impl GatewayMetrics {
                 let upstream_health = IntGaugeVec::new(
                     Opts::new(
                         "alvenqis_gateway_upstream_health",
-                        "Last active upstream health result (1 healthy, 0 unhealthy)",
+                        "Gateway circuit availability after active and passive health evaluation (1 available, 0 unavailable)",
                     ),
                     &["upstream"],
                 )

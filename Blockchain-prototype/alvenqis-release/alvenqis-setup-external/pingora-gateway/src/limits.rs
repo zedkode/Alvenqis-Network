@@ -1,6 +1,8 @@
 use crate::routes::{RatePolicy, RouteId};
+use async_trait::async_trait;
 use lru::LruCache;
-use std::net::IpAddr;
+use pingora::listeners::ConnectionFilter;
+use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -44,7 +46,10 @@ impl RateLimiter {
         client: IpAddr,
         policy: RatePolicy,
     ) -> LimitDecision {
-        let key = LimitKey { route, client };
+        let key = LimitKey {
+            route: limit_scope(route),
+            client,
+        };
         let now = Instant::now();
         let mut state = self
             .state
@@ -80,6 +85,44 @@ impl RateLimiter {
             limiter: Arc::clone(self),
             key: Some(key),
         })
+    }
+}
+
+fn limit_scope(route: RouteId) -> RouteId {
+    match route {
+        RouteId::FleetEnroll | RouteId::FleetMtlsReport | RouteId::FleetMtlsRotate => {
+            RouteId::FleetEnroll
+        }
+        _ => route,
+    }
+}
+
+#[derive(Debug)]
+pub struct ConnectionRateFilter {
+    limiter: Arc<RateLimiter>,
+    policy: RatePolicy,
+}
+
+impl ConnectionRateFilter {
+    pub fn new(max_keys: usize, policy: RatePolicy) -> Arc<Self> {
+        Arc::new(Self {
+            limiter: RateLimiter::new(max_keys),
+            policy,
+        })
+    }
+}
+
+#[async_trait]
+impl ConnectionFilter for ConnectionRateFilter {
+    async fn should_accept(&self, address: Option<&SocketAddr>) -> bool {
+        let Some(address) = address else {
+            return false;
+        };
+        matches!(
+            self.limiter
+                .check(RouteId::ConnectionAdmission, address.ip(), self.policy),
+            LimitDecision::Allowed(_)
+        )
     }
 }
 
@@ -146,5 +189,25 @@ mod tests {
             drop(decision);
         }
         assert_eq!(limiter.state.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn fleet_enrollment_and_mtls_reports_share_one_bucket() {
+        let limiter = RateLimiter::new(16);
+        let policy = RatePolicy {
+            requests_per_second: 1.0,
+            burst: 1,
+            concurrent: 2,
+        };
+        let client = "192.0.2.50".parse().unwrap();
+        let permit = match limiter.check(RouteId::FleetEnroll, client, policy) {
+            LimitDecision::Allowed(permit) => permit,
+            decision => panic!("unexpected decision: {decision:?}"),
+        };
+        assert!(matches!(
+            limiter.check(RouteId::FleetMtlsReport, client, policy),
+            LimitDecision::RateLimited
+        ));
+        drop(permit);
     }
 }

@@ -75,6 +75,24 @@ try {
   Invoke-NativeChecked "node.exe" "Blockchain-scripts/docs/check-english-content.mjs"
   Invoke-NativeChecked "node.exe" "Blockchain-scripts/docs/audit-docs.mjs"
 
+  # Audit production and build dependencies. npm ci only prints advisory
+  # findings, so make moderate-or-higher findings fail the release gate.
+  foreach ($npmProject in @(
+    "Blockchain-prototype\alvenqis-explorer",
+    "Blockchain-prototype\alvenqis-website",
+    "Blockchain-prototype\alvenqis-desktop-v2"
+  )) {
+    $lockfile = Join-Path $repoRoot "$npmProject\package-lock.json"
+    if (Test-Path $lockfile) {
+      Push-Location (Join-Path $repoRoot $npmProject)
+      try {
+        Invoke-NativeChecked "npm.cmd" "audit" "--package-lock-only" "--audit-level=moderate"
+      } finally {
+        Pop-Location
+      }
+    }
+  }
+
   Assert-PathExists "Blockchain-prototype/configs/mainnet-candidate.toml" "Mainnet-candidate config"
   Assert-PathExists "Blockchain-docs/human/release/MAINNET_CANDIDATE_CHECKLIST.md" "Mainnet-candidate checklist"
   Assert-PathExists "Blockchain-docs/human/release/RELEASE_GATE.md" "Release gate documentation"

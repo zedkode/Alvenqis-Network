@@ -45,6 +45,8 @@ pub struct GatewayConfig {
     pub pki: PkiConfig,
     pub dns_refresh: Duration,
     pub limiter_max_keys: usize,
+    pub connection_rate_per_second: u32,
+    pub connection_burst: u32,
 }
 
 impl fmt::Debug for GatewayConfig {
@@ -60,6 +62,11 @@ impl fmt::Debug for GatewayConfig {
             .field("pki", &self.pki)
             .field("dns_refresh", &self.dns_refresh)
             .field("limiter_max_keys", &self.limiter_max_keys)
+            .field(
+                "connection_rate_per_second",
+                &self.connection_rate_per_second,
+            )
+            .field("connection_burst", &self.connection_burst)
             .finish()
     }
 }
@@ -186,6 +193,20 @@ impl GatewayConfig {
             65_536,
             "GATEWAY_RATE_LIMIT_MAX_KEYS",
         )?;
+        let connection_rate_per_second = parse_bounded_usize(
+            env_value("GATEWAY_CONNECTION_RATE_PER_SECOND").as_deref(),
+            200,
+            10,
+            10_000,
+            "GATEWAY_CONNECTION_RATE_PER_SECOND",
+        )? as u32;
+        let connection_burst = parse_bounded_usize(
+            env_value("GATEWAY_CONNECTION_BURST").as_deref(),
+            400,
+            20,
+            20_000,
+            "GATEWAY_CONNECTION_BURST",
+        )? as u32;
 
         Ok(Self {
             hosts,
@@ -197,6 +218,8 @@ impl GatewayConfig {
             pki,
             dns_refresh,
             limiter_max_keys,
+            connection_rate_per_second,
+            connection_burst,
         })
     }
 }
@@ -326,6 +349,8 @@ mod tests {
         assert_eq!(config.http_bind.port(), 8080);
         assert_eq!(config.mtls_bind.port(), 10443);
         assert_eq!(config.metrics_bind.port(), 9091);
+        assert_eq!(config.connection_rate_per_second, 200);
+        assert_eq!(config.connection_burst, 400);
         let debug = format!("{config:?}");
         assert!(!debug.contains("operator-secret"));
         assert!(!debug.contains(&"a".repeat(64)));
@@ -355,5 +380,14 @@ mod tests {
         )
         .expect_err("token must fail closed");
         assert!(error.contains("64 hexadecimal"));
+    }
+
+    #[test]
+    fn rejects_unbounded_connection_admission_values() {
+        let mut environment = environment();
+        environment.insert("GATEWAY_CONNECTION_BURST".into(), "999999".into());
+        let error = GatewayConfig::load_from(|name| environment.get(name).cloned(), secret)
+            .expect_err("connection admission must be bounded");
+        assert!(error.contains("GATEWAY_CONNECTION_BURST"));
     }
 }
