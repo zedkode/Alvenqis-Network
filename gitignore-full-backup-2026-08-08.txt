@@ -1,3 +1,6 @@
+Backup of the repository root .gitignore before the portable Linux/Windows sync cleanup.
+Restore by copying the rules below back to .gitignore after reviewing current secret/runtime needs.
+
 # -----------------------------------------------------------------------------
 # Repository-private material and local tooling
 # -----------------------------------------------------------------------------
@@ -19,15 +22,11 @@
 /.vs/
 /.fleet/
 
-# Internal agent/tracker material is intentionally not public repository copy.
-# This exception to the portable-source rule is required by
-# Blockchain-docs/internal/AGENTS.md and 06_CONTINUATION_PROTOCOL.md.
 /llms.md
 /Blockchain-docs/ai/
 /Blockchain-docs/internal/
 /Blockchain-docs/human/internal/
-/InternalAI/
-/reform.md
+
 AGENTS.md
 CLAUDE.md
 GEMINI.md
@@ -166,6 +165,22 @@ CMakeFiles/
 CMakeCache.txt
 cmake-build-*/
 compile_commands.json
+Debug/
+Release/
+!Blockchain-docs/human/release/
+!Blockchain-docs/human/release/**
+!Blockchain-scripts/release/
+Blockchain-scripts/release/*
+!Blockchain-scripts/release/build-windows-installer.ps1
+!Blockchain-scripts/release/build-linux-desktop.sh
+!Blockchain-scripts/release/build-alvenqis-setup-external-bundle.sh
+!Blockchain-scripts/release/build-linux-component-artifact.sh
+!Blockchain-scripts/release/release-gate.ps1
+!Blockchain-scripts/release/release-gate.sh
+!Blockchain-scripts/release/alvenqis-release.cmd
+!Blockchain-scripts/release/alvenqis-release.ps1
+!Blockchain-scripts/release/setup-wsl-linux-build-host.sh
+!Blockchain-scripts/release/wsl-linux-setup.sh
 x64/
 x86/
 *.o
@@ -283,3 +298,15 @@ docker-compose.override.yaml
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl.backup
+
+
+
+# -----------------------------------------------------------------------------
+# Audit and security reports 2
+# -----------------------------------------------------------------------------
+AUDIT_ALVENQIS_NETWORK.md
+PLAN_IMBUNATATIRI_ALVENQIS_NETWORK.md
+ALVENQIS_ARCHITECTURE_REDESIGN.md
+reform.md
+/InternalAI/
+00_DECENTRALIZATION_READ_FIRST.md

@@ -1,0 +1,17 @@
+name: alvenqis-node
+arch: x86_64
+platform: linux
+version: ${ALVENQIS_NODE_VERSION}
+maintainer: Alvenqis Network <admin@alvenqis.network>
+description: Alvenqis Mainnet Candidate full validation node
+homepage: https://github.com/zedkode/Alvenqis-Network
+license: Apache-2.0
+contents:
+  - src: release-artifacts/nfpm-stage/alvenqis-node
+    dst: /usr/bin/alvenqis-node
+  - src: configs/genesis.mainnet-candidate.toml
+    dst: /usr/share/alvenqis/configs/genesis.mainnet-candidate.toml
+  - src: Blockchain-docs/human/release/GENESIS_APPROVAL.mainnet-candidate.json
+    dst: /usr/share/alvenqis/Blockchain-docs/human/release/GENESIS_APPROVAL.mainnet-candidate.json
+  - src: alvenqis-release/vps/configs/node.vps.toml
+    dst: /usr/share/alvenqis/node.example.toml
