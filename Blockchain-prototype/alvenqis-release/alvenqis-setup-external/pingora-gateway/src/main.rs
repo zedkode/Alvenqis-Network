@@ -1,10 +1,13 @@
 use alvenqis_pingora_gateway::tls::build_mtls_settings;
+use alvenqis_pingora_gateway::{limits::ConnectionRateFilter, routes::RatePolicy};
 use alvenqis_pingora_gateway::{GatewayConfig, GatewayProxy};
 use clap::Parser as _;
 use log::LevelFilter;
 use pingora::proxy::http_proxy_service;
 use pingora::server::Server;
 use pingora::services::background::background_service;
+use serde_json::json;
+use std::io::Write as _;
 
 #[derive(Debug, clap::Parser)]
 #[command(
@@ -40,13 +43,21 @@ fn init_logging() {
         _ => LevelFilter::Info,
     };
     let mut builder = env_logger::Builder::new();
-    // Dependency debug logs can contain complete upstream headers. Keep every
-    // dependency at Info even when application-local diagnostics are requested.
+    // Pingora can log raw malformed request bytes before the application
+    // callback runs. Suppress dependency logs and emit only bounded,
+    // application-owned structured records.
     builder
-        .filter_level(LevelFilter::Info)
+        .filter_level(LevelFilter::Off)
         .filter_module("alvenqis_pingora_gateway", application_level)
-        .filter_module("pingora_proxy", LevelFilter::Info)
-        .filter_module("pingora_core", LevelFilter::Info)
+        .format(|buffer, record| {
+            let value = json!({
+                "timestamp": buffer.timestamp_millis().to_string(),
+                "level": record.level().as_str(),
+                "target": record.target(),
+                "message": record.args().to_string(),
+            });
+            writeln!(buffer, "{value}")
+        })
         .init();
 }
 
@@ -66,12 +77,21 @@ fn run() -> Result<(), String> {
     let http_bind = config.http_bind.to_string();
     let mtls_bind = config.mtls_bind.to_string();
     let metrics_bind = config.metrics_bind.to_string();
+    let connection_filter = ConnectionRateFilter::new(
+        config.limiter_max_keys,
+        RatePolicy {
+            requests_per_second: f64::from(config.connection_rate_per_second),
+            burst: config.connection_burst,
+            concurrent: u32::MAX,
+        },
+    );
     let (gateway, health_checker) = GatewayProxy::new(config);
 
     let mut server = Server::new_with_opt_and_conf(None, GatewayProxy::server_configuration());
     server.bootstrap();
 
     let mut gateway_service = http_proxy_service(&server.configuration, gateway);
+    gateway_service.set_connection_filter(connection_filter);
     gateway_service.add_tcp(&http_bind);
     gateway_service.add_tls_with_settings(&mtls_bind, None, mtls_settings);
     server.add_service(gateway_service);

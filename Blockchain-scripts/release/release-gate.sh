@@ -54,6 +54,18 @@ node "$scripts_root/docs/check-english-content.mjs"
 node "$scripts_root/docs/audit-docs.mjs"
 bash "$prototype_root/alvenqis-release/alvenqis-setup-external/scripts/validate-stack.sh"
 
+# Dependency advisories must fail the gate rather than being printed as a
+# non-fatal side effect of npm ci. Include build/dev tooling because it runs in
+# trusted release jobs and can affect generated artifacts.
+for npm_project in \
+  "$prototype_root/alvenqis-explorer" \
+  "$prototype_root/alvenqis-website" \
+  "$prototype_root/alvenqis-desktop-v2"; do
+  if [[ -f "$npm_project/package-lock.json" ]]; then
+    (cd "$npm_project" && npm audit --package-lock-only --audit-level=moderate)
+  fi
+done
+
 assert_path_exists "$prototype_root/configs/mainnet-candidate.toml" "Mainnet-candidate config"
 assert_path_exists "$docs_root/release/MAINNET_CANDIDATE_CHECKLIST.md" "Mainnet-candidate checklist"
 assert_path_exists "$docs_root/release/RELEASE_GATE.md" "Release gate documentation"

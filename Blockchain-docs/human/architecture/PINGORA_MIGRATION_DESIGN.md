@@ -1,13 +1,16 @@
 # Pingora edge migration design
 
-Status: **Proposed for owner review — implementation not started**
-Date: 2026-08-01
+Status: **Owner-approved implementation in repository; live cutover pending canary evidence**
+Date: 2026-08-01; implementation status refreshed 2026-08-08
 Scope: project-operated `alvenqis-setup-external` edge only
 
 This design replaces the project edge Nginx process with a Rust service built
 on Pingora. It does not change consensus, P2P, Stratum, chain data, wallets,
 independent-operator roles, 1Panel, or any service outside the Alvenqis Docker
-network. Approval of this document is required before Pingora code is added.
+network. The owner subsequently directed the project to replace the edge Nginx
+gateway with Pingora before the remaining deployment/release work, authorizing
+the reviewed pinned-commit path. This document retains the pre-migration
+topology and acceptance requirements so the cutover remains auditable.
 
 "Nginx replacement" in this document means the edge reverse proxy under
 `alvenqis-setup-external/docker/gateway/`. The website and explorer currently
@@ -45,9 +48,10 @@ Non-goals:
   single-host operational component until a separately evidenced topology
   change exists.
 
-## 2. Current edge topology
+## 2. Pre-migration edge topology
 
-The active edge is the Compose service `gateway`. Cloudflare Tunnel sends all
+Before the pending cutover, the active VPS edge is the Compose service
+`gateway` running the recorded Nginx image. Cloudflare Tunnel sends all
 tunneled HTTP hostnames to `http://gateway:8080`. Docker publishes only the
 direct fleet mTLS listener, `${FLEET_MTLS_BIND_ADDRESS}:10443`; port 8080 is not
 published on the host.
@@ -115,7 +119,7 @@ renewal path, and redirect policy receive a separate design approval. The
 installer and validation scripts must report that limitation explicitly rather
 than silently exposing cleartext HTTP.
 
-## 3. Proposed Pingora component
+## 3. Approved Pingora component
 
 Add a workspace crate named `alvenqis-pingora-gateway` and a dedicated
 multi-stage Docker image. Pingora `0.8.1` is the API/design reference current on
@@ -142,14 +146,14 @@ reviewed-commit option, not permission to consume a moving branch. Vendoring or
 patching is not allowed silently and would require its own owner-visible source
 and maintenance decision.
 
-The reviewed-commit candidate as of 2026-08-01 is official upstream commit
+The approved dependency is official upstream commit
 `402acae52ff29c4183b9eca55ffa3f77814a5ee0`. A clean minimal manifest pinned to
 that exact revision made `cargo audit` exit 0 and removed `protobuf 2.28.0` from
-the resolved graph; the informational unmaintained warning for
-`derivative 2.2.0` remained. This is only candidate evidence: the full source
-delta and this workspace's `cargo deny check`, tests, clippy, and policy checks
-have not yet been performed. The Prometheus separation itself entered upstream
-in commit `842ddd9fac9ee8570eb1e5b8ea208fbc88e7671c`.
+the resolved graph; the allowed unmaintained warning for `derivative 2.2.0`
+remained. The workspace source-policy allowlist is restricted to this exact Git
+source, and the dated dependency report records the audit/deny evidence. The
+Prometheus separation itself entered upstream in commit
+`842ddd9fac9ee8570eb1e5b8ea208fbc88e7671c`.
 
 Use the OpenSSL backend for the first implementation because Pingora's official
 project labels its rustls backend experimental and the current host already
@@ -417,7 +421,7 @@ working with zero Pingora or dashboard dependency. A repository check will
 reject Pingora references in that guide and reject project-edge overlays in
 independent role definitions.
 
-## 13. Implementation sequence after approval
+## 13. Implementation and cutover sequence
 
 1. **Dependency-source gate:** resolve the owner-approved source in a clean
    lockfile, run dependency, advisory, maintenance, license, and source checks,
@@ -551,18 +555,11 @@ was deleted. The current executable source of truth is the Cloudflare bootstrap
 script, Compose overlays, and `.env.example`. Recreating a DNS/ports document
 is not part of this design-only checkpoint.
 
-## 18. Approval gate
+## 18. Approval and current execution gate
 
-Owner approval of this design and a dependency-source option authorizes the
-implementation sequence in section 13, beginning with the dependency-source
-gate. Until both are explicit, no Pingora code, Compose replacement, Nginx
-removal, Cloudflare change, or live cutover is authorized.
-
-Approval must select one path explicitly:
-
-- `approve pingora design — wait for fixed release`; or
-- `approve pingora design — review pinned official commit 402acae`.
-
-The fixed-release option has the smaller supply-chain maintenance burden. The
-pinned-commit option permits work to start sooner but authorizes only the
-dependency-source review first; a failing review stops before proxy code.
+The owner-approved pinned official commit path is active. Dependency review,
+the repository implementation, Compose wiring, and local unit/lint checks are
+present; they do not by themselves prove the live edge. Sections 13-15 still
+control the canary, rollback capture, route/mTLS verification, soak, and final
+acceptance. Until those live checks pass, the previous VPS image remains the
+rollback baseline and this document must not describe the cutover as accepted.
