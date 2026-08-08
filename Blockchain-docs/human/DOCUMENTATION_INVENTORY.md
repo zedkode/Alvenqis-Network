@@ -14,8 +14,8 @@ excluded by policy.
 |---|---:|
 | Component reference | 22 |
 | Historical | 2 |
-| Public | 130 |
-| **Total** | **154** |
+| Public | 131 |
+| **Total** | **155** |
 
 ## Complete inventory
 
@@ -42,7 +42,7 @@ excluded by policy.
 | `Blockchain-docs/human/architecture/06_CLIENT_PLATFORM_DIRECTION.md` | Public | Draft / Planned / Prototype | Client Platform Direction |
 | `Blockchain-docs/human/architecture/07_BROWSER_EXTENSION_AND_NATIVE_HOST.md` | Public | Prototype / Mainnet Candidate / not store-ready | Browser Extension and Native Host |
 | `Blockchain-docs/human/architecture/LEDGER_STATE_AND_TX_HASH_RETENTION.md` | Public | Mainnet Candidate / Prototype | Ledger state and transaction-hash retention |
-| `Blockchain-docs/human/architecture/PINGORA_MIGRATION_DESIGN.md` | Public | **Owner-approved implementation in repository; live cutover pending canary evidence** | Pingora edge migration design |
+| `Blockchain-docs/human/architecture/PINGORA_MIGRATION_DESIGN.md` | Public | **Owner-approved implementation live on the controlled VPS; post-cutover soak and remaining acceptance evidence open** | Pingora edge migration design |
 | `Blockchain-docs/human/architecture/README.md` | Public | Current reference / Mainnet Candidate | Architecture Docs |
 | `Blockchain-docs/human/architecture/STORAGE_CONSISTENCY_AND_RECOVERY.md` | Public | Draft audit contract / Mainnet Candidate | Storage Consistency and Recovery |
 | `Blockchain-docs/human/DOCUMENTATION_INVENTORY.md` | Public | Generated audit inventory | Alvenqis Documentation Inventory |
@@ -51,6 +51,7 @@ excluded by policy.
 | `Blockchain-docs/human/engineering/DATA_INTEGRITY_VERIFICATION_2026-07-30.md` | Public | Local G1 engineering evidence / `TM-307` remains In Progress | Canonical SQLite Data-Integrity Verification — 2026-07-30 |
 | `Blockchain-docs/human/engineering/LINUX_COMPONENT_BUILD_EVIDENCE_2026-07-30.md` | Public | Local G1 packaging evidence / `TM-1110` remains In Progress | Linux Component and Desktop Build Evidence — 2026-07-30 |
 | `Blockchain-docs/human/engineering/LONG_CHAIN_REBUILD_BENCHMARK_2026-07-30.md` | Public | Point-in-time engineering measurement / `TM-205` remains In Progress | Long-Chain Rebuild Benchmark — 2026-07-30 |
+| `Blockchain-docs/human/engineering/PINGORA_CUTOVER_EVIDENCE_2026-08-08.md` | Public | G1 controlled deployment evidence; post-cutover soak remains open | Pingora controlled-VPS cutover evidence — 2026-08-08 |
 | `Blockchain-docs/human/engineering/WORKSPACE_AND_LINTS.md` | Public | Draft / engineering hygiene | Workspace Scope and Rust Lint Policy |
 | `Blockchain-docs/human/legal/LICENSING_POLICY.md` | Public | Draft / Accepted Repository Policy | Alvenqis Licensing Policy |
 | `Blockchain-docs/human/legal/README.md` | Public | Draft | Legal Docs |
