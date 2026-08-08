@@ -102,7 +102,7 @@ excluded by policy.
 | `Blockchain-docs/human/release/NETWORK_MATURITY.md` | Public | **Draft / Mainnet Candidate / Prototype — not a public live Mainnet** | Network Maturity and Release Readiness |
 | `Blockchain-docs/human/release/RELEASE_GATE.md` | Public | **Draft / Mainnet Candidate / Prototype** | Release Gate (G1) |
 | `Blockchain-docs/human/roadmap/README.md` | Public | Draft | Roadmap Docs |
-| `Blockchain-docs/human/security/AUDIT_LOG_HASH_CHAIN_STATUS_2026-08-08.md` | Public | Local defensive implementation / deployment and external anchoring pending | Fleet Audit-Log Hash-Chain Status — 2026-08-08 |
+| `Blockchain-docs/human/security/AUDIT_LOG_HASH_CHAIN_STATUS_2026-08-08.md` | Public | Deployed defensive implementation / immutable CI and external anchoring pending | Fleet Audit-Log Hash-Chain Status — 2026-08-08 |
 | `Blockchain-docs/human/security/AUDIT_STATUS.md` | Public | **Current internal verification record / no external audit** | Verification and Audit Status |
 | `Blockchain-docs/human/security/DEFENSIVE_SECURITY_SCOPE.md` | Public | Authorized project-owned defensive engineering policy | Defensive Security Engineering Scope |
 | `Blockchain-docs/human/security/DEPENDENCY_AUDIT_2026-07-30.md` | Public | Dated Rust dependency review / open findings retained | Dependency Security Review — 2026-07-30 |
