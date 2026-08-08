@@ -1,7 +1,6 @@
 # Fleet RBAC and agent mTLS status — 2026-08-01
 
-Repository evidence refreshed 2026-08-08 for the Pingora edge implementation;
-live cutover evidence remains pending below.
+Repository evidence and live Pingora cutover evidence refreshed 2026-08-08.
 
 Scope: TM-1212, project-operated fleet tooling only. These controls do not
 authorize P2P participation, validator status, block acceptance, mining, or
@@ -51,19 +50,41 @@ Blockchain-scripts/operator/prepare-alvenqis-vps-env.py with a temporary output
 Result: generated distinct fleet/fleet-mTLS hosts, loopback bind, and port 10443
 ```
 
-## Verification still required
+## Live verification performed
 
-- Docker was unavailable on this workstation, so `validate-stack.sh
-  --require-docker`, Compose rendering, and image builds were not executed.
-- The positive/negative TLS handshake probes have not been run against a live
-  composed stack. The default host bind is intentionally
-  `127.0.0.1:10443`. The generated `.env` and setup UI accept an explicit IPv4
-  bind for a controller, but selecting a public interface and firewall policy
-  remains an operator decision.
-- `FLEET_MTLS_HOST` defaults to `fleet-mtls.<base-domain>` and Cloudflare
-  automation manages it as a DNS-only direct `A` record. It is deliberately
-  absent from the HTTP Tunnel ingress used by `FLEET_HOST`.
-- No fleet mTLS deployment, firewall change, public-port change, or live TLS
-  handshake was performed as part of this local transport-boundary change.
+On 2026-08-08 the controlled VPS was updated from the active repository source
+and the Pingora gateway image was built before cutover. The following evidence
+was recorded without changing chain data or wallets:
 
-Until those integration checks are recorded, TM-1212 remains **In Progress**.
+```text
+bash scripts/validate-stack.sh --require-docker
+Result: static validation and Docker Compose role rendering passed.
+
+bash scripts/compose.sh run --rm --no-deps gateway --check-config
+Result: configuration valid for HTTP 8080, mTLS 10443, and metrics 9091.
+
+Control endpoint probes
+Result: unauthenticated request 401; viewer session 200; operator session 200;
+viewer POST /api/invitations 403 with "operator role required".
+
+Direct mTLS probes against fleet-mtls.dohotstudio.com:10443
+Result: no certificate failed the TLS handshake (curl exit 56, HTTP 000);
+an untrusted self-signed certificate failed the TLS handshake (exit 56,
+HTTP 000); an ephemeral certificate signed by the fleet CA completed TLS and
+reached application payload validation (HTTP 422 for the deliberately
+incomplete JSON body).
+
+HTTPS fleet boundary
+Result: POST https://fleet.dohotstudio.com/fleet/report returned 426 and
+directed agents to the dedicated mTLS endpoint.
+```
+
+Cloudflare automation confirmed `fleet-mtls.dohotstudio.com` as a DNS-only
+direct `A` record. The hostname is absent from the HTTP Tunnel ingress used by
+`fleet.dohotstudio.com`. The gateway runs as UID/GID 10001, read-only,
+unprivileged, with all Linux capabilities dropped and no fleet CA private key
+mounted.
+
+TM-1212 is **Completed** for its defined RBAC and mTLS deliverable. A live
+state-changing certificate rotation/revocation exercise remains a separate
+operational rehearsal; repository tests continue to cover those transitions.

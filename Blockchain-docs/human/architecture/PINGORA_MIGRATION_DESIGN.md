@@ -1,6 +1,6 @@
 # Pingora edge migration design
 
-Status: **Owner-approved implementation in repository; live cutover pending canary evidence**
+Status: **Owner-approved implementation live on the controlled VPS; post-cutover soak and remaining acceptance evidence open**
 Date: 2026-08-01; implementation status refreshed 2026-08-08
 Scope: project-operated `alvenqis-setup-external` edge only
 
@@ -50,7 +50,7 @@ Non-goals:
 
 ## 2. Pre-migration edge topology
 
-Before the pending cutover, the active VPS edge is the Compose service
+Before the 2026-08-08 cutover, the active VPS edge was the Compose service
 `gateway` running the recorded Nginx image. Cloudflare Tunnel sends all
 tunneled HTTP hostnames to `http://gateway:8080`. Docker publishes only the
 direct fleet mTLS listener, `${FLEET_MTLS_BIND_ADDRESS}:10443`; port 8080 is not
@@ -500,6 +500,15 @@ logs and evidence before another attempt.
 
 ## 16. Source basis
 
+Live cutover evidence is recorded in
+`Blockchain-docs/human/engineering/PINGORA_CUTOVER_EVIDENCE_2026-08-08.md`.
+The cutover proved the public route contract, RBAC separation, negative and
+positive mTLS handshakes, Cloudflare routing, private mining access, container
+hardening, unchanged chain identity, and an untouched healthy Vaultwarden
+service. The broader acceptance matrix above remains the source of truth for
+post-cutover soak and destructive/state-changing rehearsal items that were not
+performed during this deployment.
+
 Repository contract:
 
 - `InternalAI/03_MASTER_BUILD_DIRECTIVE.md` Phase 4;
@@ -558,8 +567,8 @@ is not part of this design-only checkpoint.
 ## 18. Approval and current execution gate
 
 The owner-approved pinned official commit path is active. Dependency review,
-the repository implementation, Compose wiring, and local unit/lint checks are
-present; they do not by themselves prove the live edge. Sections 13-15 still
-control the canary, rollback capture, route/mTLS verification, soak, and final
-acceptance. Until those live checks pass, the previous VPS image remains the
-rollback baseline and this document must not describe the cutover as accepted.
+the repository implementation, Compose wiring, local unit/lint checks, and the
+2026-08-08 live cutover evidence are present. Sections 13-15 continue to
+control the remaining soak, outage-isolation, WebSocket, and state-changing
+fleet rehearsals. The retained Nginx image remains the immediate edge rollback
+baseline for the release window.
