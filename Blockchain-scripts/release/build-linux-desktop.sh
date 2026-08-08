@@ -144,8 +144,14 @@ if [[ -d "$bundle_root" ]]; then
   find "$bundle_root" -type f \
     \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.pacman' \) \
     -print0 | while IFS= read -r -d '' f; do
-      cp -f "$f" "$output/"
-      echo "  + $(basename "$f")"
+      source_name="$(basename "$f")"
+      portable_name="${source_name// /-}"
+      if [[ ! "$portable_name" =~ ^[A-Za-z0-9._+-]+$ ]]; then
+        echo "Linux package has a non-portable release filename: $source_name" >&2
+        exit 1
+      fi
+      cp -f "$f" "$output/$portable_name"
+      echo "  + $portable_name"
     done
 fi
 
@@ -195,8 +201,14 @@ EOF
 
 (
   cd "$output"
+  non_portable="$(find . -maxdepth 1 -type f -printf '%f\n' | grep -Ev '^[A-Za-z0-9._+-]+$' || true)"
+  if [[ -n "$non_portable" ]]; then
+    printf 'Non-portable Linux release filenames:\n%s\n' "$non_portable" >&2
+    exit 1
+  fi
   find . -maxdepth 1 -type f ! -name SHA256SUMS ! -name INSTALL.txt -print0 \
     | sort -z | xargs -0 sha256sum > SHA256SUMS
+  sha256sum -c SHA256SUMS
 )
 
 echo ""

@@ -5,6 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 prototype="$repo_root/Blockchain-prototype"
 output_dir="$repo_root/release-artifacts"
 output="$output_dir/alvenqis-setup-external.tar.gz"
+contents_file="$(mktemp "${TMPDIR:-/tmp}/alvenqis-setup-external-contents.XXXXXX")"
+trap 'rm -f "$contents_file"' EXIT
 
 cd "$repo_root"
 git diff --quiet && git diff --cached --quiet || {
@@ -33,16 +35,25 @@ mkdir -p "$output_dir"
 git archive --format=tar HEAD -- "${paths[@]}" | gzip -9 > "$output"
 (cd "$output_dir" && sha256sum "$(basename "$output")" > "$(basename "$output").sha256")
 
-tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/alvenqis-setup-external/compose/base.yaml'
-tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/alvenqis-setup-external/compose/installer.yaml'
-tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/alvenqis-setup-external/compose/roles.json'
-tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/alvenqis-setup-external/APPLICATIONS.md'
-tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/alvenqis-setup-external/scripts/install-docker-stack.sh'
-tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/Dockerfile'
-tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-explorer/Dockerfile'
-tar -tzf "$output" | grep -Fxq 'Blockchain-prototype/alvenqis-website/Dockerfile'
+tar -tzf "$output" > "$contents_file"
+required_entries=(
+  Blockchain-prototype/alvenqis-release/alvenqis-setup-external/compose/base.yaml
+  Blockchain-prototype/alvenqis-release/alvenqis-setup-external/compose/installer.yaml
+  Blockchain-prototype/alvenqis-release/alvenqis-setup-external/compose/roles.json
+  Blockchain-prototype/alvenqis-release/alvenqis-setup-external/APPLICATIONS.md
+  Blockchain-prototype/alvenqis-release/alvenqis-setup-external/scripts/install-docker-stack.sh
+  Blockchain-prototype/alvenqis-release/alvenqis-setup-external/docker/Dockerfile
+  Blockchain-prototype/alvenqis-explorer/Dockerfile
+  Blockchain-prototype/alvenqis-website/Dockerfile
+)
+for required_entry in "${required_entries[@]}"; do
+  grep -Fxq "$required_entry" "$contents_file" || {
+    echo "Required file is missing from Setup External archive: $required_entry" >&2
+    exit 1
+  }
+done
 
-if tar -tzf "$output" | grep -Eq '(^|/)\.env$|(^|/)state/[^.]|(^|/)(target|node_modules|\.artifacts)/'; then
+if grep -Eq '(^|/)\.env$|(^|/)state/[^.]|(^|/)(target|node_modules|\.artifacts)/' "$contents_file"; then
   echo "Forbidden runtime or generated file entered the Docker release archive." >&2
   exit 1
 fi
