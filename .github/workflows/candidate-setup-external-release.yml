@@ -82,6 +82,8 @@ jobs:
             find . -maxdepth 1 -type f ! -name 'SHA256SUMS-SETUP-EXTERNAL.txt' -print0 \
               | sort -z \
               | xargs -0 sha256sum > SHA256SUMS-SETUP-EXTERNAL.txt
+            sha256sum -c alvenqis-setup-external.tar.gz.sha256
+            sha256sum -c SHA256SUMS-SETUP-EXTERNAL.txt
           )
           ls -la release-publish/setup-external
 
