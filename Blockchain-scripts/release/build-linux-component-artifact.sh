@@ -124,6 +124,11 @@ case "$component" in
   miner) package_rust_component alvenqis-miner alvenqis-miner ;;
 esac
 
-sha256sum "$artifact" > "$artifact.sha256"
+artifact_name="$(basename "$artifact")"
+(
+  cd "$output_dir"
+  sha256sum "$artifact_name" > "$artifact_name.sha256"
+  sha256sum -c "$artifact_name.sha256"
+)
 echo "$artifact"
 echo "$artifact.sha256"

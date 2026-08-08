@@ -77,7 +77,16 @@ jobs:
           cache-dependency-path: Blockchain-prototype/alvenqis-explorer/package-lock.json
 
       - name: Test and package component
-        run: bash Blockchain-scripts/release/build-linux-component-artifact.sh "${{ matrix.component }}" release-publish/component
+        run: |
+          set -euo pipefail
+          bash Blockchain-scripts/release/build-linux-component-artifact.sh \
+            "${{ matrix.component }}" release-publish/component
+          (
+            cd release-publish/component
+            for manifest in *.sha256; do
+              sha256sum -c "$manifest"
+            done
+          )
 
       - name: Keep component as workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
